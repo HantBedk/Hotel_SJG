@@ -1,0 +1,705 @@
+
+import os
+
+output_dir = "/mnt/agents/output"
+skills_dir = os.path.join(output_dir, "skills")
+os.makedirs(skills_dir, exist_ok=True)
+
+# ============================================================
+# SKILL 1: Arquitectura y Stack Tecnológico
+# ============================================================
+skill_arch = """# Skill: Arquitectura y Stack Tecnológico — Hotel Manager
+
+## Contexto
+Sistema de gestión hotelera local (red LAN, sin dependencia de internet). Dockerizado, multi-dispositivo (máx. 10), responsive. Una PC maestra corre Docker y las demás se conectan por red local.
+
+## Stack Confirmado
+### Frontend
+- React 19 (stable)
+- TypeScript 5.8
+- Vite 8 (build tool)
+- React Router v7
+- Zustand 5 (state management)
+- Tailwind CSS v4
+- Axios (HTTP client)
+- Framer Motion (animaciones)
+- Lucide React (iconografía)
+- React Hot Toast (notificaciones toast)
+- clsx + tailwind-merge (utilidades de clases CSS)
+
+### Backend
+- Laravel 12 (framework PHP)
+- PHP 8.4
+- PostgreSQL 16 (base de datos)
+- Laravel Sanctum (autenticación API por tokens)
+- Spatie Laravel Permission (roles y permisos granulares)
+- Laravel Reverb (WebSockets nativo para notificaciones en tiempo real y estados de habitación sin recargar página)
+- UUIDs como identificadores primarios en TODAS las tablas (sin excepción)
+
+### Infraestructura
+- Docker + Docker Compose
+- Alpine Linux (imagen base)
+- Nginx (servidor web dentro del contenedor app)
+- PostgreSQL volumen persistente
+- Servicios Docker: `app` (PHP-FPM + Nginx + React build), `db` (PostgreSQL), `reverb` (WebSockets)
+
+## Reglas de Arquitectura
+1. NUNCA usar MQTT; usar Laravel Reverb para tiempo real.
+2. TODAS las tablas usan UUID primary key. Nunca usar auto-increment integers.
+3. El backend expone API RESTful con Sanctum. El frontend es SPA que consume la API.
+4. Docker Compose debe permitir acceso por IP de red local (puertos expuestos: 80 para app, 5432 solo interno o restringido).
+5. La PC maestra inicia Docker automáticamente (Windows Docker Desktop auto-start).
+6. El sistema debe funcionar 100% offline después del primer despliegue.
+7. Responsive design obligatorio: desktop, tablet y móvil.
+8. Nunca hardcodear configuraciones; todo debe venir de la tabla `settings` o tablas de configuración.
+"""
+
+# ============================================================
+# SKILL 2: Modelo de Datos y Reglas de Negocio
+# ============================================================
+skill_data = """# Skill: Modelo de Datos y Reglas de Negocio — Hotel Manager
+
+## Entidades Principales
+
+### 1. Hotel (settings)
+- `id` (UUID), `name`, `nit`, `address`, `phone`, `email`, `logo_path`, `check_in_time` (nullable, configurable), `check_out_time` (default 13:00), `iva_enabled` (bool, default true), `iva_rate` (decimal, default 19.0), `currency` (default COP), `country` (default Colombia).
+- Solo superadmin y admin pueden editar.
+
+### 2. Users (empleados del sistema)
+- `id` (UUID), `name`, `email`, `password`, `role` (superadmin, admin, receptionist, housekeeping, maintenance), `active` (bool).
+- Autenticación vía Sanctum tokens.
+- Roles manejados con Spatie Permission.
+
+### 3. Guests (huéspedes)
+- `id` (UUID), `full_name`, `document_type` (CC, CE, PASAPORTE, NIT), `document_number` (único), `email`, `phone`, `nationality`, `birth_date` (opcional), `notes`.
+- Un huésped puede tener múltiples acompañantes (tabla `guest_companions`).
+- Un huésped puede tener múltiples estadías y múltiples habitaciones simultáneas.
+
+### 4. Companies (empresas)
+- `id` (UUID), `name`, `nit`, `address`, `phone`, `email`, `contact_name`.
+- Se crea en el momento si no existe, durante el wizard de check-in o reserva.
+
+### 5. Room Types (tipos de habitación)
+- `id` (UUID), `name` (Sencilla, Doble, King, Presidencial), `description`, `base_price` (default), `capacity`.
+
+### 6. Rooms (habitaciones)
+- `id` (UUID), `number`, `room_type_id`, `house_id` (nullable, FK a houses), `status` (enum: available, occupied, cleaning, maintenance, reserved), `current_price` (sobrescribe base si aplica), `notes`.
+- Estados: SOLO UNO A LA VEZ. Nunca múltiples.
+- Después de checkout automático → `cleaning`.
+- De `cleaning` a `available` requiere seleccionar empleado de housekeeping y registrar hora de finalización.
+
+### 7. Houses (casas)
+- `id` (UUID), `name` (ej: "Casa Principal"), `price` (fijo, configurable), `room_ids` (relación: 4 habitaciones pertenecen a esta casa), `active`.
+- Si la Casa está reservada/ocupada en un rango de fechas, esas 4 habitaciones se BLOQUEAN en el calendario (lógica de negocio, no es un estado de room).
+- Si UNA habitación de la Casa está reservada individualmente, la Casa se bloquea para ese rango (no se puede reservar la Casa completa en esas fechas). Las otras 3 habitaciones de la Casa SÍ se pueden usar individualmente.
+- El admin prioriza llenar el hotel antes de usar la Casa.
+
+### 8. Seasons (temporadas)
+- `id` (UUID), `name`, `start_date`, `end_date`, `price_multiplier` o `fixed_price_override`, `active`.
+- Notificación anticipada configurable al admin en horarios de baja saturación.
+
+### 9. Reservations (reservas)
+- `id` (UUID), `guest_id`, `company_id` (nullable), `room_id` (nullable, se asigna al check-in), `house_id` (nullable, si reserva la Casa), `status` (pending, confirmed, checked_in, cancelled, no_show), `start_date`, `end_date`, `nights`, `agreed_price` (por noche o total), `deposit_amount` (nullable), `payment_status` (pending, partial, paid), `created_by` (user_id), `notes`.
+- Una reserva NO bloquea la habitación físicamente hasta el check-in; aparece como "separada" en el calendario.
+- Alerta configurable cuando se acerca la fecha/hora de la reserva.
+- Vencimiento: modal de alerta, NO cancelación automática. El admin/recepcionista decide.
+
+### 10. Stays (estadías / check-ins activos)
+- `id` (UUID), `guest_id`, `company_id` (nullable), `status` (active, extended, checked_out), `check_in_datetime`, `check_out_datetime`, `actual_check_out_datetime` (nullable), `created_by`, `notes`.
+- Una estadía puede tener MÚLTIPLES habitaciones (tabla `stay_rooms`).
+- Una estadía puede extenderse (cambiar `check_out_datetime`).
+- Transferencia de huésped: se crea registro en `room_transfers` (from_room_id, to_room_id, reason, transferred_by, transferred_at). La estadía continúa.
+
+### 11. Stay Rooms (habitaciones por estadía)
+- `id` (UUID), `stay_id`, `room_id`, `check_in_date`, `check_out_date`, `price_per_night`, `nights`, `subtotal`.
+- Permite que un huésped tenga varias habitaciones.
+
+### 12. Payments (pagos y abonos)
+- `id` (UUID), `stay_id`, `amount`, `payment_method` (cash, transfer, card), `payment_type` (deposit, partial, final), `paid_by` (guest, company, mixed), `receptionist_id` (quién recibió el pago), `payment_date`, `notes`.
+- Historial completo por estadía.
+- Abonos antes del check-in se registran contra la reserva (tabla `reservation_payments`).
+
+### 13. Minibar Products (catálogo de minibar)
+- `id` (UUID), `name`, `inventory_product_id` (nullable, link a consumibles), `sale_price`, `cost_price` (del inventario), `description`.
+
+### 14. Room Minibar (inventario por habitación)
+- `id` (UUID), `room_id`, `minibar_product_id`, `quantity`, `last_restocked_at`, `restocked_by` (user_id).
+- Carga inicial al check-in desde una "plantilla de minibar" configurable.
+
+### 15. Minibar Consumptions (consumos/daños)
+- `id` (UUID), `stay_id`, `room_id`, `minibar_product_id`, `quantity`, `type` (consumed, damaged, missing), `unit_price`, `total`, `registered_at`, `registered_by`.
+- Al checkout se revisa y se registran faltantes/consumos. Se suman a la cuenta.
+
+### 16. Inventory Categories (categorías de inventario)
+- `id` (UUID), `name` (Consumibles, Activos, Limpieza), `type` (consumable, asset, cleaning).
+
+### 17. Inventory Items (productos del inventario general)
+- `id` (UUID), `category_id`, `code` (auto-secuencial para consumibles, formato: PROD-00001), `name`, `brand`, `presentation` (ej: "1.5L", "500ml", "1kg"), `unit`, `cost_price`, `sale_price` (para minibar), `current_stock`, `min_stock_threshold` (default 5, configurable), `expiry_date` (nullable), `supplier`, `invoice_number` (nullable), `location`.
+- Para consumibles: al crear, sugerir si ya existe producto con misma marca + presentación. Si es diferente presentación, es producto nuevo con nuevo código.
+- Historial de recargas: tabla `inventory_transactions` (type: entry, exit_to_minibar, exit_to_housekeeping, adjustment, sale).
+
+### 18. Assets (activos)
+- `id` (UUID), `inventory_item_id` (si aplica), `asset_code` (auto, ej: ACT-0001), `name`, `brand`, `model`, `serial_number`, `location` (room_id o general), `purchase_date`, `warranty_expiry`, `status` (active, maintenance, retired).
+- Mantenimientos programados: tabla `asset_maintenances` (asset_id, scheduled_date, completed_date, description, cost, technician_id, next_maintenance_date, status).
+- Órdenes de reparación: tabla `repair_orders` (asset_id, room_id, description, reported_by, assigned_to, cost, status, completed_at).
+
+### 19. Extra Services (servicios extras)
+- `id` (UUID), `name`, `price`, `description`, `active`.
+- CRUD en configuración.
+
+### 20. Stay Services (servicios usados durante estadía)
+- `id` (UUID), `stay_id`, `extra_service_id`, `quantity`, `unit_price`, `total`, `applied_at`, `applied_by`.
+
+### 21. Notifications (centro de notificaciones)
+- `id` (UUID), `type` (season_alert, expiry_alert, low_stock, reservation_reminder, checkout_reminder, cleaning_alert, maintenance_alert, system), `title`, `message`, `severity` (info, warning, critical), `target_role` (admin, superadmin, receptionist), `is_modal` (bool), `scheduled_at`, `dismissed_at`, `dismissed_by`, `action_url` (ruta interna a la que redirige).
+- Modales para admin en horarios de baja saturación (configurable: default 06:00 y 20:00).
+- Todos los modales dejan registro en notificaciones.
+
+### 22. Settings / Configuraciones
+- Tabla clave-valor o tabla estructurada por categoría: `hotel_info`, `pricing`, `notifications`, `reservations`, `cleaning`, `backup`, `roles_permissions`.
+- Solo superadmin y admin pueden editar.
+
+### 23. Activity Log (historial de auditoría)
+- `id` (UUID), `user_id`, `action` (create, update, delete, payment, check_in, check_out, transfer, etc.), `entity_type`, `entity_id`, `old_values`, `new_values`, `ip_address`, `created_at`.
+- Toda transacción, pago, abono, cambio de estado debe quedar aquí.
+- Vista tipo calendario: seleccionar día y ver todas las transacciones con hora y usuario.
+
+### 24. Backups
+- `id` (UUID), `file_path`, `file_size`, `type` (auto, manual), `created_at`, `status`.
+- Configuración: ruta local, hora (default 23:59), retención (configurable, default 30 días o ilimitado hasta que el usuario decida).
+- Formato ZIP con dump de PostgreSQL + carpeta `storage/app` (logos, comprobantes).
+
+## Reglas de Negocio Críticas
+1. **IVA**: Todos los precios de venta (habitaciones, minibar, servicios) se almacenan CON IVA incluido. Si `iva_enabled=true`, el checkout desglosa subtotal + IVA. Si `iva_enabled=false`, no hay desglose.
+2. **Checkout**: Si el huésped se pasa de la hora configurada, el sistema muestra banner amigable: "Recuerde: checkout excedido, calcular cobro adicional". El recepcionista ingresa el monto manualmente como "late checkout fee".
+3. **Pagos mixtos**: Al checkout, si hay empresa asociada, opciones: (a) Todo empresa, (b) Todo huésped, (c) Mixto: empresa paga habitación, huésped paga minibar + extras + recargos.
+4. **Precios**: Cada habitación tiene `current_price`. El admin puede editar masivamente desde Configuración > Habitaciones.
+5. **Casa**: Precio fijo independiente de la suma de habitaciones. Si se reserva la Casa, las 4 habitaciones se bloquean en calendario. Si se reserva 1 habitación de la Casa, la Casa se bloquea para ese rango.
+6. **Cancelación**: No hay cancelación automática de reservas. Solo alertas y decisión humana.
+7. **Extensión de estadía**: Se edita `check_out_datetime` de la estadía y de `stay_rooms`. Se recalcula automáticamente.
+8. **Checkout anticipado**: Se cobran solo las noches efectivamente usadas + consumos + extras. Se hace checkout normal.
+"""
+
+# ============================================================
+# SKILL 3: Flujos de Usuario y UI/UX
+# ============================================================
+skill_ui = """# Skill: Flujos de Usuario y UI/UX — Hotel Manager
+
+## Estructura de Vistas
+1. **Dashboard** (principal)
+2. **Habitaciones** (grid de habitaciones con colores de estado)
+3. **Reservas** (listado y creación)
+4. **Calendario** (ocupación semana/mes/año)
+5. **Inventario** (general, minibar, activos, mantenimientos)
+6. **Configuración** (hotel, habitaciones, precios, temporadas, roles, backup, notificaciones, servicios extras)
+7. **Historial / Auditoría** (log de actividad con calendario)
+8. **Checkout / Cuenta** (proceso de checkout y pago)
+
+## Dashboard
+- Cards: Ingresos del día (solo cobrado), Ventas (cantidad de transacciones), Huéspedes activos, Habitaciones disponibles/ocupadas/en limpieza.
+- Gráfico principal: selector de métrica (dinero o visitas) y periodo (día, semana, mes, año) con comparación periodo anterior.
+- Atajo rápido: "Check-in inmediato" que abre modal wizard.
+- Lista de habitaciones disponibles con botón de check-in directo.
+- Actualización en tiempo real vía Reverb.
+
+## Vista Habitaciones
+- Grid visual: cada habitación es una tarjeta con color según estado:
+  - Verde: Disponible
+  - Rojo: Ocupada
+  - Amarillo: En limpieza
+  - Naranja: Mantenimiento
+  - Azul claro: Reservada (para hoy o próxima)
+- Habitaciones de la Casa tienen indicador visual especial (icono de casa pequeño).
+- Click en habitación disponible → opción "Check-in" (walk-in sin reserva).
+- Click en habitación ocupada → opción "Ver estadía", "Checkout", "Transferir huésped".
+- Click en habitación en limpieza → opción "Marcar disponible" (seleccionar housekeeping).
+- Actualización en tiempo real sin recargar.
+
+## Wizard de Check-in (3 pasos)
+### Paso 1: Huésped
+- Buscar huésped por nombre, documento o teléfono.
+- Si no existe: formulario de creación rápida (nombre, documento, email, teléfono, nacionalidad).
+- Opción "Agregar acompañantes" (nombre y documento de cada uno).
+- Opción "Asignar múltiples habitaciones" (seleccionar N habitaciones disponibles).
+- Checkbox: "Viene por empresa" (si sí, habilita Paso 2; si no, salta al Paso 3).
+
+### Paso 2: Empresa
+- Buscar empresa por NIT o nombre.
+- Si no existe: formulario de creación (nombre, NIT, dirección, teléfono, email, contacto).
+- Seleccionar empresa.
+
+### Paso 3: Confirmación y Minibar
+- Resumen: huésped, empresa (si aplica), habitaciones asignadas.
+- Fechas: entrada (ahora o configurable), salida (fecha y hora).
+- Detalle de minibar: lista de productos que tendrá la habitación (desde plantilla configurable).
+- Precio por noche por habitación.
+- Botón "Confirmar Check-in".
+- Al confirmar: habitación pasa a "Ocupada", se genera comprobante (PDF opcional), se notifica.
+
+## Wizard de Check-in Inmediato (desde Reserva)
+- Desde la lista de reservas o alerta de reserva próxima: botón "Check-in Inmediato".
+- Precarga datos del huésped y empresa.
+- Solo confirma habitación (si la reserva tenía una asignada) o permite reasignar si está ocupada (con alerta al admin).
+- Paso 3 igual que el check-in normal.
+
+## Checkout
+1. Click en habitación ocupada → "Iniciar Checkout".
+2. Modal de revisión de minibar: lista de productos esperados vs. realidad.
+   - Marcar consumidos (cantidad).
+   - Marcar dañados (cantidad + costo de reposición).
+   - Marcar faltantes.
+   - Todo se suma a la cuenta.
+3. Banner si checkout excedió la hora límite: "Recuerde: checkout excedido, calcular cobro adicional".
+4. Servicios extras usados: lista editable (agregar/quitar).
+5. Resumen de cuenta:
+   - Habitación(es): noches × precio.
+   - Minibar: consumos + daños.
+   - Servicios extras.
+   - Recargos (late checkout, etc.).
+   - Subtotal, IVA (si aplica), TOTAL.
+6. Opciones de pago:
+   - Método: efectivo, transferencia, tarjeta.
+   - Responsable: Todo empresa / Todo huésped / Mixto (detallar qué paga quién).
+7. Botón "Registrar Pago".
+8. Al pagar: generar comprobante PDF, descargar/ver. Habitación pasa a "En limpieza".
+9. Registro de quién hizo el checkout y quién recibió el pago.
+
+## Reservas
+- Listado con filtros (fecha, estado, huésped, empresa).
+- Crear reserva: wizard similar al check-in pero sin asignar físicamente la habitación (solo "separar" en calendario).
+- Campos: huésped (crear si no existe), empresa (opcional), tipo de habitación o Casa, fechas, noches, precio acordado, abono (opcional), notas.
+- Estado inicial: `pending`.
+- Alertas automáticas cuando se acerca la fecha.
+- Desde calendario: click en fecha → crear reserva con fecha inicio prellenada, luego seleccionar fecha fin.
+- Reservas masivas/grupos: opción de crear múltiples habitaciones bajo un mismo huésped principal (factura única) o independientes (cada uno paga).
+
+## Calendario
+- Vistas: Semana, Mes, Año.
+- Eje Y: Habitaciones (numeradas, con indicador de Casa).
+- Bloques de color:
+  - Azul claro: Reserva pendiente.
+  - Verde: Check-in confirmado / ocupada.
+  - Rojo: Cancelada / No-show.
+  - Gris: Bloqueada por Casa.
+- Click en celda vacía → crear reserva.
+- Click en bloque existente → ver detalle.
+- Tooltip con datos del huésped al hover.
+
+## Inventario
+### Pestañas: Consumibles | Activos | Minibar | Mantenimientos | Reparaciones
+- **Consumibles**: tabla con código, nombre, marca, presentación, stock, precio costo, precio venta, fecha vencimiento. Acciones: recargar, ajustar, entregar a housekeeping.
+- **Activos**: tabla con código, nombre, ubicación, estado. Acciones: programar mantenimiento, ver historial.
+- **Minibar**: catálogo de productos que PUEDEN ir a minibares. Acciones: asignar a habitación, ver stock por habitación.
+- **Mantenimientos**: lista de próximos y completados. Acciones: marcar como hecho, asignar técnico, costo, próxima fecha.
+- **Reparaciones**: órdenes de trabajo. Crear, asignar, cerrar con costo y descripción.
+
+## Configuración
+### Secciones:
+1. **Información del Hotel**: nombre, NIT, dirección, teléfono, email, logo, país, moneda.
+2. **Habitaciones**: CRUD de habitaciones (número, tipo, Casa a la que pertenece, precio actual). Edición masiva de precios.
+3. **Casas**: CRUD de casas (nombre, precio, asignar habitaciones).
+4. **Tipos de Habitación**: CRUD.
+5. **Temporadas**: fechas, multiplicador de precio o precio fijo. Notificaciones anticipadas.
+6. **Servicios Extras**: CRUD (nombre, precio).
+7. **IVA y Precios**: tasa IVA, habilitar/deshabilitar IVA.
+8. **Horarios**: check-out (default 13:00), check-in (opcional, habilitable).
+9. **Reservas**: habilitar/deshabilitar reservas, auto-asignación (habilitable), alertas de vencimiento.
+10. **Limpieza**: horario de limpieza general, alertas (habilitable), notificación a admin.
+11. **Notificaciones**: umbral de vencimiento (días), umbral de stock bajo (unidades), horarios de modales para admin.
+12. **Roles y Permisos**: matriz de qué puede ver/hacer cada rol. Superadmin edita todo.
+13. **Backup**: ruta local, hora automática, retención, botón "Respaldar ahora", botón "Cargar respaldo".
+14. **Usuarios**: CRUD de empleados (solo admin/superadmin).
+
+## Responsive
+- Sidebar colapsable en móvil.
+- Grid de habitaciones: 1 columna en móvil, 2 en tablet, 4+ en desktop.
+- Modales adaptados a pantalla completa en móvil.
+- Calendario: vista simplificada en móvil (lista en vez de grid si es necesario).
+
+## Reglas de UI
+1. NUNCA recargar la página para cambios de estado; usar Reverb + Zustand.
+2. Toda acción destructiva (checkout, cancelar reserva, eliminar) requiere confirmación modal.
+3. Formularios con validación en tiempo real (Zod o similar).
+4. Estados de carga (skeletons) en todas las vistas.
+5. Toasts de éxito/error en todas las mutaciones.
+6. Colores de estado de habitación SIEMPRE consistentes en toda la app.
+"""
+
+# ============================================================
+# SKILL 4: API y Comunicación Backend-Frontend
+# ============================================================
+skill_api = """# Skill: API y Comunicación Backend-Frontend — Hotel Manager
+
+## Convenciones de API
+- Base URL: `/api/v1/`
+- Respuesta estándar: `{ success: boolean, data: any, message: string, errors: object }`
+- Códigos HTTP estándar: 200, 201, 400, 401, 403, 404, 422, 500.
+- Autenticación: Bearer token de Sanctum en header `Authorization`.
+- Todos los IDs en URL y body son UUIDs.
+
+## Endpoints Principales (resumen)
+
+### Auth
+- POST `/api/v1/login` → token
+- POST `/api/v1/logout`
+- GET `/api/v1/me` → usuario autenticado
+
+### Dashboard
+- GET `/api/v1/dashboard/stats?period=day|week|month|year&metric=money|visits`
+- GET `/api/v1/dashboard/chart?period=...&compare=true`
+- GET `/api/v1/dashboard/available-rooms`
+
+### Habitaciones
+- GET `/api/v1/rooms` (con filtros de estado, tipo, casa)
+- GET `/api/v1/rooms/{id}`
+- POST `/api/v1/rooms/{id}/check-in` (walk-in)
+- POST `/api/v1/rooms/{id}/checkout`
+- POST `/api/v1/rooms/{id}/transfer` (cambio de habitación)
+- POST `/api/v1/rooms/{id}/set-cleaning`
+- POST `/api/v1/rooms/{id}/set-available` (requiere housekeeping_id)
+- GET `/api/v1/rooms/{id}/minibar`
+- PUT `/api/v1/rooms/{id}/minibar` (recargar)
+
+### Huéspedes
+- GET `/api/v1/guests?search=...`
+- POST `/api/v1/guests`
+- GET `/api/v1/guests/{id}`
+- PUT `/api/v1/guests/{id}`
+
+### Empresas
+- GET `/api/v1/companies?search=...`
+- POST `/api/v1/companies`
+- GET `/api/v1/companies/{id}`
+
+### Reservas
+- GET `/api/v1/reservations`
+- POST `/api/v1/reservations`
+- GET `/api/v1/reservations/{id}`
+- POST `/api/v1/reservations/{id}/check-in` (check-in inmediato)
+- POST `/api/v1/reservations/{id}/cancel`
+- PUT `/api/v1/reservations/{id}/extend`
+
+### Estadías
+- GET `/api/v1/stays?status=active`
+- GET `/api/v1/stays/{id}`
+- POST `/api/v1/stays/{id}/extend`
+- POST `/api/v1/stays/{id}/add-room`
+- GET `/api/v1/stays/{id}/account` (resumen de cuenta)
+- POST `/api/v1/stays/{id}/payments`
+- GET `/api/v1/stays/{id}/payments`
+- POST `/api/v1/stays/{id}/services`
+- POST `/api/v1/stays/{id}/minibar-charges`
+
+### Pagos
+- POST `/api/v1/payments` (registrar pago/abono)
+- GET `/api/v1/payments?stay_id=...`
+
+### Inventario
+- GET `/api/v1/inventory/items`
+- POST `/api/v1/inventory/items`
+- PUT `/api/v1/inventory/items/{id}`
+- POST `/api/v1/inventory/items/{id}/restock`
+- POST `/api/v1/inventory/items/{id}/deliver` (a housekeeping)
+- GET `/api/v1/inventory/assets`
+- POST `/api/v1/inventory/assets/{id}/maintenance`
+- GET `/api/v1/inventory/minibar-products`
+
+### Calendario
+- GET `/api/v1/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD&view=room|house`
+- POST `/api/v1/calendar/reservations` (crear desde calendario)
+
+### Configuración
+- GET `/api/v1/settings`
+- PUT `/api/v1/settings`
+- GET `/api/v1/settings/rooms` (configuración de habitaciones y precios)
+- PUT `/api/v1/settings/rooms/prices` (edición masiva)
+
+### Notificaciones
+- GET `/api/v1/notifications`
+- POST `/api/v1/notifications/{id}/dismiss`
+- GET `/api/v1/notifications/unread-count`
+
+### Backup
+- POST `/api/v1/backup/trigger` (manual)
+- POST `/api/v1/backup/restore` (cargar archivo)
+- GET `/api/v1/backup/list`
+
+### Historial / Auditoría
+- GET `/api/v1/activity-log?date=YYYY-MM-DD`
+
+## WebSockets (Laravel Reverb)
+- Canal privado: `hotel.notifications` → notificaciones en tiempo real.
+- Canal privado: `hotel.rooms` → cambios de estado de habitaciones.
+- Canal privado: `hotel.reservations` → nuevas reservas, check-ins.
+- El frontend se suscribe a estos canales y actualiza Zustand sin recargar.
+
+## Reglas de API
+1. TODAS las respuestas de listado usan paginación por defecto (15 items).
+2. Búsquedas por texto usan índices de PostgreSQL (GIN o trigram).
+3. Validación de fechas: check-in < check-out, no superposición de reservas en misma habitación (con excepción de override por admin).
+4. Transacciones de base de datos en operaciones críticas (pagos, checkout, check-in).
+5. Soft delete en entidades clave (huéspedes, empresas, habitaciones) para preservar historial.
+"""
+
+# ============================================================
+# SKILL 5: Reglas del Proyecto (Anti-Alucinación)
+# ============================================================
+skill_rules = """# Skill: Reglas del Proyecto — Hotel Manager
+
+## Propósito
+Evitar que la IA genere código o decisiones que contradigan lo acordado con el cliente. Cualquier desviación requiere consulta explícita.
+
+## Reglas Absolutas (NO NEGOCIABLES)
+1. **Stack fijo**: React 19 + TS 5.8 + Vite 8 + Laravel 12 + PHP 8.4 + PostgreSQL + Docker. NUNCA sugerir cambio de stack sin autorización explícita del usuario.
+2. **UUIDs obligatorios**: TODAS las tablas usan UUID como PK. Nunca usar BigInteger auto-increment.
+3. **Local/Offline**: El sistema NO depende de internet. Nunca integrar APIs externas (Google Drive, pasarelas de pago, facturación electrónica) hasta que el usuario lo solicite explícitamente en fases futuras.
+4. **Un solo estado por habitación**: Nunca implementar estados múltiples simultáneos. Los estados válidos son: available, occupied, cleaning, maintenance, reserved.
+5. **La Casa**: Es entidad separada. Precio fijo independiente. Si una habitación de la Casa está reservada, la Casa se bloquea para ese rango. Las otras 3 habitaciones de la Casa siguen disponibles individualmente.
+6. **IVA**: Precios almacenados CON IVA incluido. Desglose opcional en checkout según configuración. Tasa default 19% Colombia.
+7. **Pagos**: Todo pago se registra en `payments` con método, tipo, recepcionista y fecha. Nunca omitir el historial de pagos.
+8. **No cancelación automática**: Las reservas vencen por alerta, NUNCA por sistema automático. La decisión es humana.
+9. **Backup**: ZIP diario automático a medianoche (configurable). Incluye BD + archivos (storage). Ruta configurable local.
+10. **Roles**: Spatie Permission. Superadmin = todo. Admin = config + operaciones. Receptionist = operaciones (configurable por admin). Housekeeping y maintenance existen en BD pero SIN vistas propias por ahora.
+11. **Minibar**: Productos tienen precio costo (inventario) y precio venta (minibar). Al checkout se descuenta del inventario de la habitación y se suma a la cuenta.
+12. **Responsive**: Obligatorio. Debe funcionar en desktop, tablet y móvil.
+13. **Tiempo real**: Usar Laravel Reverb. Nunca usar MQTT ni polling excesivo.
+14. **Códigos de inventario**: Consumibles = auto-secuencial (PROD-XXXXX). Activos = auto (ACT-XXXX). Nunca mezclar.
+15. **Wizard de check-in**: Siempre 3 pasos (Huésped → Empresa → Confirmación/Minibar). Nunca omitir pasos ni agregar pasos extra sin consulta.
+16. **Checkout**: Siempre incluye revisión de minibar + resumen de cuenta + opciones de pago + comprobante PDF. Nunca saltarse pasos.
+17. **Notificaciones**: Modales para admin en horarios de baja saturación (configurable). Todos los modales dejan registro persistente.
+18. **Extensión de estadía**: Editar fechas de la estadía existente. Nunca crear nueva estadía.
+19. **Transferencia de huésped**: Cambio de habitación sin checkout. Registrar en `room_transfers`. La estadía continúa.
+20. **Actividad**: Toda transacción, pago, cambio de estado, abono, checkout, check-in se registra en `activity_log` con usuario, hora e IP.
+
+## Lo que NO debe hacer la IA
+- NO agregar módulos no solicitados (ej: restaurante, spa, gym).
+- NO cambiar el flujo de check-in/checkout acordado.
+- NO usar localStorage para datos sensibles (tokens en memoria de Zustand, localStorage solo para preferencias UI).
+- NO implementar autenticación JWT; usar Sanctum.
+- NO crear tablas sin UUID.
+- NO omitir el campo `created_by` / `updated_by` en tablas de negocio.
+- NO hardcodear precios, IVA o configuraciones.
+- NO usar imágenes externas (CDN); todo local.
+
+## Proceso de Desarrollo por Fases
+1. Nunca saltar una fase sin completar la anterior.
+2. Cada fase debe tener su propia rama Git (o al menos su propia carpeta de documentación).
+3. Antes de escribir código de una fase, revisar esta skill y el SDD.
+4. Cada fase termina con pruebas manuales del flujo completo antes de pasar a la siguiente.
+5. Si una decisión técnica contradice estas reglas, detenerse y consultar al usuario.
+"""
+
+# ============================================================
+# SKILL 6: Docker y Despliegue Local
+# ============================================================
+skill_docker = """# Skill: Docker y Despliegue Local — Hotel Manager
+
+## Arquitectura Docker Compose
+```yaml
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    volumes:
+      - ./storage:/var/www/html/storage
+      - ./backup:/var/www/html/backup
+    environment:
+      - APP_ENV=local
+      - DB_HOST=db
+    depends_on:
+      - db
+      - reverb
+    networks:
+      - hotel-network
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hotel_db
+      POSTGRES_USER: hotel_user
+      POSTGRES_PASSWORD: hotel_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - hotel-network
+
+  reverb:
+    build:
+      context: .
+      dockerfile: Dockerfile.reverb
+    ports:
+      - "8080:8080"
+    networks:
+      - hotel-network
+
+volumes:
+  postgres_data:
+
+networks:
+  hotel-network:
+    driver: bridge
+```
+
+## Dockerfile (App)
+- Base: `php:8.4-fpm-alpine`
+- Instalar extensiones: pdo_pgsql, pgsql, gd, zip, exif, pcntl, bcmath
+- Instalar Composer
+- Instalar Node.js 20+ para build de React
+- Copiar Laravel backend y React frontend
+- Build del frontend: `npm run build`
+- Nginx sirve el build de React en `/` y proxy a PHP-FPM en `/api`
+- Script de entrypoint: `php artisan migrate --force && php artisan db:seed --force && php artisan reverb:start & nginx -g 'daemon off;'`
+
+## Consideraciones de Red Local
+- La PC maestra debe tener IP estática en la red local (ej: 192.168.1.100).
+- Las PCs cliente acceden por `http://192.168.1.100`.
+- El contenedor `app` escucha en 0.0.0.0:80.
+- PostgreSQL NO expone puerto externo; solo accesible dentro de la red Docker.
+- Windows: Docker Desktop con WSL2 backend. Activar "Start Docker Desktop when you log in".
+
+## Backup dentro de Docker
+- Cron job dentro del contenedor `app` (o script PHP ejecutado por scheduler de Laravel) a la hora configurada.
+- Comando: `pg_dump` + `tar` de storage/app → ZIP en `/var/www/html/backup/`.
+- El volumen `backup` se mapea a carpeta local del host (configurable en `.env`).
+- Retención: eliminar archivos más antiguos que N días (configurable).
+
+## Restauración
+- Endpoint `/api/v1/backup/restore` recibe archivo ZIP.
+- Proceso: descomprimir, restaurar BD con `psql`, restaurar archivos a storage/app.
+- Requiere confirmación modal en frontend y validación de superadmin.
+
+## Reglas Docker
+1. Nunca exponer PostgreSQL al exterior (sin puerto mapeado o con IP restringida).
+2. El contenedor debe ser auto-suficiente: al reiniciar la PC, Docker Desktop inicia y el contenedor `app` arranca automáticamente.
+3. Usar volúmenes nombrados para persistencia de BD y backups.
+4. El build del frontend debe hacerse en build time, no en runtime.
+"""
+
+# ============================================================
+# SKILL 7: Calendario y Planificación
+# ============================================================
+skill_calendar = """# Skill: Calendario y Planificación — Hotel Manager
+
+## Modelo de Datos del Calendario
+El calendario NO es una tabla separada; se construye dinámicamente desde:
+- `reservations` (status = pending, confirmed)
+- `stays` + `stay_rooms` (status = active, extended)
+- `houses` reservadas (bloquean sus 4 habitaciones)
+
+## Lógica de Ocupación
+Para cada día y cada habitación:
+1. Si existe `stay_room` activo que incluya esa fecha → Ocupada (verde).
+2. Si existe `reservation` confirmed/pending para esa habitación en esa fecha → Reservada (azul claro).
+3. Si la habitación pertenece a una Casa y la Casa está reservada/ocupada en esa fecha → Bloqueada (gris).
+4. Si la habitación está en estado `maintenance` → Mantenimiento (naranja).
+5. Si la habitación está en estado `cleaning` → Limpieza (amarillo).
+6. Si ninguna de las anteriores → Disponible (verde claro/blanco).
+
+## Reglas de Superposición
+- Una habitación NO puede tener dos reservas pending/confirmed para fechas que se solapen. El sistema debe validar esto al crear reserva.
+- Excepción: override por admin (con alerta y registro en auditoría).
+- Una habitación NO puede estar en dos estadías activas simultáneamente.
+- Si una habitación de la Casa está reservada individualmente, la Casa completa se marca como bloqueada para ese rango en el calendario.
+
+## Vistas
+- **Semana**: grid 7 días × N habitaciones. Scroll vertical.
+- **Mes**: grid mensual. Cada celda muestra resumen de ocupación (ej: "8/13" ocupadas). Click en día → detalle.
+- **Año**: heatmap de ocupación por mes. Click en mes → vista mes.
+
+## Interacciones
+- Click en celda vacía → modal de nueva reserva con fecha prellenada.
+- Click en bloque existente → drawer/modal con detalle completo.
+- Drag en celda → seleccionar rango de fechas para reserva.
+- Reservas masivas: seleccionar múltiples habitaciones en el mismo rango de fechas.
+
+## Colores Oficiales (Tailwind)
+- Disponible: `bg-emerald-100 text-emerald-800 border-emerald-300`
+- Ocupada: `bg-rose-100 text-rose-800 border-rose-300`
+- Limpieza: `bg-amber-100 text-amber-800 border-amber-300`
+- Mantenimiento: `bg-orange-100 text-orange-800 border-orange-300`
+- Reservada: `bg-sky-100 text-sky-800 border-sky-300`
+- Bloqueada (Casa): `bg-slate-200 text-slate-600 border-slate-400`
+
+## Reglas
+1. El calendario se actualiza en tiempo real vía Reverb.
+2. Nunca mostrar datos inconsistentes (ej: habitación ocupada y disponible al mismo tiempo).
+3. Las reservas canceladas o no-show se mantienen visibles en el calendario histórico (rojo), pero no bloquean disponibilidad futura.
+"""
+
+# ============================================================
+# SKILL 8: Facturación y Comprobantes (Fase Futura)
+# ============================================================
+skill_billing = """# Skill: Facturación y Comprobantes — Hotel Manager (Fase Futura)
+
+## Estado Actual
+Por ahora NO se implementa facturación electrónica ni pasarelas de pago. Solo comprobantes internos PDF.
+
+## Preparación para Futuro
+- Tablas y campos ya preparados:
+  - `companies.nit` (para facturar a empresa)
+  - `guests.document_number` (para facturar a persona)
+  - `hotel.nit` (emisor)
+  - `payments` con método y tipo
+  - `settings.iva_enabled`, `settings.iva_rate`
+- El checkout ya desglosa subtotal + IVA, listo para factura electrónica.
+
+## Comprobante PDF (Actual)
+- Generado con librería PHP (ej: DomPDF o BrowserShot).
+- Contiene: logo del hotel, datos del huésped/empresa, detalle de habitaciones, noches, precios, minibar, servicios extras, IVA, total, fechas de check-in/out, número de comprobante.
+- Opciones: "Ver PDF" (en nueva pestaña) o "Descargar PDF".
+- No se envía por email/WhatsApp por ahora.
+
+## Reglas
+1. Nunca implementar pasarela de pago sin autorización explícita del usuario.
+2. Nunca conectar con DIAN/SAT/efactura hasta fase específica.
+3. El PDF debe ser generado en el backend y servido como blob/stream.
+4. Guardar copia del PDF en `storage/app/comprobantes/{año}/{mes}/` para auditoría.
+"""
+
+# ============================================================
+# SKILL 9: Sistema de Aprendizaje / Sugerencias
+# ============================================================
+skill_ai = """# Skill: Sistema de Aprendizaje / Sugerencias — Hotel Manager
+
+## Alcance
+Sugerencias basadas en patrones históricos. NO es IA predictiva compleja; es análisis de datos locales.
+
+## Sugerencias Implementables
+1. **Minibar personalizado**: Si un huésped recurrente siempre consume cervezas, sugerir al recepcionista recargar cervezas extras en su minibar al check-in.
+2. **Precios dinámicos sugeridos**: Si el calendario muestra que los fines de semana de diciembre tienen >90% ocupación histórica, sugerir al admin revisar precios.
+3. **Paquetes corporativos**: Si una empresa reserva 3+ habitaciones mensualmente, sugerir crear tarifa especial o paquete.
+4. **Reposición automática de minibar**: Si el historial muestra que la habitación 101 consume 2 aguas diarias, sugerir mantener stock de 4 aguas (2 de consumo + 2 de seguridad).
+
+## Implementación Técnica
+- Tabla `suggestions`: `id`, `type`, `title`, `description`, `confidence_score`, `dismissed`, `created_at`.
+- Job de Laravel que corre periódicamente (diario) analizando tablas `stays`, `minibar_consumptions`, `reservations`.
+- Mostrar en Dashboard como "Sugerencias del día" con opción de descartar.
+- Solo visible para admin y superadmin.
+
+## Reglas
+1. Nunca tomar decisiones automáticas; solo sugerencias.
+2. Nunca enviar datos fuera del sistema local.
+3. Las sugerencias deben explicar el porqué (ej: "Carlos García ha consumido cerveza en 4 de 5 visitas").
+"""
+
+# Guardar todas las skills
+skills = {
+    "SKILL-01-Arquitectura.md": skill_arch,
+    "SKILL-02-ModeloDeDatos.md": skill_data,
+    "SKILL-03-FlujosUI.md": skill_ui,
+    "SKILL-04-API.md": skill_api,
+    "SKILL-05-ReglasDelProyecto.md": skill_rules,
+    "SKILL-06-Docker.md": skill_docker,
+    "SKILL-07-Calendario.md": skill_calendar,
+    "SKILL-08-Facturacion.md": skill_billing,
+    "SKILL-09-Aprendizaje.md": skill_ai,
+}
+
+for filename, content in skills.items():
+    with open(os.path.join(skills_dir, filename), "w", encoding="utf-8") as f:
+        f.write(content)
+
+print(f"✅ {len(skills)} skills creadas en {skills_dir}")
