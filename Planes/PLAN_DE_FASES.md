@@ -1,5 +1,6 @@
 # Plan de Desarrollo por Fases — Hotel Manager
-## Versión 1.0 | Markdown Chuleable
+## Versión 1.1 | Markdown Chuleable
+> **v1.1** — Se integran mejoras detectadas en análisis cruzado de SDD, Skills y Borradores (30/05/2026).
 
 ---
 
@@ -8,6 +9,7 @@
 - **NO saltar fases**. Cada fase es base para la siguiente.
 - Al final de cada fase, hacer **prueba de flujo completo** antes de pasar a la siguiente.
 - Si algo no está claro durante el desarrollo, consultar el **SDD.md** y las **Skills** en `/skills/`.
+- Al finalizar cada fase, verificar los **Criterios de Fase Completada** listados al final de las pruebas.
 
 ---
 
@@ -39,11 +41,25 @@ Fase 0 (Fundación)
 - [ ] Crear `docker-compose.yml` con servicios: `app` (PHP 8.4 + Nginx + Node), `db` (PostgreSQL 16 Alpine), `reverb` (WebSockets).
 - [ ] Crear `Dockerfile` para `app` con extensiones PHP: pdo_pgsql, pgsql, gd, zip, exif, pcntl, bcmath.
 - [ ] Crear `Dockerfile.reverb` para servicio WebSocket.
+- [ ] **Reverb solo en contenedor `reverb`**: NO ejecutar `reverb:start` en el entrypoint del servicio `app`. El servicio `reverb` es independiente.
 - [ ] Configurar Nginx para servir React build en `/` y proxy PHP en `/api`.
 - [ ] Configurar volúmenes persistentes: `postgres_data`, `storage`, `backup`.
-- [ ] Script de entrypoint: migraciones automáticas, seeders, inicio de Reverb.
+- [ ] Script de entrypoint: migraciones automáticas, seeders condicionales (ver 0.1b), inicio de servicios.
+- [ ] **Credenciales vía `.env`**: NUNCA hardcodear credenciales de BD en `docker-compose.yml`. Usar variables de entorno referenciadas desde `.env`.
 - [ ] Probar build completo: `docker-compose up --build` sin errores.
 - [ ] Documentar IP estática de PC maestra y acceso desde red local.
+
+### 0.1b Seeders Seguros (Protección contra reinicio)
+- [ ] El entrypoint NO debe ejecutar `db:seed --force` en cada arranque.
+- [ ] Implementar lógica condicional: solo ejecutar seeders si la tabla `users` está vacía (primer arranque).
+- [ ] Alternativa: usar un flag/archivo de control (ej: `storage/.seeded`) que se crea tras el primer seed.
+- [ ] Verificar: reiniciar contenedor 3 veces → los datos NO se duplican.
+
+### 0.1c `.gitignore`
+- [ ] Crear `.gitignore` en la raíz del proyecto con al menos:
+  - `vendor/`, `node_modules/`, `.env`, `storage/app/backups/`
+  - `Planes/Borradores/` (el cliente pidió explícitamente que los borradores no se suban)
+  - Datos de prueba y seeders de desarrollo
 
 ### 0.2 Laravel Backend Base
 - [ ] Instalar Laravel 12 con Composer en contenedor.
@@ -53,6 +69,7 @@ Fase 0 (Fundación)
 - [ ] Configurar UUIDs como default para todas las migraciones (trait o macro).
 - [ ] Crear migraciones de tablas base: `users`, `roles`, `permissions`, `model_has_roles`, `model_has_permissions`.
 - [ ] Crear seeders: superadmin por defecto (credenciales configurables en `.env`), roles base.
+- [ ] **Unificar nomenclatura de enums**: Todos los enums en minúsculas y en inglés (`cc`, `ce`, `passport`, `nit` — NO `CC`, `PASAPORTE`). Consistente con el resto del sistema (`available`, `occupied`, etc.).
 
 ### 0.3 React Frontend Base
 - [ ] Inicializar proyecto React 19 + TypeScript 5.8 + Vite 8.
@@ -76,12 +93,30 @@ Fase 0 (Fundación)
 - [ ] Frontend: hook `useReverb` para suscribirse a canales y actualizar Zustand.
 - [ ] Probar evento simple: cambiar estado de habitación en backend → ver cambio en frontend sin recargar.
 
-### 0.6 Pruebas de Fase 0
+### 0.6 Estrategia de Concurrencia
+- [ ] Definir política de concurrencia para operaciones críticas (2 recepcionistas intentando la misma habitación al mismo tiempo).
+- [ ] Implementar **lock pesimista** (`SELECT FOR UPDATE`) en transacciones de check-in y checkout.
+- [ ] Alternativa: **lock optimista** con campo `version` o verificación de `updated_at` antes de confirmar.
+- [ ] Reverb notifica el cambio en tiempo real, pero la protección DEBE ser a nivel de BD.
+- [ ] Probar: abrir 2 pestañas, intentar check-in en la misma habitación → solo 1 debe tener éxito, la otra recibe error claro.
+
+### 0.7 Pruebas de Fase 0
 - [ ] Build de Docker exitoso en PC limpia.
 - [ ] Login funciona desde 2 navegadores diferentes (simulando 2 PCs).
 - [ ] Token expira correctamente.
 - [ ] Reverb transmite eventos entre navegadores.
 - [ ] Superadmin puede acceder a Configuración; receptionist NO.
+- [ ] Reiniciar contenedores 3 veces → datos NO se duplican (seeders seguros).
+- [ ] Credenciales de BD vienen de `.env`, NO hardcodeadas en YAML.
+- [ ] `.gitignore` existe y excluye lo correcto.
+
+**Criterios de Fase 0 Completada:**
+- ✅ Docker levanta sin errores en PC limpia
+- ✅ Login/logout funciona con token que expira
+- ✅ Roles y permisos separan acceso correctamente
+- ✅ Reverb transmite eventos entre 2+ navegadores
+- ✅ Settings se leen/escriben desde API
+- ✅ Seeders son idempotentes (reinicio seguro)
 
 **Entregable Fase 0**: Sistema base corriendo en Docker, login funcional, roles separados, settings editables, tiempo real activo.
 
@@ -92,8 +127,10 @@ Fase 0 (Fundación)
 **Depende de**: Fase 0.
 **Conecta con**: Fase 2 (reservas alimentan calendario), Fase 3 (checkout cierra lo que se abre aquí), Fase 4 (minibar se carga aquí).
 
-### 1.1 Modelo de Datos: Habitaciones
+### 1.1 Modelo de Datos: Habitaciones y Entidades Relacionadas
 - [ ] Migraciones: `room_types`, `houses`, `rooms`.
+- [ ] Migración: `guest_companions` (id UUID, guest_id FK, name, document_type, document_number nullable, relationship, age nullable, created_at, updated_at).
+- [ ] Migración: `room_transfers` (id UUID, stay_id FK, from_room_id FK, to_room_id FK, transferred_by FK→users, reason nullable, transferred_at timestamp, notes nullable, created_at).
 - [ ] Seeder: 13 habitaciones + 1 Casa con 4 habitaciones asignadas.
 - [ ] Relación: `rooms.house_id` nullable.
 - [ ] Estados validados en modelo: available, occupied, cleaning, maintenance, reserved.
@@ -104,6 +141,8 @@ Fase 0 (Fundación)
 - [ ] Endpoint `POST /api/v1/rooms/{id}/set-available` (requiere `housekeeping_id`).
 - [ ] Endpoint `POST /api/v1/rooms/{id}/set-cleaning` (automático al checkout).
 - [ ] Endpoint `POST /api/v1/rooms/{id}/set-maintenance`.
+- [ ] Endpoint `POST /api/v1/rooms/{id}/transfer` (transferir huésped a otra habitación sin checkout).
+- [ ] **Concurrencia**: Todas las operaciones de cambio de estado deben usar transacciones con `SELECT FOR UPDATE` (definido en Fase 0.6).
 
 ### 1.3 Vista de Habitaciones (Frontend)
 - [ ] Grid responsive: 1 col móvil, 2 tablet, 4+ desktop.
@@ -124,9 +163,10 @@ Fase 0 (Fundación)
 - [ ] **Paso 1 - Huésped**:
   - Buscador con sugerencias (nombre, documento, teléfono).
   - Si no existe: formulario de creación rápida (nombre, documento, email, teléfono, nacionalidad).
-  - Checkbox "Agregar acompañantes" (lista dinámica).
+  - Checkbox "Agregar acompañantes" (lista dinámica). Guardar en tabla `guest_companions`.
   - Checkbox "Asignar múltiples habitaciones" (selector de habitaciones disponibles).
   - Checkbox "Viene por empresa" (si sí, habilita Paso 2).
+  - **Nota**: Si la reserva se creó con datos mínimos, al hacer check-in se deben completar los campos obligatorios (documento, teléfono, etc.).
 - [ ] **Paso 2 - Empresa** (condicional):
   - Buscador de empresa por NIT/nombre.
   - Si no existe: formulario de creación (nombre, NIT, dirección, teléfono, email, contacto).
@@ -138,22 +178,60 @@ Fase 0 (Fundación)
   - Botón "Confirmar Check-in".
 - [ ] Al confirmar:
   - Crear `Stay` + `StayRooms`.
+  - **Usar transacción con lock** (Fase 0.6) para evitar check-in simultáneo en la misma habitación.
   - `Room.status` → `occupied`.
   - Emitir evento Reverb.
   - Opción de generar comprobante PDF (placeholder si Fase 3 no está lista).
   - Registrar en `ActivityLog`.
 
 ### 1.6 Vista de Huéspedes (básica)
-- [ ] Listado de huéspedes con búsqueda.
+- [ ] Listado de huéspedes con búsqueda y paginación.
 - [ ] Modal de creación/edición rápida.
 - [ ] API: `GET/POST/PUT /api/v1/guests`.
+- [ ] API: `GET/POST/PUT/DELETE /api/v1/guests/{id}/companions` (acompañantes).
+- [ ] **Wireframe necesario**: Diseñar pantalla de listado de huéspedes (no hay wireframe en UI_Visual_Guide — crear uno siguiendo el estilo de la vista de Reservas: tabla con filas alternadas, badges, acciones al hover).
 
-### 1.7 Pruebas de Fase 1
+### 1.6b Vista de Empresas (básica)
+- [ ] Listado de empresas con búsqueda y paginación.
+- [ ] Modal de creación/edición rápida.
+- [ ] API: `GET/POST/PUT /api/v1/companies`.
+- [ ] **Wireframe necesario**: Diseñar pantalla de listado de empresas (misma observación que huéspedes).
+
+### 1.7 Transferencia de Huésped
+- [ ] Desde habitación ocupada: opción "Transferir huésped" → seleccionar habitación destino (solo disponibles).
+- [ ] Crear registro en `room_transfers` con motivo y usuario.
+- [ ] Habitación origen → `cleaning`, habitación destino → `occupied`.
+- [ ] Actualizar `stay_rooms` (cerrar la anterior, crear la nueva).
+- [ ] Emitir evento Reverb.
+- [ ] Registrar en `ActivityLog`.
+- [ ] **Wireframe necesario**: Diseñar modal/drawer de transferencia (no hay wireframe en UI_Visual_Guide).
+
+### 1.8 Drawer Lateral de Detalle de Estadía
+- [ ] Al hacer click en habitación ocupada → drawer lateral con:
+  - Datos del huésped, acompañantes, empresa.
+  - Fechas de estadía, noches transcurridas.
+  - Consumos de minibar (si Fase 4 está lista, sino placeholder).
+  - Servicios extras.
+  - Total acumulado.
+  - Botones: Extender, Transferir, Checkout.
+- [ ] **Wireframe necesario**: Diseñar drawer lateral (mencionado en UI_Visual_Guide pero no dibujado).
+
+### 1.9 Pruebas de Fase 1
 - [ ] Crear check-in walk-in completo con 1 habitación.
 - [ ] Crear check-in con múltiples habitaciones.
 - [ ] Verificar que habitación pasa a ocupada en tiempo real en otra pestaña.
 - [ ] Marcar habitación en limpieza → disponible (con housekeeping).
 - [ ] Dashboard muestra datos correctos.
+- [ ] Transferir huésped de habitación 101 a 102 → verificar estados y registro.
+- [ ] Intentar check-in simultáneo en misma habitación desde 2 pestañas → solo 1 éxito.
+
+**Criterios de Fase 1 Completada:**
+- ✅ Check-in walk-in funciona end-to-end (1 y múltiples habitaciones)
+- ✅ Grid de habitaciones se actualiza en tiempo real vía Reverb
+- ✅ Dashboard muestra KPIs correctos
+- ✅ Transferencia de huésped funciona sin checkout
+- ✅ Concurrencia protegida a nivel de BD
+- ✅ Responsive probado en 3 breakpoints (desktop, tablet, móvil)
 
 **Entregable Fase 1**: Se puede ver el hotel, hacer check-in de personas que llegan sin reserva, y ver el estado de todas las habitaciones en tiempo real.
 
@@ -166,8 +244,9 @@ Fase 0 (Fundación)
 
 ### 2.1 Modelo de Datos: Reservas
 - [ ] Migración `reservations` con todos los campos (ver SDD).
-- [ ] Migración `reservation_payments` para abonos antes del check-in.
-- [ ] Validación: no solapamiento de reservas en misma habitación (con opción de override por admin).
+- [ ] Migración `reservation_payments` para abonos antes del check-in. Campos: id UUID, reservation_id FK, amount decimal(12,2), method (cash/transfer/card), received_by FK→users, notes nullable, created_at.
+- [ ] Migración `seasons` (temporadas): id UUID, name, start_date, end_date, multiplier decimal(4,2) nullable, fixed_price decimal(12,2) nullable, is_active boolean, notify_days_before int default 7, created_at, updated_at.
+- [ ] Validación: no solapamiento de reservas en misma habitación (con opción de override por admin, con registro en auditoría).
 - [ ] Lógica de Casa: si una habitación de la Casa está reservada, bloquear la Casa para ese rango.
 
 ### 2.2 API de Reservas
@@ -216,6 +295,15 @@ Fase 0 (Fundación)
 - [ ] Hacer check-in inmediato desde reserva.
 - [ ] Verificar que calendario muestra colores correctos.
 - [ ] Probar alerta de reserva próxima.
+- [ ] Intentar crear 2 reservas solapadas en la misma habitación → la segunda debe fallar (o pedir override admin).
+
+**Criterios de Fase 2 Completada:**
+- ✅ Reservas CRUD funciona con validación de solapamiento
+- ✅ Calendario muestra ocupación correcta en las 3 vistas (semana/mes/año)
+- ✅ Check-in inmediato desde reserva funciona end-to-end
+- ✅ Lógica de Casa/bloqueo funciona correctamente
+- ✅ Alertas de reservas próximas se generan y muestran
+- ✅ Responsive probado en 3 breakpoints
 
 **Entregable Fase 2**: Se puede reservar manualmente, ver ocupación en calendario, y hacer check-in desde reservas.
 
@@ -228,8 +316,9 @@ Fase 0 (Fundación)
 
 ### 3.1 Modelo de Datos: Estadías y Pagos
 - [ ] Revisar migraciones `stays`, `stay_rooms`, `payments`, `stay_services`.
-- [ ] Agregar campo `late_checkout_fee` a `stays` (nullable).
-- [ ] Agregar campo `payment_split_details` a `payments` (JSON, para mixto).
+- [ ] **Agregar campo `reservation_id`** (FK nullable) a `stays` → vincula directamente la estadía con su reserva de origen. Sin esto no hay forma directa de saber de qué reserva vino un check-in.
+- [ ] Agregar campo `late_checkout_fee` a `stays` (decimal(12,2) nullable).
+- [ ] Agregar campo `payment_split_details` a `payments` (JSON, para pago mixto — detalla qué conceptos paga empresa y qué paga huésped).
 
 ### 3.2 API de Checkout
 - [ ] Endpoint `POST /api/v1/rooms/{id}/checkout` inicia proceso.
@@ -274,6 +363,8 @@ Fase 0 (Fundación)
 ### 3.5 Comprobantes PDF
 - [ ] Instalar librería PDF en Laravel (DomPDF o BrowserShot).
 - [ ] Diseño de comprobante: logo, datos hotel, huésped/empresa, detalle de habitaciones, noches, precios, minibar, servicios, IVA, total, fechas.
+- [ ] **Formato de número de comprobante**: auto-secuencial con formato `COMP-{AAAAMM}-{SECUENCIAL}` (ej: `COMP-202601-0042`). Guardar secuencia en `settings`.
+- [ ] Asociar comprobante PDF al registro de `payments` (campo `receipt_path` en `payments`).
 - [ ] Endpoint `GET /api/v1/stays/{id}/receipt` genera PDF.
 - [ ] Guardar copia en `storage/app/comprobantes/{año}/{mes}/{uuid}.pdf`.
 - [ ] Frontend: botones "Ver PDF" (nueva pestaña) y "Descargar PDF".
@@ -287,10 +378,20 @@ Fase 0 (Fundación)
 
 ### 3.7 Pruebas de Fase 3
 - [ ] Check-in → consumir minibar (simulado) → checkout completo con pago mixto.
-- [ ] Verificar que PDF se genera y guarda.
+- [ ] Verificar que PDF se genera y guarda con número de comprobante correcto.
 - [ ] Verificar que habitación pasa a limpieza y luego a disponible.
 - [ ] Verificar que abonos durante estadía se reflejan en cuenta final.
 - [ ] Verificar desglose de IVA correcto.
+- [ ] Verificar que `stays.reservation_id` se llena correctamente al hacer check-in desde reserva.
+
+**Criterios de Fase 3 Completada:**
+- ✅ Checkout completo funciona end-to-end (minibar → servicios → cuenta → pago)
+- ✅ Pagos mixtos (empresa + huésped) se registran correctamente
+- ✅ PDF se genera con formato correcto y número secuencial
+- ✅ Late checkout fee se calcula y muestra
+- ✅ Abonos parciales se descuentan del total
+- ✅ Habitación pasa a limpieza automáticamente post-checkout
+- ✅ Responsive probado en 3 breakpoints
 
 **Entregable Fase 3**: Se puede cerrar cualquier estadía, cobrar de forma mixta, revisar minibar, y generar comprobante PDF.
 
@@ -316,15 +417,17 @@ Fase 0 (Fundación)
 - [ ] Catálogo `minibar_products`: productos que PUEDEN ir a minibares.
   - Relacionados con `inventory_items` (opcional).
   - Precio venta independiente.
+  - **Precio daño/reposición**: campo adicional para cuando un producto es dañado (ej: vaso roto, cobro de reposición). Puede ser igual al precio venta o diferente.
 - [ ] `room_minibars`: stock actual por habitación.
   - Carga inicial desde "plantilla de minibar" configurable (Settings).
   - Registro de quién rellenó y cuándo.
+- [ ] **Auditoría de reposición minibar**: Registrar en `inventory_transactions` quién repuso, cuándo, qué productos y cantidades. El cliente pidió explícitamente saber "quién rellenó el minibar".
 - [ ] Traslado desde inventario general a minibar:
   - Seleccionar producto del inventario general.
   - Seleccionar habitación destino.
   - Cantidad.
   - Descuenta de inventario general, suma a room_minibar.
-  - Registro en `inventory_transactions` tipo `exit_to_minibar`.
+  - Registro en `inventory_transactions` tipo `exit_to_minibar` con `user_id` del responsable.
 - [ ] Revisión al checkout (ya implementado en Fase 3, aquí conectar datos reales).
 
 ### 4.4 Activos
@@ -359,6 +462,17 @@ Fase 0 (Fundación)
 - [ ] Hacer check-in en 101 → verificar minibar cargado.
 - [ ] Checkout con consumo → verificar stock descontado y alerta si bajo.
 - [ ] Programar mantenimiento de aire acondicionado → verificar alerta.
+- [ ] Verificar que la reposición de minibar registra quién la hizo.
+- [ ] Registrar daño en minibar → verificar cobro de reposición diferenciado.
+
+**Criterios de Fase 4 Completada:**
+- ✅ Inventario CRUD funciona con códigos auto-secuenciales
+- ✅ Minibar end-to-end: traslado → check-in → consumo → checkout → descuento
+- ✅ Activos con mantenimientos programados y alertas
+- ✅ Reparaciones con ciclo completo (crear → asignar → cerrar)
+- ✅ Alertas de stock bajo y vencimiento se generan
+- ✅ Auditoría de reposición registra responsable
+- ✅ Responsive probado en 3 breakpoints
 
 **Entregable Fase 4**: Control completo de inventario, minibar funcional end-to-end, activos con mantenimientos.
 
@@ -369,24 +483,33 @@ Fase 0 (Fundación)
 **Depende de**: Fases 1-4 (necesita saber qué configurar).
 **Conecta con**: Todas las fases anteriores (settings gobiernan comportamiento).
 
+> **⚠️ Endpoints API faltantes**: Varios CRUDs de esta fase no tenían endpoints definidos en SKILL-04.
+> Agregar los siguientes endpoints al implementar:
+
 ### 5.1 Información del Hotel
 - [ ] Formulario: nombre, NIT, dirección, teléfono, email, logo (upload).
 - [ ] Preview del logo en comprobantes.
 
 ### 5.2 Habitaciones y Precios
 - [ ] CRUD de habitaciones (número, tipo, Casa asignada, precio actual).
+  - Endpoints: `GET/POST/PUT/DELETE /api/v1/admin/rooms`.
 - [ ] CRUD de Casas (nombre, precio, asignar/desasignar habitaciones).
+  - Endpoints: `GET/POST/PUT/DELETE /api/v1/admin/houses`.
 - [ ] CRUD de Tipos de Habitación.
+  - Endpoints: `GET/POST/PUT/DELETE /api/v1/admin/room-types`.
 - [ ] **Edición masiva de precios**: seleccionar múltiples habitaciones + Casa, aplicar nuevo precio.
 - [ ] Edición individual de precio por habitación.
 
 ### 5.3 Temporadas
 - [ ] CRUD de temporadas: nombre, fechas inicio/fin, multiplicador de precio o precio fijo.
+  - Endpoints: `GET/POST/PUT/DELETE /api/v1/admin/seasons`.
+  - Usar tabla `seasons` creada en Fase 2.1.
 - [ ] Notificación anticipada configurable (días antes).
 - [ ] Modal al admin en horario de baja saturación (configurable: default 06:00 y 20:00).
 
 ### 5.4 Servicios Extras
 - [ ] CRUD: nombre, precio, descripción, activar/desactivar.
+  - Endpoints: `GET/POST/PUT/DELETE /api/v1/admin/extra-services`.
 
 ### 5.5 IVA y Precios
 - [ ] Toggle "Incluir IVA en precios".
@@ -417,6 +540,8 @@ Fase 0 (Fundación)
 - [ ] Superadmin edita todo.
 - [ ] Admin edita permisos de receptionist (no de superadmin).
 - [ ] CRUD de usuarios (empleados): nombre, email, rol, activo.
+  - Endpoints: `GET/POST/PUT/DELETE /api/v1/admin/users`.
+  - Endpoints: `GET/PUT /api/v1/admin/roles/{id}/permissions`.
 
 ### 5.11 Backup
 - [ ] Input "Ruta de respaldo" (default `./backup/`).
@@ -429,9 +554,20 @@ Fase 0 (Fundación)
 ### 5.12 Pruebas de Fase 5
 - [ ] Cambiar precio de 5 habitaciones masivamente → verificar en check-in.
 - [ ] Cambiar IVA a 0% → verificar checkout sin desglose.
-- [ ] Crear temporada alta → verificar notificación.
+- [ ] Crear temporada alta → verificar notificación y multiplicador aplicado.
 - [ ] Hacer backup manual → verificar archivo ZIP.
 - [ ] Restaurar backup → verificar datos intactos.
+- [ ] CRUD de usuarios: crear recepcionista, asignar permisos, verificar acceso limitado.
+- [ ] CRUD de servicios extras: crear servicio → verificar que aparece en checkout.
+
+**Criterios de Fase 5 Completada:**
+- ✅ Todos los CRUDs de configuración funcionan (habitaciones, casas, tipos, temporadas, servicios, usuarios)
+- ✅ Edición masiva de precios se refleja correctamente
+- ✅ IVA toggle funciona y afecta checkout
+- ✅ Temporadas con multiplicador se aplican
+- ✅ Backup manual + restauración funciona
+- ✅ Roles y permisos se editan visualmente
+- ✅ Responsive probado en 3 breakpoints
 
 **Entregable Fase 5**: Admin puede configurar todo sin desarrollador.
 
@@ -465,13 +601,34 @@ Fase 0 (Fundación)
   - Huéspedes recurrentes + consumos de minibar → sugerir recarga personalizada.
   - Ocupación histórica por día de semana/mes → sugerir ajuste de precios.
   - Empresas frecuentes → sugerir tarifa corporativa.
-- [ ] Tabla `suggestions` con score de confianza.
+  - Consumo histórico por habitación → sugerir reposición automática de minibar.
+- [ ] Tabla `suggestions` con score de confianza (campos: id UUID, type, title, description, confidence_score decimal, data JSON, dismissed boolean default false, dismissed_by FK nullable, created_at).
+- [ ] Endpoints: `GET /api/v1/suggestions`, `POST /api/v1/suggestions/{id}/dismiss`.
 - [ ] Mostrar en Dashboard como "Sugerencias del día" (solo admin/superadmin).
-- [ ] Opción de descartar sugerencia.
+- [ ] Opción de descartar sugerencia con registro de quién la descartó.
+- [ ] Cada sugerencia incluye explicación del "porqué" (ej: "Este huésped ha visitado 5 veces y siempre consume agua y snacks").
 
-### 6.5 Pruebas de Fase 6
+### 6.5 Vista de Historial / Auditoría (Frontend)
+- [ ] **Wireframe necesario**: Diseñar pantalla de Historial/Auditoría (no hay wireframe en UI_Visual_Guide).
+  - Propuesta: Calendario mensual (similar a Reservas) + tabla de eventos filtrable.
+  - Filtros: tipo de acción, usuario, entidad, rango de fechas.
+  - Detalle expandible con diff de valores (old → new).
+  - Exportar a PDF.
+
+### 6.6 Pruebas de Fase 6
 - [ ] Hacer 3 check-ins, 2 pagos, 1 checkout → verificar que todo queda en historial.
 - [ ] Verificar que sugerencia aparece después de datos suficientes.
+- [ ] Descartar sugerencia → verificar que no reaparece.
+- [ ] Exportar pagos históricos a PDF → verificar formato.
+- [ ] Filtrar auditoría por usuario y por tipo de acción → verificar resultados.
+
+**Criterios de Fase 6 Completada:**
+- ✅ Todas las acciones críticas quedan en activity_log automáticamente
+- ✅ Vista de historial muestra eventos con filtros y diff de valores
+- ✅ Pagos históricos exportables a PDF
+- ✅ Sugerencias se generan con job diario y se muestran en dashboard
+- ✅ Sugerencias se pueden descartar
+- ✅ Responsive probado en 3 breakpoints
 
 **Entregable Fase 6**: Todo movimiento queda registrado. El sistema empieza a "aprender" patrones.
 
@@ -504,10 +661,25 @@ Fase 0 (Fundación)
 - [ ] Compresión gzip en Nginx.
 - [ ] Imágenes comprimidas (logo < 200KB).
 
-### 7.4 Pruebas de Fase 7
+### 7.4 Estrategia de Actualización del Sistema
+- [ ] Documentar proceso de actualización post-despliegue (el sistema es offline, no se puede actualizar remotamente).
+- [ ] Proceso propuesto: backup automático → copiar nueva versión vía USB o red local → `docker-compose down && docker-compose up --build`.
+- [ ] Crear script `update.sh` / `update.bat` que automatice: backup → pull/copy → rebuild → migrate.
+- [ ] Documentar rollback: restaurar backup anterior si la actualización falla.
+
+### 7.5 Pruebas de Fase 7
 - [ ] 5 dispositivos simultáneos haciendo check-in/checkout sin errores.
-- [ ] Prueba de carga: 20 requests/segundo durante 1 minuto (simulado).
+- [ ] Prueba de carga: 20 requests/segundo durante 1 minuto (herramienta sugerida: Apache Bench `ab` o `hey`).
 - [ ] Uso en tablet: check-in completo solo con touch.
+- [ ] Proceso de actualización simulado: backup → rebuild → verificar datos intactos.
+
+**Criterios de Fase 7 Completada:**
+- ✅ 5+ dispositivos simultáneos sin errores ni degradación
+- ✅ Responsive funciona correctamente en todos los flujos
+- ✅ Prueba de carga pasada (20 req/s × 1 min)
+- ✅ Proceso de actualización documentado y probado
+- ✅ Compresión gzip activa, lazy loading funcional
+- ✅ Índices PostgreSQL optimizados
 
 **Entregable Fase 7**: Sistema estable en red local, responsive, listo para producción.
 
@@ -563,6 +735,10 @@ Antes de declarar una fase "terminada", verificar:
 3. **Validar fechas**: check-in < check-out, no solapamiento sin override.
 4. **Probar en modo incógnito** para simular segundo dispositivo.
 5. **Backup antes de cambios grandes** en Fase 5+.
+6. **Concurrencia**: Usar `SELECT FOR UPDATE` en transacciones de check-in/checkout/transferencia (definido en Fase 0.6).
+7. **Enums en minúsculas e inglés**: `cc`, `ce`, `passport`, `nit`, `available`, `occupied`, etc. Nunca mezclar idiomas o cases.
+8. **Colores de estado**: SKILL-10 (UX/UI Design System) es la fuente de verdad para colores. Si hay conflicto con SKILL-07, usar SKILL-10.
+9. **Rama Git por fase**: Cada fase se desarrolla en su propia rama (`fase-0`, `fase-1`, etc.) y se mergea a `main` al completar.
 
 ### C. Glosario
 - **Casa**: Entidad separada de 4 habitaciones con precio fijo propio.
@@ -571,6 +747,24 @@ Antes de declarar una fase "terminada", verificar:
 - **Check-in inmediato**: Conversión de reserva a estadía ocupada.
 - **Check-in walk-in**: Check-in de persona sin reserva previa.
 - **Pago mixto**: Empresa paga unos conceptos, huésped otros.
+- **Lock pesimista**: Bloqueo a nivel de BD (`SELECT FOR UPDATE`) que impide que dos procesos modifiquen el mismo registro simultáneamente.
+- **Seeder idempotente**: Seeder que puede ejecutarse múltiples veces sin duplicar datos.
+
+### D. Estimaciones de Tiempo Aproximadas
+
+| Fase | Estimación | Notas |
+|------|-----------|-------|
+| Fase 0 | ~3-4 días | Docker + Auth + Settings + Reverb + Concurrencia |
+| Fase 1 | ~5-7 días | Dashboard + Grid + Wizard check-in + Transferencia |
+| Fase 2 | ~4-5 días | Reservas + Calendario 3 vistas + Alertas |
+| Fase 3 | ~5-6 días | Checkout wizard + Pagos mixtos + PDF |
+| Fase 4 | ~5-6 días | Inventario completo + Minibar end-to-end + Activos |
+| Fase 5 | ~4-5 días | Configuración completa + Backup |
+| Fase 6 | ~3-4 días | Auditoría + Historial + Sugerencias |
+| Fase 7 | ~3-4 días | Red local + Responsive final + Optimización |
+| **Total** | **~32-41 días** | Sin contar Fase 8 (futura) |
+
+> **Nota**: Estas estimaciones son aproximadas y asumen un desarrollador dedicado. Incluyen desarrollo + pruebas. Ajustar según experiencia y disponibilidad.
 
 ---
 
