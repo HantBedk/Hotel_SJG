@@ -48,6 +48,7 @@ Fase 0 (Fundación)
 - [ ] **Credenciales vía `.env`**: NUNCA hardcodear credenciales de BD en `docker-compose.yml`. Usar variables de entorno referenciadas desde `.env`.
 - [ ] Probar build completo: `docker-compose up --build` sin errores.
 - [ ] Documentar IP estática de PC maestra y acceso desde red local.
+- [ ] **Docker auto-start en Windows**: configurar Docker Desktop para iniciar al encender PC (Settings → General → "Start Docker Desktop when you log in"). Documentar proceso.
 
 ### 0.1b Seeders Seguros (Protección contra reinicio)
 - [ ] El entrypoint NO debe ejecutar `db:seed --force` en cada arranque.
@@ -65,26 +66,72 @@ Fase 0 (Fundación)
 - [ ] Instalar Laravel 12 con Composer en contenedor.
 - [ ] Configurar `.env` para PostgreSQL (host=db, puerto interno).
 - [ ] Instalar y configurar Laravel Sanctum para autenticación API.
+  - Expiración de token configurable (default 8 horas).
+  - Contraseñas hasheadas con bcrypt.
 - [ ] Instalar y configurar Spatie Laravel Permission.
 - [ ] Configurar UUIDs como default para todas las migraciones (trait o macro).
-- [ ] Crear migraciones de tablas base: `users`, `roles`, `permissions`, `model_has_roles`, `model_has_permissions`.
-- [ ] Crear seeders: superadmin por defecto (credenciales configurables en `.env`), roles base.
 - [ ] **Unificar nomenclatura de enums**: Todos los enums en minúsculas y en inglés (`cc`, `ce`, `passport`, `nit` — NO `CC`, `PASAPORTE`). Consistente con el resto del sistema (`available`, `occupied`, etc.).
+- [ ] Configurar formato de respuesta API estándar: `{ success, data, message, errors }`.
+- [ ] Configurar códigos HTTP estándar: 200, 201, 400, 401, 403, 404, 422, 500.
+- [ ] Base URL para todos los endpoints: `/api/v1/`.
+
+### 0.2b Migraciones Base (Fase 0)
+- [ ] Migración: tabla `hotels` (UUID PK, name, nit, address, phone, email, logo_path, check_in_time nullable, check_out_time default 13:00, iva_enabled boolean, iva_rate decimal default 19.00, currency COP, country Colombia).
+- [ ] Migración: tabla `users` (UUID PK, name, email unique, password, active boolean default true, created_at, updated_at).
+- [ ] Migración: tabla `activity_logs` (UUID PK, user_id FK nullable, action enum, entity_type, entity_id UUID, old_values JSON, new_values JSON, ip_address, created_at). → Se usa desde Fase 1 en adelante.
+- [ ] Migración: tabla `backups` (UUID PK, file_path, file_size bigint, type enum auto/manual, status enum success/failed, created_at). → Se usa en Fase 5.
+- [ ] Migración: tabla `notifications` (UUID PK, type enum, title, message, severity enum info/warning/critical, target_role, is_modal boolean, scheduled_at nullable, dismissed_at nullable, dismissed_by FK nullable, action_url nullable, created_at). → Se usa desde Fase 2 en adelante.
+- [ ] Migración: tablas de Spatie Permission adaptadas a UUID.
+
+### 0.2c Seeders Base (Fase 0)
+- [ ] Seeder: superadmin por defecto (credenciales desde `.env`).
+- [ ] Seeder: roles (superadmin, admin, receptionist, housekeeping, maintenance).
+- [ ] Seeder: 17 permisos granulares (view_dashboard, view_rooms, manage_rooms, view_reservations, manage_reservations, check_in, check_out, view_inventory, manage_inventory, view_settings, manage_settings, view_activity_log, manage_users, manage_roles, trigger_backup, restore_backup, view_reports).
+- [ ] Seeder: asignación de permisos por rol:
+  - superadmin: todos.
+  - admin: todos excepto manage_roles.
+  - receptionist: view_dashboard, view_rooms, manage_reservations, check_in, check_out, view_inventory.
+  - housekeeping: sin permisos UI por ahora.
+  - maintenance: sin permisos UI por ahora.
+- [ ] Seeder: configuración inicial del hotel en `settings`.
 
 ### 0.3 React Frontend Base
 - [ ] Inicializar proyecto React 19 + TypeScript 5.8 + Vite 8.
-- [ ] Instalar dependencias: React Router v7, Zustand 5, Tailwind CSS v4, Axios, Framer Motion, Lucide React, React Hot Toast, clsx, tailwind-merge.
-- [ ] Configurar Tailwind con tema personalizado (colores del hotel).
+- [ ] Instalar dependencias: React Router v7, Zustand 5, Tailwind CSS v4, Axios, Framer Motion, Lucide React, React Hot Toast, clsx, tailwind-merge, Zod.
+- [ ] Configurar Tailwind con tema personalizado (paleta de colores SKILL-10: emerald, rose, amber, sky, slate, orange, purple).
+- [ ] **Implementar Design System CSS** según SKILL-10:
+  - Variables CSS para modo claro (`--bg-primary: #F8FAFC`, `--accent-primary: #10B981`, etc.).
+  - Variables CSS para modo oscuro (`--bg-primary-dark: #0B1120`, etc.).
+  - Tipografía: Inter como fuente principal, tamaños definidos (título 28px/700, dashboard 48px/700, label 14px/500, input 15px/400, badge 12px/600).
+  - NUNCA blanco puro (#FFFFFF) como fondo en modo claro; NUNCA negro puro (#000000) en modo oscuro.
 - [ ] Configurar Axios con interceptor para Bearer token y manejo de errores 401/403.
-- [ ] Crear store Zustand base: `authStore` (token, user, login, logout).
-- [ ] Crear layout base: Sidebar responsive, Header con notificaciones, área de contenido.
-- [ ] Crear pantalla de Login con validación.
+- [ ] Crear store Zustand base: `authStore` (token en MEMORIA, user, login, logout). **NUNCA token en localStorage.**
+- [ ] **Guards de ruta**: proteger rutas por autenticación y por permisos/rol.
+- [ ] Crear layout base: Sidebar fijo 240px desktop, colapsable 72px tablet, bottom navigation móvil.
+- [ ] Header: título página + campana notificaciones (badge rojo) + usuario actual + toggle dark mode.
+- [ ] **Dark mode toggle**: icono Sun/Moon en header, persistir preferencia en localStorage, transición `duration-300`.
+- [ ] **Skeleton screens**: implementar como patrón global para estados de carga (NUNCA spinners genéricos).
+- [ ] **Toasts**: configurar React Hot Toast como patrón global (éxito/error/warning, 4 segundos, barra de progreso).
+- [ ] **Validación Zod**: configurar validación de formularios en tiempo real.
+- [ ] Crear pantalla de Login (card centrada, logo 180x60px, floating labels, fondo gradiente, créditos creador).
+- [ ] **Logo/info del creador**: quemado en código en footer sidebar + login + comprobantes PDF. Color `--text-muted`, no intrusivo.
 - [ ] Probar login completo: frontend → API → token → redirección a Dashboard.
+
+### 0.3b Accesibilidad (A11y) — Base
+- [ ] Contraste mínimo WCAG AA: 4.5:1 texto normal, 3:1 texto grande.
+- [ ] Todos los inputs con `label` asociado.
+- [ ] Botones con `aria-label` si son solo iconos.
+- [ ] Modales con `role="dialog"`, `aria-modal="true"`, focus trap.
+- [ ] Tamaño mínimo touch target: 44×44px en móvil.
+- [ ] Respetar `prefers-reduced-motion` (desactivar animaciones si el usuario lo pide).
 
 ### 0.4 Settings / Configuración Base
 - [ ] Migración y modelo `settings` (category, key, value JSON).
 - [ ] Seeder con valores por defecto: IVA 19%, check-out 13:00, moneda COP, país Colombia.
 - [ ] Endpoint `GET/PUT /api/v1/settings` (solo admin/superadmin).
+- [ ] Endpoints de autenticación: `POST /api/v1/login`, `POST /api/v1/logout`, `GET /api/v1/me`.
+- [ ] Middleware de autenticación Bearer en todas las rutas protegidas.
+- [ ] Middleware de autorización por permisos Spatie en cada endpoint.
 - [ ] Pantalla base de Configuración (sidebar item visible solo para admin+).
 
 ### 0.5 Laravel Reverb (Tiempo Real)
@@ -128,12 +175,38 @@ Fase 0 (Fundación)
 **Conecta con**: Fase 2 (reservas alimentan calendario), Fase 3 (checkout cierra lo que se abre aquí), Fase 4 (minibar se carga aquí).
 
 ### 1.1 Modelo de Datos: Habitaciones y Entidades Relacionadas
-- [ ] Migraciones: `room_types`, `houses`, `rooms`.
-- [ ] Migración: `guest_companions` (id UUID, guest_id FK, name, document_type, document_number nullable, relationship, age nullable, created_at, updated_at).
-- [ ] Migración: `room_transfers` (id UUID, stay_id FK, from_room_id FK, to_room_id FK, transferred_by FK→users, reason nullable, transferred_at timestamp, notes nullable, created_at).
+- [ ] Migraciones: `room_types` (UUID PK, name, description nullable, base_price decimal(12,2), capacity int).
+- [ ] Migración: `houses` (UUID PK, name, price decimal(12,2), active boolean default true).
+- [ ] Migración: `rooms` (UUID PK, number, room_type_id FK, house_id FK nullable, status enum, current_price decimal(12,2), notes nullable).
+- [ ] Migración: `guests` (UUID PK, full_name, document_type enum cc/ce/passport/nit, document_number unique, email nullable, phone nullable, nationality nullable, birth_date nullable, notes nullable).
+- [ ] Migración: `companies` (UUID PK, name, nit unique, address nullable, phone nullable, email nullable, contact_name nullable).
+- [ ] Migración: `stays` (UUID PK, guest_id FK, company_id FK nullable, reservation_id FK nullable, status enum active/extended/checked_out, check_in_datetime, check_out_datetime, actual_check_out_datetime nullable, late_checkout_fee decimal(12,2) nullable, total_amount nullable, paid_amount nullable, created_by FK, notes nullable).
+- [ ] Migración: `stay_rooms` (UUID PK, stay_id FK, room_id FK, check_in_date, check_out_date, price_per_night decimal(12,2), nights int, subtotal decimal(12,2)).
+- [ ] Migración: `payments` (UUID PK, stay_id FK, amount decimal(12,2), payment_method enum cash/transfer/card, payment_type enum deposit/partial/final, paid_by enum guest/company/mixed, payment_split_details JSON nullable, receipt_path nullable, receptionist_id FK, payment_date, notes nullable).
+- [ ] Migración: `guest_companions` (UUID PK, guest_id FK, name, document_type, document_number nullable, relationship, age nullable, created_at, updated_at).
+- [ ] Migración: `room_transfers` (UUID PK, stay_id FK, from_room_id FK, to_room_id FK, transferred_by FK→users, reason nullable, transferred_at timestamp, notes nullable, created_at).
+- [ ] Migración: `extra_services` (UUID PK, name, price decimal(12,2), description nullable, active boolean default true).
+- [ ] Migración: `stay_services` (UUID PK, stay_id FK, extra_service_id FK, quantity int, unit_price decimal(12,2), total decimal(12,2), applied_at, applied_by FK).
+- [ ] Seeder: tipos de habitación (Sencilla, Doble, King, Presidencial).
 - [ ] Seeder: 13 habitaciones + 1 Casa con 4 habitaciones asignadas.
 - [ ] Relación: `rooms.house_id` nullable.
 - [ ] Estados validados en modelo: available, occupied, cleaning, maintenance, reserved.
+- [ ] Implementar soft deletes en: Guest, Company, Room (preservar historial).
+
+### 1.1b Índices de Base de Datos
+- [ ] Habilitar extensión `pg_trgm` en PostgreSQL.
+- [ ] Índice en `guests.document_number`.
+- [ ] Índice trigram (pg_trgm) para búsqueda parcial en `guests` (nombre, teléfono).
+- [ ] Índice en `rooms.status`.
+- [ ] Índice en `stays.check_in_datetime`.
+- [ ] Índice en `reservations.start_date` / `end_date` (Fase 2, pero definir aquí).
+- [ ] Índice en `inventory_items.code` (Fase 4, pero definir aquí).
+
+### 1.1c Eventos WebSocket Específicos
+- [ ] Evento `RoomStatusChanged` → canal `hotel.rooms` (cuando cambia estado de cualquier habitación).
+- [ ] Evento `NewCheckIn` → canal `hotel.rooms` (al confirmar check-in).
+- [ ] Evento `NewNotification` → canal `hotel.notifications` (al crear notificación).
+- [ ] Frontend: suscribirse a canales y actualizar Zustand sin recargar página.
 
 ### 1.2 API de Habitaciones
 - [ ] Endpoints: `GET /api/v1/rooms`, `GET /api/v1/rooms/{id}`.
@@ -146,18 +219,25 @@ Fase 0 (Fundación)
 
 ### 1.3 Vista de Habitaciones (Frontend)
 - [ ] Grid responsive: 1 col móvil, 2 tablet, 4+ desktop.
-- [ ] `RoomCard` con colores según estado (verde=disponible, rojo=ocupada, amarillo=limpieza, naranja=mantenimiento, azul=reservada).
-- [ ] Indicador visual para habitaciones de Casa (icono pequeño).
+- [ ] `RoomCard` según SKILL-10: border-radius 12px, borde izquierdo 4px del color del estado, hover scale(1.02) + shadow 200ms.
+- [ ] Colores por estado según SKILL-10: emerald-50=disponible, rose-50=ocupada, amber-50=limpieza, orange-50=mantenimiento, sky-50=reservada.
+- [ ] Iconos Lucide por estado: CheckCircle, User, Sparkles, Wrench, Calendar, Home.
+- [ ] Indicador visual para habitaciones de Casa (icono Home en purple, agrupación con borde punteado `--accent-purple`).
 - [ ] Actualización en tiempo real vía Reverb.
 - [ ] Click en disponible → opción "Check-in".
+- [ ] Click en ocupada → opciones "Ver estadía", "Checkout", "Transferir huésped".
 - [ ] Click en limpieza → opción "Marcar disponible" (modal para escoger housekeeping).
 
 ### 1.4 Dashboard Principal
+- [ ] 4 DashboardCards según SKILL-10: icono con fondo circular + número grande (48px/700) + label + trend (↑↓) vs periodo anterior.
 - [ ] Cards: Ingresos hoy (cobrado), transacciones hoy, huéspedes activos, habitaciones disponibles/ocupadas/limpieza.
-- [ ] Gráfico: selector de métrica (dinero o visitas) + periodo (día/semana/mes/año) + comparación con periodo anterior.
+- [ ] Gráfico (Recharts o Chart.js): selector de métrica (dinero o visitas) + periodo (día/semana/mes/año) + línea actual vs línea gris periodo anterior.
 - [ ] Configuración del gráfico desde Settings (qué métrica mostrar por defecto).
+- [ ] Panel "Alertas Recientes": lista de últimas alertas con enlace "Ver todas".
 - [ ] Lista rápida de habitaciones disponibles con botón de check-in directo.
 - [ ] Atajo "Check-in inmediato" (para walk-ins).
+- [ ] Panel "Sugerencias del Sistema" (solo admin/superadmin, fondo `--accent-purple` suave). Placeholder hasta Fase 6.
+- [ ] API: `GET /api/v1/dashboard/stats`, `GET /api/v1/dashboard/chart`, `GET /api/v1/dashboard/available-rooms`.
 
 ### 1.5 Wizard de Check-in Walk-in (3 Pasos)
 - [ ] **Paso 1 - Huésped**:
@@ -214,6 +294,7 @@ Fase 0 (Fundación)
   - Servicios extras.
   - Total acumulado.
   - Botones: Extender, Transferir, Checkout.
+  - **Botón "+ Agregar Servicio Extra"** (agregar servicios durante la estadía, no solo al checkout). El cliente pidió explícitamente que se puedan agregar "al inicio o durante la estadía" (R115).
 - [ ] **Wireframe necesario**: Diseñar drawer lateral (mencionado en UI_Visual_Guide pero no dibujado).
 
 ### 1.9 Pruebas de Fase 1
@@ -273,12 +354,22 @@ Fase 0 (Fundación)
 
 ### 2.4 Calendario
 - [ ] Componente `CalendarGrid` con vistas: Semana, Mes, Año.
-- [ ] Eje Y: lista de habitaciones (con indicador de Casa).
-- [ ] Colores: azul claro=pending, verde=ocupada, rojo=cancelada, gris=bloqueada por Casa.
-- [ ] Tooltip al hover con datos del huésped.
+- [ ] Eje Y: lista de habitaciones (con indicador de Casa). Columna fija al scroll horizontal.
+- [ ] Cabecera de días fija al scroll vertical.
+- [ ] Colores según SKILL-07/10: sky=pending, rose=ocupada, slate=cancelada, gris=bloqueada por Casa.
+- [ ] Línea de "hoy" en rojo punteado vertical (`--accent-danger`).
+- [ ] Bloques: border-radius 6px, texto truncado con ellipsis.
+- [ ] Tooltip al hover con datos del huésped/empresa.
 - [ ] Click en celda vacía → modal nueva reserva con fecha prellenada.
 - [ ] Click en bloque existente → drawer con detalle completo.
-- [ ] Reservas masivas se muestran como bloque grande con número de habitaciones.
+- [ ] Drag en celda → seleccionar rango de fechas para reserva.
+- [ ] Reservas masivas se muestran como bloque grande con badge "Grupo".
+- [ ] Leyenda de colores visible en la parte inferior.
+- [ ] Navegación: botones Anterior/Hoy/Siguiente + selector de vista.
+- [ ] API calendario: `GET /api/v1/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD` con carga lazy solo del rango visible.
+- [ ] Vista Mes: cada celda muestra resumen de ocupación (ej: "8/13").
+- [ ] Vista Año: heatmap de ocupación por mes.
+- [ ] En móvil: vista simplificada como lista de eventos del día.
 
 ### 2.5 Alertas de Reservas
 - [ ] Job/Command de Laravel que corre cada hora.
@@ -315,12 +406,10 @@ Fase 0 (Fundación)
 **Conecta con**: Fase 4 (minibar se revisa aquí), Fase 5 (configuración de IVA y horarios), Fase 6 (auditoría de pagos).
 
 ### 3.1 Modelo de Datos: Estadías y Pagos
-- [ ] Revisar migraciones `stays`, `stay_rooms`, `payments`, `stay_services`.
-- [ ] **Agregar campo `reservation_id`** (FK nullable) a `stays` → vincula directamente la estadía con su reserva de origen. Sin esto no hay forma directa de saber de qué reserva vino un check-in.
-- [ ] Agregar campo `late_checkout_fee` a `stays` (decimal(12,2) nullable).
-- [ ] Agregar campo `payment_split_details` a `payments` (JSON, para pago mixto — detalla qué conceptos paga empresa y qué paga huésped).
+- [ ] Revisar migraciones `stays`, `stay_rooms`, `payments`, `stay_services` (ya creadas en Fase 1.1 con todos los campos incluyendo `reservation_id`, `late_checkout_fee`, `payment_split_details`, `receipt_path`).
+- [ ] Migración: `minibar_consumptions` (UUID PK, stay_id FK, room_id FK, minibar_product_id FK, quantity int, type enum consumed/damaged/missing, unit_price decimal(12,2), total decimal(12,2), registered_at, registered_by FK). → Conecta minibar real con checkout.
 
-### 3.2 API de Checkout
+### 3.2 API de Checkout y Estadías
 - [ ] Endpoint `POST /api/v1/rooms/{id}/checkout` inicia proceso.
 - [ ] Endpoint `GET /api/v1/stays/{id}/account` devuelve desglose completo:
   - Habitaciones: noches × precio por cada stay_room.
@@ -329,7 +418,12 @@ Fase 0 (Fundación)
   - Recargos (late checkout, etc.).
   - Subtotal, IVA (si aplica), TOTAL.
 - [ ] Endpoint `POST /api/v1/stays/{id}/payments` registra pago final.
-- [ ] Endpoint `POST /api/v1/stays/{id}/extend` para extender estadía (cambiar fechas).
+- [ ] Endpoint `POST /api/v1/stays/{id}/extend` para extender estadía (cambiar fechas, NUNCA crear nueva estadía).
+- [ ] Endpoint `POST /api/v1/stays/{id}/add-room` — agregar habitación a estadía existente.
+- [ ] Endpoint `POST /api/v1/stays/{id}/services` — agregar servicio extra durante estadía.
+- [ ] Endpoint `POST /api/v1/stays/{id}/minibar-charges` — registrar consumos de minibar.
+- [ ] Endpoint `GET /api/v1/stays/{id}/payments` — historial de pagos por estadía.
+- [ ] Checkout anticipado: cobrar solo noches usadas + consumos + extras (recalcular automáticamente).
 
 ### 3.3 Wizard de Checkout
 - [ ] Paso 1 - Revisión Minibar:
@@ -368,6 +462,7 @@ Fase 0 (Fundación)
 - [ ] Endpoint `GET /api/v1/stays/{id}/receipt` genera PDF.
 - [ ] Guardar copia en `storage/app/comprobantes/{año}/{mes}/{uuid}.pdf`.
 - [ ] Frontend: botones "Ver PDF" (nueva pestaña) y "Descargar PDF".
+- [ ] **Checkboxes de gastos en PDF**: Al generar comprobante, permitir incluir/excluir conceptos (ej: quitar minibar del comprobante de empresa, dejar solo habitación). El cliente pidió explícitamente esta funcionalidad (R31).
 - [ ] Comprobante de check-in (opcional, más simple) también disponible.
 
 ### 3.6 Pagos Parciales y Abonos
@@ -403,7 +498,14 @@ Fase 0 (Fundación)
 **Conecta con**: Fase 1 (minibar se carga al check-in), Fase 5 (configuración de umbrales), Fase 6 (auditoría de movimientos).
 
 ### 4.1 Modelo de Datos: Inventario
-- [ ] Migraciones: `inventory_categories`, `inventory_items`, `inventory_transactions`, `minibar_products`, `room_minibars`, `minibar_consumptions`, `assets`, `asset_maintenances`, `repair_orders`.
+- [ ] Migración: `inventory_categories` (UUID PK, name, type enum consumable/asset/cleaning).
+- [ ] Migración: `inventory_items` (UUID PK, category_id FK, code unique auto PROD-XXXXX, name, brand nullable, presentation nullable, unit, cost_price decimal(12,2), sale_price decimal(12,2) nullable, current_stock int, min_stock_threshold int default 5, expiry_date nullable, supplier nullable, invoice_number nullable, location nullable).
+- [ ] Migración: `inventory_transactions` (UUID PK, inventory_item_id FK, type enum entry/exit_to_minibar/exit_to_housekeeping/adjustment/sale, quantity int, unit_price decimal(12,2), total_value decimal(12,2), performed_by FK, destination_room_id FK nullable, notes nullable, created_at).
+- [ ] Migración: `minibar_products` (UUID PK, name, inventory_item_id FK nullable, sale_price decimal(12,2), cost_price decimal(12,2), damage_price decimal(12,2) nullable, description nullable).
+- [ ] Migración: `room_minibars` (UUID PK, room_id FK, minibar_product_id FK, quantity int, last_restocked_at, restocked_by FK nullable).
+- [ ] Migración: `assets` (UUID PK, asset_code unique auto ACT-XXXX, name, brand nullable, model nullable, serial_number nullable, location_type enum room/general, room_id FK nullable, purchase_date nullable, warranty_expiry nullable, status enum active/maintenance/retired).
+- [ ] Migración: `asset_maintenances` (UUID PK, asset_id FK, scheduled_date, completed_date nullable, description, cost decimal(12,2) nullable, technician_id FK nullable, next_maintenance_date nullable, status enum pending/completed/cancelled).
+- [ ] Migración: `repair_orders` (UUID PK, asset_id FK nullable, room_id FK nullable, description, reported_by FK, assigned_to FK nullable, cost decimal(12,2) nullable, status enum pending/in_progress/completed, completed_at nullable).
 - [ ] Seeder: categorías (Consumibles, Activos, Limpieza).
 
 ### 4.2 Consumibles
@@ -422,6 +524,15 @@ Fase 0 (Fundación)
   - Carga inicial desde "plantilla de minibar" configurable (Settings).
   - Registro de quién rellenó y cuándo.
 - [ ] **Auditoría de reposición minibar**: Registrar en `inventory_transactions` quién repuso, cuándo, qué productos y cantidades. El cliente pidió explícitamente saber "quién rellenó el minibar".
+
+### 4.3b Entrega de Inventario a Housekeeping (Flujo Detallado)
+- [ ] Crear flujo de entrega de inventario a personal de housekeeping:
+  - Seleccionar empleado de housekeeping (de lista de usuarios con rol housekeeping).
+  - Seleccionar productos y cantidades a entregar.
+  - Registrar en `inventory_transactions` tipo `exit_to_housekeeping` con `destination_user_id`.
+  - Historial de entregas consultable (quién recibió, cuándo, qué, cuánto).
+- [ ] Frontend: botón "Entregar a Housekeeping" en pestaña Consumibles, abre modal con el flujo.
+
 - [ ] Traslado desde inventario general a minibar:
   - Seleccionar producto del inventario general.
   - Seleccionar habitación destino.
@@ -447,14 +558,26 @@ Fase 0 (Fundación)
 - [ ] Job diario que revisa:
   - Productos por vencer (umbral configurable, default 3 días).
   - Stock bajo (umbral configurable, default 5 unidades).
+  - Mantenimientos próximos.
 - [ ] Crear notificaciones en tabla `notifications`.
 - [ ] Mostrar en Dashboard y NotificationCenter.
 
+### 4.6b Centro de Notificaciones (Frontend)
+- [ ] Componente `NotificationCenter`: drawer lateral con historial de notificaciones.
+- [ ] Contador de no leídas en campana del header (badge rojo).
+- [ ] API: `GET /api/v1/notifications`, `POST /api/v1/notifications/{id}/dismiss`, `GET /api/v1/notifications/unread-count`.
+- [ ] Modales de alerta para admin: solo aparecen en horarios configurados (default 06:00 y 20:00). Backdrop blur, botón "Recordarme más tarde".
+- [ ] Todos los modales dejan registro persistente en notificaciones.
+
 ### 4.7 Vista de Inventario (Frontend)
-- [ ] Pestañas: Consumibles | Activos | Minibar | Mantenimientos | Reparaciones.
-- [ ] Tablas con filtros y paginación.
+- [ ] Pestañas estilo pills: Consumibles | Activos | Minibar | Mantenimientos | Reparaciones. Activa con fondo `--accent-primary`.
+- [ ] Tablas según SKILL-10: header oscuro, filas alternadas, bordes solo horizontales.
+- [ ] Alertas visuales: ⚠️ amarillo por vencer, 🔴 rojo stock bajo.
 - [ ] Modales de creación/edición/traslado.
-- [ ] Responsive: tablas scrollables horizontalmente en móvil.
+- [ ] API inventario: `GET/POST/PUT /api/v1/inventory/items`, `POST .../restock`, `POST .../deliver`.
+- [ ] API activos: `GET /api/v1/inventory/assets`, `POST .../maintenance`.
+- [ ] API minibar: `GET /api/v1/inventory/minibar-products`.
+- [ ] Responsive: en móvil cada fila se convierte en card apilada.
 
 ### 4.8 Pruebas de Fase 4
 - [ ] Crear producto consumible, verificar código auto.
@@ -546,10 +669,11 @@ Fase 0 (Fundación)
 ### 5.11 Backup
 - [ ] Input "Ruta de respaldo" (default `./backup/`).
 - [ ] Input "Hora automática" (default 23:59).
-- [ ] Input "Retención" (días, default 30).
+- [ ] Input "Retención" (días, default **ilimitado**). El cliente dijo explícitamente: "quiero uno diario, sin importar que me cree 30 o 31 al mes" — conservar todos por defecto. Toggle "Limitar retención" solo si admin quiere borrar antiguos.
 - [ ] Botón "Respaldar ahora" (manual).
 - [ ] Botón "Cargar respaldo" (subir ZIP y restaurar).
 - [ ] Lista de respaldos existentes con tamaño y fecha.
+- [ ] **Placeholder para backup externo**: Texto en configuración: "Próximamente: enviar backups a Google Drive u otro servidor". El cliente lo mencionó como deseo futuro (R127). NO implementar aún.
 
 ### 5.12 Pruebas de Fase 5
 - [ ] Cambiar precio de 5 habitaciones masivamente → verificar en check-in.
@@ -739,6 +863,18 @@ Antes de declarar una fase "terminada", verificar:
 7. **Enums en minúsculas e inglés**: `cc`, `ce`, `passport`, `nit`, `available`, `occupied`, etc. Nunca mezclar idiomas o cases.
 8. **Colores de estado**: SKILL-10 (UX/UI Design System) es la fuente de verdad para colores. Si hay conflicto con SKILL-07, usar SKILL-10.
 9. **Rama Git por fase**: Cada fase se desarrolla en su propia rama (`fase-0`, `fase-1`, etc.) y se mergea a `main` al completar.
+10. **Soft delete** en entidades clave: Guest, Company, Room. Preservar historial.
+11. **Campo `created_by`/`updated_by`** en tablas de negocio (stays, payments, reservations, etc.).
+12. **Respuesta API estándar**: siempre `{ success, data, message, errors }`. Definido en Fase 0.2.
+
+### B2. ⚠️ REGLA OBLIGATORIA: Leer Planes antes de cada fase
+> **Antes de iniciar cualquier tarea de desarrollo**, el desarrollador (o la IA) DEBE leer TODA la carpeta `Planes/` para:
+> 1. Saber en qué fase estamos y qué tareas faltan.
+> 2. Consultar el SDD, Skills y UI Guide antes de codificar.
+> 3. Verificar que no se está duplicando trabajo o contradiciendo decisiones previas.
+> 4. Usar el archivo `RESUMEN_PROGRESO.md` como punto de entrada rápido.
+>
+> **Esta regla NO es negociable.** Si la IA no lee los planes, puede alucinar decisiones que ya están definidas.
 
 ### C. Glosario
 - **Casa**: Entidad separada de 4 habitaciones con precio fijo propio.
