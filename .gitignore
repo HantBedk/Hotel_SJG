@@ -27,6 +27,13 @@ Planes/
 # Claude local config
 .claude/
 
+# Archivos de estructura vacía (directorios los crea Docker)
+.gitkeep
+
+# gitignore locales de subcarpetas (el root los cubre)
+backend/.gitignore
+frontend/.gitignore
+
 # OS
 .DS_Store
 Thumbs.db

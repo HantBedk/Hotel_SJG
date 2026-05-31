@@ -68,11 +68,17 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 COPY --from=frontend-builder /frontend/dist ./public/app
 COPY docker/nginx/spa-index.html ./public/index.html
 
-# Storage permissions
-RUN chown -R www-data:www-data /var/www/html/storage \
-    && chown -R www-data:www-data /var/www/html/bootstrap/cache \
-    && chmod -R 775 /var/www/html/storage \
-    && chmod -R 775 /var/www/html/bootstrap/cache
+# Crear directorios que Laravel necesita (no depender de .gitkeep)
+RUN mkdir -p \
+        storage/app/public \
+        storage/app/comprobantes \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
 
 # Backup folder
 RUN mkdir -p /var/www/html/backup && chown www-data:www-data /var/www/html/backup
