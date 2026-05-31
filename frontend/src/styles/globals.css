@@ -1,0 +1,163 @@
+@import "tailwindcss";
+
+/* ── Design Tokens ─────────────────────────────────────────────────────────── */
+:root {
+  /* Backgrounds */
+  --bg-base:       #F8FAFC;
+  --bg-surface:    #FFFFFF;
+  --bg-elevated:   #F1F5F9;
+  --bg-overlay:    rgba(15, 23, 42, 0.5);
+
+  /* Primario — Azul marino */
+  --color-primary:         #1E40AF;
+  --color-primary-hover:   #1D3799;
+  --color-primary-light:   #EFF6FF;
+  --color-primary-border:  #BFDBFE;
+
+  /* Secundario — Gris slate */
+  --color-secondary:       #475569;
+  --color-secondary-hover: #334155;
+
+  /* Estado — Habitaciones */
+  --status-available:   #059669; /* available  — verde esmeralda */
+  --status-occupied:    #DC2626; /* occupied   — rojo */
+  --status-reserved:    #D97706; /* reserved   — ámbar */
+  --status-cleaning:    #7C3AED; /* cleaning   — violeta */
+  --status-maintenance: #0891B2; /* maintenance— cian */
+  --status-blocked:     #6B7280; /* blocked    — gris */
+
+  /* Semánticos */
+  --color-success:  #059669;
+  --color-warning:  #D97706;
+  --color-error:    #DC2626;
+  --color-info:     #0284C7;
+
+  /* Texto */
+  --text-primary:   #0F172A;
+  --text-secondary: #475569;
+  --text-muted:     #94A3B8;
+  --text-inverse:   #F8FAFC;
+
+  /* Bordes */
+  --border-default: #E2E8F0;
+  --border-strong:  #CBD5E1;
+  --border-focus:   #1E40AF;
+
+  /* Sidebar */
+  --sidebar-bg:    #0F172A;
+  --sidebar-width: 240px;
+  --sidebar-text:  #CBD5E1;
+  --sidebar-active:#1E40AF;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.07), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+
+  /* Tipografía */
+  --font-sans:  'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono:  'JetBrains Mono', 'Fira Code', monospace;
+  --font-size-xs:   0.75rem;
+  --font-size-sm:   0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg:   1.125rem;
+  --font-size-xl:   1.25rem;
+  --font-size-2xl:  1.5rem;
+
+  /* Radios */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Transiciones */
+  --transition-fast:   150ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow:   300ms ease;
+}
+
+/* ── Dark mode ──────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg-base:       #0B1120;
+  --bg-surface:    #0F172A;
+  --bg-elevated:   #1E293B;
+  --bg-overlay:    rgba(0, 0, 0, 0.7);
+
+  --color-primary:        #3B82F6;
+  --color-primary-hover:  #2563EB;
+  --color-primary-light:  #1E3A5F;
+  --color-primary-border: #1E40AF;
+
+  --color-secondary:      #94A3B8;
+
+  --text-primary:   #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted:     #475569;
+  --text-inverse:   #0F172A;
+
+  --border-default: #1E293B;
+  --border-strong:  #334155;
+  --border-focus:   #3B82F6;
+
+  --sidebar-bg:   #060D18;
+  --sidebar-text: #94A3B8;
+}
+
+/* ── Base styles ─────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  background-color: var(--bg-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+}
+
+#root {
+  min-height: 100dvh;
+  display: flex;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-full);
+}
+
+/* ── Focus ───────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ── Skeleton animation ──────────────────────────────────────────────────── */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.skeleton {
+  background-color: var(--bg-elevated);
+  border-radius: var(--radius-md);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}

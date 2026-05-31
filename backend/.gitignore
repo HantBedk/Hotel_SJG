@@ -1,0 +1,11 @@
+/vendor/
+/.env
+/.env.*
+!/.env.example
+/bootstrap/cache/*.php
+/storage/app/backups/
+/storage/app/comprobantes/
+/storage/logs/*.log
+/storage/.seeded
+/public/hot
+/public/storage

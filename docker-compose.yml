@@ -1,0 +1,82 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hotel_app
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./backend/storage:/var/www/html/storage
+      - ./backend/bootstrap/cache:/var/www/html/bootstrap/cache
+      - ./backup:/var/www/html/backup
+    environment:
+      - APP_ENV=${APP_ENV:-local}
+      - APP_KEY=${APP_KEY}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=${DB_DATABASE:-hotel_sjg}
+      - DB_USERNAME=${DB_USERNAME:-hotel_user}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme_strong_password}
+      - REVERB_APP_ID=${REVERB_APP_ID:-hotel_sjg}
+      - REVERB_APP_KEY=${REVERB_APP_KEY:-hotel_reverb_key}
+      - REVERB_APP_SECRET=${REVERB_APP_SECRET:-changeme_reverb_secret}
+      - REVERB_HOST=reverb
+      - REVERB_PORT=8080
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - hotel-network
+
+  db:
+    image: postgres:16-alpine
+    container_name: hotel_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-hotel_sjg}
+      POSTGRES_USER: ${DB_USERNAME:-hotel_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme_strong_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-hotel_user} -d ${DB_DATABASE:-hotel_sjg}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hotel-network
+
+  reverb:
+    build:
+      context: .
+      dockerfile: Dockerfile.reverb
+    container_name: hotel_reverb
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - REVERB_APP_ID=${REVERB_APP_ID:-hotel_sjg}
+      - REVERB_APP_KEY=${REVERB_APP_KEY:-hotel_reverb_key}
+      - REVERB_APP_SECRET=${REVERB_APP_SECRET:-changeme_reverb_secret}
+      - REVERB_HOST=0.0.0.0
+      - REVERB_PORT=8080
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DATABASE=${DB_DATABASE:-hotel_sjg}
+      - DB_USERNAME=${DB_USERNAME:-hotel_user}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme_strong_password}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - hotel-network
+
+volumes:
+  postgres_data:
+
+networks:
+  hotel-network:
+    driver: bridge

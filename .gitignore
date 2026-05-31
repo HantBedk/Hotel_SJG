@@ -1,0 +1,36 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Dependencies
+backend/vendor/
+frontend/node_modules/
+
+# Laravel generated
+backend/bootstrap/cache/*.php
+backend/storage/app/backups/
+backend/storage/app/comprobantes/
+backend/storage/logs/
+backend/storage/.seeded
+backend/public/hot
+
+# React build output (built inside Docker)
+frontend/dist/
+
+# Docker volumes
+postgres_data/
+
+# Planning docs (never committed)
+Planes/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
