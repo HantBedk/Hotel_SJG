@@ -10,14 +10,15 @@ use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        api: __DIR__ . '/../routes/api.php',
-        health: '/up',
+        api:         __DIR__ . '/../routes/api.php',
+        channels:    __DIR__ . '/../routes/channels.php',
+        health:      '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([
-            'auth.sanctum' => \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
-            'role'         => \Spatie\Permission\Middleware\RoleMiddleware::class,
-            'permission'   => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'auth.sanctum'       => \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            'role'               => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'permission'         => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
     })
@@ -63,6 +64,17 @@ return Application::configure(basePath: dirname(__DIR__))
                     'message' => 'No tienes permiso para realizar esta acción.',
                     'errors'  => [],
                 ], 403);
+            }
+        });
+
+        $exceptions->render(function (\Illuminate\Validation\ValidationException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json([
+                    'success' => false,
+                    'data'    => null,
+                    'message' => 'Datos inválidos.',
+                    'errors'  => $e->errors(),
+                ], 422);
             }
         });
     })

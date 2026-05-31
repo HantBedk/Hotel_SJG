@@ -13,13 +13,13 @@ import { cn } from '@/lib/cn'
 import { useAuth } from '@/hooks/useAuth'
 
 const NAV_ITEMS = [
-  { to: '/',              label: 'Dashboard',    icon: LayoutDashboard, permission: null },
-  { to: '/rooms',         label: 'Habitaciones', icon: BedDouble,       permission: 'view_rooms' },
-  { to: '/stays',         label: 'Estadías',     icon: ClipboardList,   permission: 'view_stays' },
-  { to: '/guests',        label: 'Huéspedes',    icon: Users,           permission: 'view_guests' },
-  { to: '/reservations',  label: 'Reservas',     icon: CalendarDays,    permission: 'view_reservations' },
-  { to: '/reports',       label: 'Reportes',     icon: BarChart3,       permission: 'view_reports' },
-  { to: '/settings',      label: 'Configuración',icon: Settings,        permission: 'manage_settings' },
+  { to: '/',             label: 'Dashboard',     icon: LayoutDashboard, permission: 'view_dashboard' },
+  { to: '/rooms',        label: 'Habitaciones',  icon: BedDouble,       permission: 'view_rooms' },
+  { to: '/stays',        label: 'Estadías',      icon: ClipboardList,   permission: 'check_in' },
+  { to: '/guests',       label: 'Huéspedes',     icon: Users,           permission: 'check_in' },
+  { to: '/reservations', label: 'Reservas',      icon: CalendarDays,    permission: 'view_reservations' },
+  { to: '/reports',      label: 'Reportes',      icon: BarChart3,       permission: 'view_reports' },
+  { to: '/settings',     label: 'Configuración', icon: Settings,        permission: 'view_settings' },
 ]
 
 interface SidebarProps {
@@ -36,10 +36,15 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
         collapsed ? 'w-[72px]' : 'w-[240px]',
       )}
       style={{ background: 'var(--sidebar-bg)', color: 'var(--sidebar-text)' }}
+      aria-label="Navegación principal"
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-white/10">
-        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0">
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ background: 'var(--color-primary)' }}
+          aria-hidden="true"
+        >
           <BedDouble size={16} className="text-white" />
         </div>
         {!collapsed && (
@@ -48,25 +53,28 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 overflow-y-auto">
-        <ul className="space-y-1 px-2">
+      <nav className="flex-1 py-4 overflow-y-auto" aria-label="Menú principal">
+        <ul className="space-y-1 px-2" role="list">
           {NAV_ITEMS.map(({ to, label, icon: Icon, permission }) => {
-            if (permission && !hasPermission(permission)) return null
+            if (!hasPermission(permission)) return null
             return (
               <li key={to}>
                 <NavLink
                   to={to}
                   end={to === '/'}
+                  aria-label={collapsed ? label : undefined}
                   className={({ isActive }) =>
                     cn(
                       'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                       'hover:bg-white/10',
-                      isActive && 'bg-blue-600 text-white',
-                      !isActive && 'text-slate-300',
+                      collapsed && 'justify-center',
+                      isActive
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-300',
                     )
                   }
                 >
-                  <Icon size={18} className="flex-shrink-0" />
+                  <Icon size={18} className="flex-shrink-0" aria-hidden="true" />
                   {!collapsed && <span>{label}</span>}
                 </NavLink>
               </li>
@@ -75,18 +83,30 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
         </ul>
       </nav>
 
-      {/* Logout */}
-      <div className="p-2 border-t border-white/10">
-        <button
-          onClick={logout}
-          className={cn(
-            'flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full',
-            'text-slate-400 hover:text-white hover:bg-white/10 transition-colors',
-          )}
-        >
-          <LogOut size={18} className="flex-shrink-0" />
-          {!collapsed && <span>Cerrar sesión</span>}
-        </button>
+      {/* Creator info + Logout */}
+      <div className="border-t border-white/10">
+        {!collapsed && (
+          <p
+            className="px-4 pt-3 pb-1 text-center"
+            style={{ color: 'var(--text-muted)', fontSize: '10px' }}
+          >
+            Desarrollado por HantBedk
+          </p>
+        )}
+        <div className="p-2">
+          <button
+            onClick={logout}
+            aria-label="Cerrar sesión"
+            className={cn(
+              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full',
+              'text-slate-400 hover:text-white hover:bg-white/10 transition-colors',
+              collapsed && 'justify-center',
+            )}
+          >
+            <LogOut size={18} className="flex-shrink-0" aria-hidden="true" />
+            {!collapsed && <span>Cerrar sesión</span>}
+          </button>
+        </div>
       </div>
     </aside>
   )

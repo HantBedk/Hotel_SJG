@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
             HotelSeeder::class,
             RolesPermissionsSeeder::class,
             SuperAdminSeeder::class,
+            SettingsSeeder::class,
         ]);
     }
 }

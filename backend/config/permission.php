@@ -2,8 +2,8 @@
 
 return [
     'models' => [
-        'permission' => Spatie\Permission\Models\Permission::class,
-        'role'       => Spatie\Permission\Models\Role::class,
+        'permission' => App\Models\Permission::class,
+        'role'       => App\Models\Role::class,
     ],
 
     'table_names' => [
@@ -30,8 +30,8 @@ return [
     'enable_wildcard_permission'       => false,
 
     'cache' => [
-        'expiration_time'  => \DateInterval::createFromDateString('24 hours'),
-        'key'              => 'spatie.permission.cache',
-        'store'            => 'default',
+        'expiration_time' => \DateInterval::createFromDateString('24 hours'),
+        'key'             => 'spatie.permission.cache',
+        'store'           => 'default',
     ],
 ];

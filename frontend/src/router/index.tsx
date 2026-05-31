@@ -3,8 +3,9 @@ import { useAuthStore } from '@/store/authStore'
 import AppLayout from '@/components/layout/AppLayout'
 import LoginPage from '@/pages/auth/LoginPage'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
+import SettingsPage from '@/pages/settings/SettingsPage'
 
-// ── Route guard ───────────────────────────────────────────────────────────────
+// ── Route guards ──────────────────────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   if (!isAuthenticated) return <Navigate to="/login" replace />
@@ -14,6 +15,18 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 function RequireGuest({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   if (isAuthenticated) return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+function RequirePermission({
+  children,
+  permission,
+}: {
+  children: React.ReactNode
+  permission: string
+}) {
+  const hasPermission = useAuthStore((s) => s.hasPermission)
+  if (!hasPermission(permission)) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -35,6 +48,14 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <DashboardPage /> },
+      {
+        path: 'settings',
+        element: (
+          <RequirePermission permission="view_settings">
+            <SettingsPage />
+          </RequirePermission>
+        ),
+      },
     ],
   },
   {

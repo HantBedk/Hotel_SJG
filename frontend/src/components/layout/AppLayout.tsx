@@ -13,15 +13,20 @@ const PAGE_TITLES: Record<string, string> = {
   '/settings':     'Configuración',
 }
 
+const DARK_MODE_KEY = 'hotel_dark_mode'
+
 export default function AppLayout() {
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
-  const [darkMode, setDarkMode] = useState(false)
+  const [darkMode, setDarkMode] = useState(
+    () => localStorage.getItem(DARK_MODE_KEY) === 'true'
+  )
 
   const title = PAGE_TITLES[location.pathname] ?? 'Hotel Manager'
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
+    localStorage.setItem(DARK_MODE_KEY, String(darkMode))
   }, [darkMode])
 
   return (

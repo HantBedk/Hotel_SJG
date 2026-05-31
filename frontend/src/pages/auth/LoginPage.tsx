@@ -58,6 +58,7 @@ export default function LoginPage() {
           <div
             className="w-14 h-14 rounded-xl flex items-center justify-center"
             style={{ background: 'var(--color-primary)' }}
+            aria-hidden="true"
           >
             <BedDouble size={28} className="text-white" />
           </div>
@@ -72,7 +73,12 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="space-y-4"
+          noValidate
+          aria-label="Formulario de inicio de sesión"
+        >
           {/* Email */}
           <div>
             <label
@@ -87,20 +93,21 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               autoFocus
+              aria-describedby={errors.email ? 'email-error' : undefined}
+              aria-invalid={!!errors.email}
               {...register('email')}
               className={cn(
                 'w-full px-3 py-2.5 rounded-lg text-sm border transition-colors',
-                'focus:outline-none focus:ring-2',
+                'focus:outline-none focus:ring-2 focus:ring-blue-500',
                 errors.email ? 'border-red-400' : 'border-[var(--border-default)]',
               )}
-              style={{
-                background: 'var(--bg-base)',
-                color:      'var(--text-primary)',
-              }}
+              style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}
               placeholder="admin@hotelsjg.com"
             />
             {errors.email && (
-              <p className="text-xs text-red-500 mt-1">{errors.email.message}</p>
+              <p id="email-error" className="text-xs text-red-500 mt-1" role="alert">
+                {errors.email.message}
+              </p>
             )}
           </div>
 
@@ -118,30 +125,31 @@ export default function LoginPage() {
                 id="password"
                 type={showPass ? 'text' : 'password'}
                 autoComplete="current-password"
+                aria-describedby={errors.password ? 'password-error' : undefined}
+                aria-invalid={!!errors.password}
                 {...register('password')}
                 className={cn(
                   'w-full px-3 py-2.5 pr-10 rounded-lg text-sm border transition-colors',
-                  'focus:outline-none focus:ring-2',
+                  'focus:outline-none focus:ring-2 focus:ring-blue-500',
                   errors.password ? 'border-red-400' : 'border-[var(--border-default)]',
                 )}
-                style={{
-                  background: 'var(--bg-base)',
-                  color:      'var(--text-primary)',
-                }}
+                style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}
                 placeholder="••••••••"
               />
               <button
                 type="button"
                 onClick={() => setShowPass((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2"
+                className="icon-sm absolute right-2 top-1/2 -translate-y-1/2 rounded p-1"
                 style={{ color: 'var(--text-muted)' }}
                 aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               >
-                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                {showPass ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
             </div>
             {errors.password && (
-              <p className="text-xs text-red-500 mt-1">{errors.password.message}</p>
+              <p id="password-error" className="text-xs text-red-500 mt-1" role="alert">
+                {errors.password.message}
+              </p>
             )}
           </div>
 
@@ -150,16 +158,25 @@ export default function LoginPage() {
             type="submit"
             disabled={isSubmitting}
             className={cn(
-              'w-full py-2.5 px-4 rounded-lg text-sm font-medium text-white',
-              'transition-colors flex items-center justify-center gap-2 mt-2',
+              'w-full py-2.5 px-4 rounded-lg text-sm font-medium text-white mt-2',
+              'transition-colors flex items-center justify-center gap-2',
               'disabled:opacity-60 disabled:cursor-not-allowed',
             )}
             style={{ background: 'var(--color-primary)' }}
+            aria-busy={isSubmitting}
           >
-            {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+            {isSubmitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
             {isSubmitting ? 'Iniciando sesión…' : 'Iniciar sesión'}
           </button>
         </form>
+
+        {/* Creator */}
+        <p
+          className="text-center mt-6"
+          style={{ color: 'var(--text-muted)', fontSize: '11px' }}
+        >
+          Desarrollado por HantBedk
+        </p>
       </div>
     </div>
   )

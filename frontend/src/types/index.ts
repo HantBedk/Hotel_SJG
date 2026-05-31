@@ -37,19 +37,29 @@ export type Role =
   | 'maintenance'
 
 export type Permission =
+  | 'view_dashboard'
   | 'view_rooms'
   | 'manage_rooms'
-  | 'view_stays'
-  | 'create_stays'
-  | 'manage_stays'
-  | 'transfer_guest'
-  | 'view_guests'
-  | 'manage_guests'
   | 'view_reservations'
   | 'manage_reservations'
-  | 'view_payments'
-  | 'manage_payments'
-  | 'view_reports'
+  | 'check_in'
+  | 'check_out'
+  | 'view_inventory'
+  | 'manage_inventory'
+  | 'view_settings'
   | 'manage_settings'
+  | 'view_activity_log'
   | 'manage_users'
-  | 'view_audit'
+  | 'manage_roles'
+  | 'trigger_backup'
+  | 'restore_backup'
+  | 'view_reports'
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+export interface Setting {
+  key: string
+  value: string
+  type: 'string' | 'boolean' | 'integer' | 'json'
+  group: string
+}
