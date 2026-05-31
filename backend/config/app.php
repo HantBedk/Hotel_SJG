@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Support\ServiceProvider;
+
 return [
     'name'     => env('APP_NAME', 'Hotel Manager'),
     'env'      => env('APP_ENV', 'production'),
@@ -15,8 +17,7 @@ return [
     'maintenance' => [
         'driver' => 'file',
     ],
-    // Only app-level providers — third-party are auto-discovered via composer
-    'providers' => [
+    'providers' => ServiceProvider::defaultProviders()->merge([
         App\Providers\AppServiceProvider::class,
-    ],
+    ])->toArray(),
 ];

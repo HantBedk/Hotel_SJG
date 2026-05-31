@@ -3,7 +3,13 @@
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CompanyController;
+use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\ExtraServiceController;
+use App\Http\Controllers\Api\V1\GuestController;
+use App\Http\Controllers\Api\V1\RoomController;
 use App\Http\Controllers\Api\V1\SettingsController;
+use App\Http\Controllers\Api\V1\StayController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,5 +40,77 @@ Route::prefix('v1')->group(function () {
         Route::get('/settings', [SettingsController::class, 'index']);
         Route::put('/settings', [SettingsController::class, 'update'])
              ->middleware('permission:manage_settings');
+
+        // Dashboard
+        Route::get('/dashboard', [DashboardController::class, 'index'])
+             ->middleware('permission:view_dashboard');
+
+        // Habitaciones
+        Route::get('/room-types', [RoomController::class, 'types'])
+             ->middleware('permission:view_rooms');
+        Route::get('/rooms', [RoomController::class, 'index'])
+             ->middleware('permission:view_rooms');
+        Route::post('/rooms', [RoomController::class, 'store'])
+             ->middleware('permission:manage_rooms');
+        Route::get('/rooms/{room}', [RoomController::class, 'show'])
+             ->middleware('permission:view_rooms');
+        Route::put('/rooms/{room}', [RoomController::class, 'update'])
+             ->middleware('permission:manage_rooms');
+        Route::patch('/rooms/{room}/status', [RoomController::class, 'updateStatus'])
+             ->middleware('permission:manage_rooms|check_in');
+        Route::delete('/rooms/{room}', [RoomController::class, 'destroy'])
+             ->middleware('permission:manage_rooms');
+
+        // Huéspedes
+        Route::get('/guests',    [GuestController::class, 'index'])
+             ->middleware('permission:view_reservations|manage_reservations|check_in');
+        Route::post('/guests',   [GuestController::class, 'store'])
+             ->middleware('permission:manage_reservations|check_in');
+        Route::get('/guests/{guest}',    [GuestController::class, 'show'])
+             ->middleware('permission:view_reservations|manage_reservations|check_in');
+        Route::put('/guests/{guest}',    [GuestController::class, 'update'])
+             ->middleware('permission:manage_reservations');
+        Route::delete('/guests/{guest}', [GuestController::class, 'destroy'])
+             ->middleware('permission:manage_reservations');
+        Route::get('/guests/{guest}/companions',         [GuestController::class, 'companions'])
+             ->middleware('permission:view_reservations|manage_reservations|check_in');
+        Route::post('/guests/{guest}/companions',        [GuestController::class, 'storeCompanion'])
+             ->middleware('permission:manage_reservations|check_in');
+        Route::delete('/guests/{guest}/companions/{companion}', [GuestController::class, 'destroyCompanion'])
+             ->middleware('permission:manage_reservations');
+        Route::get('/guests/{guest}/stays', [GuestController::class, 'stays'])
+             ->middleware('permission:view_reservations|manage_reservations|check_in');
+
+        // Empresas
+        Route::get('/companies',    [CompanyController::class, 'index'])
+             ->middleware('permission:view_reservations|manage_reservations|check_in');
+        Route::post('/companies',   [CompanyController::class, 'store'])
+             ->middleware('permission:manage_reservations|check_in');
+        Route::get('/companies/{company}',    [CompanyController::class, 'show'])
+             ->middleware('permission:view_reservations|manage_reservations|check_in');
+        Route::put('/companies/{company}',    [CompanyController::class, 'update'])
+             ->middleware('permission:manage_reservations');
+        Route::delete('/companies/{company}', [CompanyController::class, 'destroy'])
+             ->middleware('permission:manage_reservations');
+
+        // Estadías (Check-in / Check-out)
+        Route::get('/stays',    [StayController::class, 'index'])
+             ->middleware('permission:view_reservations|manage_reservations|check_in');
+        Route::post('/stays',   [StayController::class, 'store'])
+             ->middleware('permission:check_in');
+        Route::get('/stays/{stay}',  [StayController::class, 'show'])
+             ->middleware('permission:view_reservations|manage_reservations|check_in');
+        Route::patch('/stays/{stay}/checkout',  [StayController::class, 'checkout'])
+             ->middleware('permission:check_out');
+        Route::post('/stays/{stay}/transfer',   [StayController::class, 'transfer'])
+             ->middleware('permission:check_in|check_out');
+        Route::post('/stays/{stay}/payments',   [StayController::class, 'addPayment'])
+             ->middleware('permission:check_in|check_out|manage_reservations');
+        Route::post('/stays/{stay}/services',   [StayController::class, 'addService'])
+             ->middleware('permission:check_in|check_out|manage_reservations');
+
+        // Servicios extra (catálogo)
+        Route::get('/extra-services', [ExtraServiceController::class, 'index'])
+             ->middleware('permission:check_in|check_out|manage_reservations');
     });
 });

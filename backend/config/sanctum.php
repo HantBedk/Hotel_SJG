@@ -3,7 +3,7 @@
 return [
     'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', 'localhost,127.0.0.1')),
 
-    'guard' => ['sanctum'],
+    'guard' => ['web'],
 
     'expiration' => env('SANCTUM_TOKEN_EXPIRATION', 480), // minutos (8 horas)
 

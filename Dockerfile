@@ -61,6 +61,9 @@ COPY docker/supervisord.conf /etc/supervisord.conf
 WORKDIR /var/www/html
 COPY backend/ .
 
+# Create .env from example so key:generate has a file to write to
+RUN cp .env.example .env
+
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 

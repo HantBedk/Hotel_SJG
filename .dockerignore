@@ -1,0 +1,25 @@
+# Dependencies — instaladas dentro del build
+frontend/node_modules/
+backend/vendor/
+
+# Builds previos
+frontend/dist/
+
+# Archivos de desarrollo local
+frontend/.env
+backend/.env
+.env
+
+# Archivos de control de versiones y planificación
+.git/
+Planes/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/

@@ -6,9 +6,9 @@ import { useAuthStore } from '@/store/authStore'
 // Pusher global required by laravel-echo
 ;(window as unknown as { Pusher: typeof Pusher }).Pusher = Pusher
 
-let echoInstance: Echo | null = null
+let echoInstance: Echo<'reverb'> | null = null
 
-function getEcho(): Echo | null {
+function getEcho(): Echo<'reverb'> | null {
   const token = useAuthStore.getState().token
   if (!token) return null
 

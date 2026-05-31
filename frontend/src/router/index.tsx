@@ -3,6 +3,10 @@ import { useAuthStore } from '@/store/authStore'
 import AppLayout from '@/components/layout/AppLayout'
 import LoginPage from '@/pages/auth/LoginPage'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
+import GuestsPage from '@/pages/guests/GuestsPage'
+import RoomsPage from '@/pages/rooms/RoomsPage'
+import StaysPage from '@/pages/stays/StaysPage'
+import CompaniesPage from '@/pages/companies/CompaniesPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 
 // ── Route guards ──────────────────────────────────────────────────────────────
@@ -48,6 +52,38 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <DashboardPage /> },
+      {
+        path: 'rooms',
+        element: (
+          <RequirePermission permission="view_rooms">
+            <RoomsPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: 'guests',
+        element: (
+          <RequirePermission permission="check_in">
+            <GuestsPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: 'companies',
+        element: (
+          <RequirePermission permission="check_in">
+            <CompaniesPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: 'stays',
+        element: (
+          <RequirePermission permission="check_in">
+            <StaysPage />
+          </RequirePermission>
+        ),
+      },
       {
         path: 'settings',
         element: (

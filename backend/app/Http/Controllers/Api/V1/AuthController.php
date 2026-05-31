@@ -36,7 +36,7 @@ class AuthController extends Controller
         $user->tokens()->delete();
 
         $token = $user->createToken('hotel-session', ['*'], now()->addMinutes(
-            config('sanctum.expiration', 480)
+            (int) config('sanctum.expiration', 480)
         ))->plainTextToken;
 
         ActivityLog::record('login', $user->id, ['ip' => $request->ip()]);

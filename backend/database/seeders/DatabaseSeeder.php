@@ -13,6 +13,9 @@ class DatabaseSeeder extends Seeder
             RolesPermissionsSeeder::class,
             SuperAdminSeeder::class,
             SettingsSeeder::class,
+            RoomTypesSeeder::class,
+            RoomsSeeder::class,
+            ExtraServicesSeeder::class,
         ]);
     }
 }
