@@ -44,6 +44,12 @@ if not exist backend\.env (
 ) else (
     echo [SKIP] backend/.env ya existe.
 )
+if not exist frontend\.env (
+    copy frontend\.env.example frontend\.env >nul
+    echo [OK] frontend/.env creado desde frontend/.env.example
+) else (
+    echo [SKIP] frontend/.env ya existe.
+)
 
 echo.
 echo === Setup completo ===

@@ -1,44 +1,11 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import toast from 'react-hot-toast'
 import { BedDouble, Eye, EyeOff, Loader2 } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
+import { useLoginForm } from '@/hooks/useLoginForm'
 import { cn } from '@/lib/cn'
 
-const schema = z.object({
-  email:    z.string().email('Correo inválido'),
-  password: z.string().min(6, 'Mínimo 6 caracteres'),
-})
-
-type FormData = z.infer<typeof schema>
-
 export default function LoginPage() {
-  const navigate = useNavigate()
-  const { login } = useAuth()
+  const { register, handleSubmit, errors, isSubmitting } = useLoginForm()
   const [showPass, setShowPass] = useState(false)
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<FormData>({ resolver: zodResolver(schema) })
-
-  const onSubmit = async (data: FormData) => {
-    try {
-      const res = await login(data)
-      if (res.success) {
-        navigate('/', { replace: true })
-      }
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { message?: string } } })
-          ?.response?.data?.message ?? 'Error al iniciar sesión'
-      toast.error(msg)
-    }
-  }
 
   return (
     <div
@@ -48,9 +15,9 @@ export default function LoginPage() {
       <div
         className="w-full max-w-sm rounded-xl p-8"
         style={{
-          background:   'var(--bg-surface)',
-          boxShadow:    'var(--shadow-lg)',
-          border:       '1px solid var(--border-default)',
+          background: 'var(--bg-surface)',
+          boxShadow:  'var(--shadow-lg)',
+          border:     '1px solid var(--border-default)',
         }}
       >
         {/* Logo */}
@@ -73,19 +40,11 @@ export default function LoginPage() {
         </div>
 
         {/* Form */}
-        <form
-          onSubmit={handleSubmit(onSubmit)}
-          className="space-y-4"
-          noValidate
-          aria-label="Formulario de inicio de sesión"
-        >
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate aria-label="Inicio de sesión">
+
           {/* Email */}
           <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium mb-1.5"
-              style={{ color: 'var(--text-secondary)' }}
-            >
+            <label htmlFor="email" className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
               Correo electrónico
             </label>
             <input
@@ -93,8 +52,8 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               autoFocus
-              aria-describedby={errors.email ? 'email-error' : undefined}
               aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? 'email-error' : undefined}
               {...register('email')}
               className={cn(
                 'w-full px-3 py-2.5 rounded-lg text-sm border transition-colors',
@@ -105,7 +64,7 @@ export default function LoginPage() {
               placeholder="admin@hotelsjg.com"
             />
             {errors.email && (
-              <p id="email-error" className="text-xs text-red-500 mt-1" role="alert">
+              <p id="email-error" role="alert" className="text-xs text-red-500 mt-1">
                 {errors.email.message}
               </p>
             )}
@@ -113,11 +72,7 @@ export default function LoginPage() {
 
           {/* Password */}
           <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium mb-1.5"
-              style={{ color: 'var(--text-secondary)' }}
-            >
+            <label htmlFor="password" className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
               Contraseña
             </label>
             <div className="relative">
@@ -125,8 +80,8 @@ export default function LoginPage() {
                 id="password"
                 type={showPass ? 'text' : 'password'}
                 autoComplete="current-password"
-                aria-describedby={errors.password ? 'password-error' : undefined}
                 aria-invalid={!!errors.password}
+                aria-describedby={errors.password ? 'password-error' : undefined}
                 {...register('password')}
                 className={cn(
                   'w-full px-3 py-2.5 pr-10 rounded-lg text-sm border transition-colors',
@@ -139,15 +94,15 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPass((v) => !v)}
+                aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 className="icon-sm absolute right-2 top-1/2 -translate-y-1/2 rounded p-1"
                 style={{ color: 'var(--text-muted)' }}
-                aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               >
                 {showPass ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
               </button>
             </div>
             {errors.password && (
-              <p id="password-error" className="text-xs text-red-500 mt-1" role="alert">
+              <p id="password-error" role="alert" className="text-xs text-red-500 mt-1">
                 {errors.password.message}
               </p>
             )}
@@ -157,24 +112,20 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
+            aria-busy={isSubmitting}
             className={cn(
               'w-full py-2.5 px-4 rounded-lg text-sm font-medium text-white mt-2',
               'transition-colors flex items-center justify-center gap-2',
               'disabled:opacity-60 disabled:cursor-not-allowed',
             )}
             style={{ background: 'var(--color-primary)' }}
-            aria-busy={isSubmitting}
           >
             {isSubmitting && <Loader2 size={16} className="animate-spin" aria-hidden="true" />}
             {isSubmitting ? 'Iniciando sesión…' : 'Iniciar sesión'}
           </button>
         </form>
 
-        {/* Creator */}
-        <p
-          className="text-center mt-6"
-          style={{ color: 'var(--text-muted)', fontSize: '11px' }}
-        >
+        <p className="text-center mt-6" style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
           Desarrollado por HantBedk
         </p>
       </div>
