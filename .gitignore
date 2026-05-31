@@ -24,6 +24,9 @@ postgres_data/
 # Planning docs (never committed)
 Planes/
 
+# Claude local config
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
