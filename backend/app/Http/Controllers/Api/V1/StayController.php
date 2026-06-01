@@ -6,7 +6,9 @@ use App\Events\NewCheckIn;
 use App\Events\RoomStatusChanged;
 use App\Http\Controllers\Controller;
 use App\Models\ExtraService;
+use App\Models\MinibarConsumption;
 use App\Models\Room;
+use App\Models\Setting;
 use App\Models\Stay;
 use App\Models\StayGuest;
 use App\Models\StayRoom;
@@ -41,6 +43,7 @@ class StayController extends Controller
             'payments.receptionist',
             'transfers',
             'services.extraService',
+            'minibarConsumptions',
             'createdBy',
         ]);
 
@@ -68,7 +71,6 @@ class StayController extends Controller
         $nights   = max(1, (int) $checkIn->diffInDays($checkOut));
 
         $stay = DB::transaction(function () use ($data, $checkIn, $checkOut, $nights, $request) {
-            // Lock all requested rooms to prevent double check-in
             $rooms = Room::whereIn('id', $data['room_ids'])
                 ->lockForUpdate()
                 ->get()
@@ -101,25 +103,24 @@ class StayController extends Controller
             ]);
 
             foreach ($data['room_ids'] as $roomId) {
-                $room = $rooms->get($roomId);
+                $room          = $rooms->get($roomId);
                 $pricePerNight = $data['prices'][$roomId] ?? $room->roomType->base_price;
 
                 StayRoom::create([
-                    'stay_id'        => $stay->id,
-                    'room_id'        => $roomId,
-                    'check_in_date'  => $checkIn->toDateString(),
-                    'check_out_date' => $checkOut->toDateString(),
+                    'stay_id'         => $stay->id,
+                    'room_id'         => $roomId,
+                    'check_in_date'   => $checkIn->toDateString(),
+                    'check_out_date'  => $checkOut->toDateString(),
                     'price_per_night' => $pricePerNight,
-                    'nights'         => $nights,
-                    'subtotal'       => $pricePerNight * $nights,
-                    'is_active'      => true,
+                    'nights'          => $nights,
+                    'subtotal'        => $pricePerNight * $nights,
+                    'is_active'       => true,
                 ]);
 
                 $room->update(['status' => 'occupied']);
                 broadcast(new RoomStatusChanged($room->refresh()))->toOthers();
             }
 
-            // Register all guests linked to this stay
             $stay->stayGuests()->create(['guest_id' => $data['guest_id'], 'is_primary' => true]);
             foreach ($data['additional_guest_ids'] ?? [] as $guestId) {
                 if ($guestId !== $data['guest_id']) {
@@ -150,10 +151,22 @@ class StayController extends Controller
         $checkoutAt = Carbon::parse($data['actual_check_out_datetime'] ?? now());
 
         DB::transaction(function () use ($stay, $checkoutAt, $data) {
+            $roomsTotal    = $stay->stayRooms()->where('is_active', true)->sum('subtotal');
+            $servicesTotal = $stay->services()->sum('total');
+            $minibarTotal  = $stay->minibarConsumptions()->sum('total');
+            $lateFee       = (float) ($data['late_checkout_fee'] ?? 0);
+            $subtotal      = (float) $roomsTotal + (float) $servicesTotal + (float) $minibarTotal + $lateFee;
+
+            $ivaEnabled = Setting::get('iva_enabled', false);
+            $ivaPct     = $ivaEnabled ? (float) Setting::get('iva_pct', 19) : 0;
+            $ivaAmount  = $ivaEnabled ? round($subtotal * ($ivaPct / 100), 2) : 0;
+            $total      = $subtotal + $ivaAmount;
+
             $stay->update([
                 'status'                    => 'checked_out',
                 'actual_check_out_datetime' => $checkoutAt,
-                'late_checkout_fee'         => $data['late_checkout_fee'] ?? null,
+                'late_checkout_fee'         => $lateFee ?: null,
+                'total_amount'              => $total,
                 'notes'                     => $data['notes'] ?? $stay->notes,
             ]);
 
@@ -164,6 +177,224 @@ class StayController extends Controller
         });
 
         return response()->json(['success' => true, 'data' => $stay->refresh(), 'message' => 'Checkout realizado.']);
+    }
+
+    public function account(Stay $stay): JsonResponse
+    {
+        $stay->load(['stayRooms.room.roomType', 'services.extraService', 'minibarConsumptions']);
+
+        $roomLines = $stay->stayRooms->map(fn($sr) => [
+            'room_number'     => $sr->room->number ?? '—',
+            'room_type'       => $sr->room->roomType->name ?? '—',
+            'price_per_night' => (float) $sr->price_per_night,
+            'nights'          => $sr->nights,
+            'subtotal'        => (float) $sr->subtotal,
+            'is_active'       => $sr->is_active,
+        ]);
+
+        $serviceLines = $stay->services->map(fn($s) => [
+            'name'       => $s->extraService->name ?? 'Servicio',
+            'quantity'   => $s->quantity,
+            'unit_price' => (float) $s->unit_price,
+            'total'      => (float) $s->total,
+        ]);
+
+        $minibarLines = $stay->minibarConsumptions->map(fn($m) => [
+            'product_name' => $m->product_name,
+            'type'         => $m->type,
+            'quantity'     => $m->quantity,
+            'unit_price'   => (float) $m->unit_price,
+            'total'        => (float) $m->total,
+        ]);
+
+        $roomsTotal    = $roomLines->where('is_active', true)->sum('subtotal');
+        $servicesTotal = $serviceLines->sum('total');
+        $minibarTotal  = $minibarLines->sum('total');
+        $lateFee       = (float) ($stay->late_checkout_fee ?? 0);
+        $subtotal      = $roomsTotal + $servicesTotal + $minibarTotal + $lateFee;
+
+        $ivaEnabled = Setting::get('iva_enabled', false);
+        $ivaPct     = $ivaEnabled ? (float) Setting::get('iva_pct', 19) : 0;
+        $ivaAmount  = $ivaEnabled ? round($subtotal * ($ivaPct / 100), 2) : 0;
+        $total      = $subtotal + $ivaAmount;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'rooms'             => $roomLines->values(),
+                'services'          => $serviceLines->values(),
+                'minibar'           => $minibarLines->values(),
+                'late_checkout_fee' => $lateFee,
+                'subtotal'          => $subtotal,
+                'iva_pct'           => $ivaPct,
+                'iva_amount'        => $ivaAmount,
+                'total'             => $total,
+                'paid_amount'       => (float) $stay->paid_amount,
+                'balance'           => max(0, $total - (float) $stay->paid_amount),
+            ],
+        ]);
+    }
+
+    public function extend(Request $request, Stay $stay): JsonResponse
+    {
+        abort_if(!in_array($stay->status, ['active', 'extended']), 409, 'Solo se puede extender una estadía activa.');
+
+        $data = $request->validate([
+            'check_out_datetime' => 'required|date|after:' . $stay->check_in_datetime,
+        ]);
+
+        $newCheckOut = Carbon::parse($data['check_out_datetime']);
+        $checkIn     = Carbon::parse($stay->check_in_datetime);
+        $newNights   = max(1, (int) $checkIn->diffInDays($newCheckOut));
+
+        DB::transaction(function () use ($stay, $newCheckOut, $newNights) {
+            foreach ($stay->activeStayRooms as $sr) {
+                $sr->update([
+                    'check_out_date' => $newCheckOut->toDateString(),
+                    'nights'         => $newNights,
+                    'subtotal'       => $sr->price_per_night * $newNights,
+                ]);
+            }
+
+            $roomsTotal    = $stay->stayRooms()->where('is_active', true)->sum('subtotal');
+            $servicesTotal = $stay->services()->sum('total');
+            $minibarTotal  = $stay->minibarConsumptions()->sum('total');
+
+            $stay->update([
+                'status'             => 'extended',
+                'check_out_datetime' => $newCheckOut,
+                'total_amount'       => (float) $roomsTotal + (float) $servicesTotal + (float) $minibarTotal,
+            ]);
+        });
+
+        return response()->json(['success' => true, 'data' => $stay->refresh(), 'message' => 'Estadía extendida.']);
+    }
+
+    public function addRoom(Request $request, Stay $stay): JsonResponse
+    {
+        abort_if(!in_array($stay->status, ['active', 'extended']), 409, 'Solo se puede agregar habitaciones a una estadía activa.');
+
+        $data = $request->validate([
+            'room_id'         => 'required|uuid|exists:rooms,id',
+            'price_per_night' => 'required|numeric|min:0',
+        ]);
+
+        $checkIn  = Carbon::parse($stay->check_in_datetime);
+        $checkOut = Carbon::parse($stay->check_out_datetime);
+        $nights   = max(1, (int) $checkIn->diffInDays($checkOut));
+        $subtotal = $data['price_per_night'] * $nights;
+
+        DB::transaction(function () use ($stay, $data, $checkIn, $checkOut, $nights, $subtotal) {
+            $room = Room::lockForUpdate()->findOrFail($data['room_id']);
+            abort_if(
+                !in_array($room->status, ['available', 'reserved']),
+                409,
+                "La habitación {$room->number} no está disponible."
+            );
+
+            StayRoom::create([
+                'stay_id'         => $stay->id,
+                'room_id'         => $room->id,
+                'check_in_date'   => $checkIn->toDateString(),
+                'check_out_date'  => $checkOut->toDateString(),
+                'price_per_night' => $data['price_per_night'],
+                'nights'          => $nights,
+                'subtotal'        => $subtotal,
+                'is_active'       => true,
+            ]);
+
+            $room->update(['status' => 'occupied']);
+            broadcast(new RoomStatusChanged($room->refresh()))->toOthers();
+            $stay->increment('total_amount', $subtotal);
+        });
+
+        $stay->load('stayRooms.room.roomType');
+
+        return response()->json(['success' => true, 'data' => $stay, 'message' => 'Habitación agregada.'], 201);
+    }
+
+    public function minibarCharges(Request $request, Stay $stay): JsonResponse
+    {
+        abort_if($stay->status === 'checked_out', 409, 'La estadía ya está cerrada.');
+
+        $data = $request->validate([
+            'items'                => 'required|array|min:1',
+            'items.*.product_name' => 'required|string|max:100',
+            'items.*.room_id'      => 'required|uuid|exists:rooms,id',
+            'items.*.type'         => 'required|in:consumed,damaged,missing',
+            'items.*.quantity'     => 'required|integer|min:1',
+            'items.*.unit_price'   => 'required|numeric|min:0',
+        ]);
+
+        $records = DB::transaction(function () use ($stay, $data, $request) {
+            $records = [];
+            foreach ($data['items'] as $item) {
+                $itemTotal = $item['unit_price'] * $item['quantity'];
+                $records[] = $stay->minibarConsumptions()->create([
+                    'room_id'       => $item['room_id'],
+                    'product_name'  => $item['product_name'],
+                    'quantity'      => $item['quantity'],
+                    'type'          => $item['type'],
+                    'unit_price'    => $item['unit_price'],
+                    'total'         => $itemTotal,
+                    'registered_at' => now(),
+                    'registered_by' => $request->user()->id,
+                ]);
+            }
+            return $records;
+        });
+
+        return response()->json(['success' => true, 'data' => $records, 'message' => 'Consumos registrados.'], 201);
+    }
+
+    public function receipt(Stay $stay): mixed
+    {
+        abort_if($stay->status !== 'checked_out', 422, 'El comprobante solo está disponible para estadías cerradas.');
+
+        $stay->load(['guest', 'company', 'stayRooms.room.roomType', 'services.extraService', 'minibarConsumptions', 'payments']);
+
+        if (!$stay->receipt_number) {
+            $yearMonth = now()->format('Ym');
+            $seqKey    = "receipt_seq_{$yearMonth}";
+
+            DB::transaction(function () use ($seqKey, $stay, $yearMonth) {
+                $current    = (int) Setting::get($seqKey, 0);
+                $next       = $current + 1;
+                Setting::set($seqKey, $next, 'integer', 'receipts');
+                $compNumber = 'COMP-' . substr($yearMonth, 0, 4) . substr($yearMonth, 4, 2) . '-' . str_pad($next, 4, '0', STR_PAD_LEFT);
+                $stay->update(['receipt_number' => $compNumber]);
+            });
+            $stay->refresh();
+        }
+
+        $compNumber   = $stay->receipt_number;
+        $roomLines    = $stay->stayRooms;
+        $serviceLines = $stay->services;
+        $minibarLines = $stay->minibarConsumptions;
+
+        $roomsTotal    = (float) $roomLines->sum('subtotal');
+        $servicesTotal = (float) $serviceLines->sum('total');
+        $minibarTotal  = (float) $minibarLines->sum('total');
+        $lateFee       = (float) ($stay->late_checkout_fee ?? 0);
+        $subtotal      = $roomsTotal + $servicesTotal + $minibarTotal + $lateFee;
+
+        $ivaEnabled = Setting::get('iva_enabled', false);
+        $ivaPct     = $ivaEnabled ? (float) Setting::get('iva_pct', 19) : 0;
+        $ivaAmount  = $ivaEnabled ? round($subtotal * ($ivaPct / 100), 2) : 0;
+        $total      = $subtotal + $ivaAmount;
+
+        $hotelName  = Setting::get('hotel_name', 'Hotel');
+        $hotelPhone = Setting::get('hotel_phone', '');
+        $hotelAddr  = Setting::get('hotel_address', '');
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.receipt', compact(
+            'stay', 'compNumber', 'roomLines', 'serviceLines', 'minibarLines',
+            'roomsTotal', 'servicesTotal', 'minibarTotal', 'lateFee',
+            'subtotal', 'ivaPct', 'ivaAmount', 'total',
+            'hotelName', 'hotelPhone', 'hotelAddr'
+        ));
+
+        return $pdf->stream("comprobante-{$compNumber}.pdf");
     }
 
     public function transfer(Request $request, Stay $stay): JsonResponse
@@ -183,7 +414,6 @@ class StayController extends Controller
 
             abort_if($toRoom->status !== 'available', 409, "La habitación {$toRoom->number} no está disponible.");
 
-            // Close old stay_room, open new one
             $oldStayRoom = $stay->stayRooms()
                 ->where('room_id', $fromRoom->id)
                 ->where('is_active', true)
@@ -228,13 +458,13 @@ class StayController extends Controller
     public function addPayment(Request $request, Stay $stay): JsonResponse
     {
         $data = $request->validate([
-            'amount'                 => 'required|numeric|min:0.01',
-            'payment_method'         => 'required|in:cash,transfer,card',
-            'payment_type'           => 'required|in:deposit,partial,final',
-            'paid_by'                => 'required|in:guest,company,mixed',
-            'payment_split_details'  => 'nullable|array',
-            'payment_date'           => 'nullable|date',
-            'notes'                  => 'nullable|string',
+            'amount'                => 'required|numeric|min:0.01',
+            'payment_method'        => 'required|in:cash,transfer,card',
+            'payment_type'          => 'required|in:deposit,partial,final',
+            'paid_by'               => 'required|in:guest,company,mixed',
+            'payment_split_details' => 'nullable|array',
+            'payment_date'          => 'nullable|date',
+            'notes'                 => 'nullable|string',
         ]);
 
         $payment = DB::transaction(function () use ($stay, $data, $request) {

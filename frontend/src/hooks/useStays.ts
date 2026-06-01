@@ -3,8 +3,9 @@ import toast from 'react-hot-toast'
 import {
   getStaysApi, getStayApi, createStayApi, checkoutStayApi,
   transferRoomApi, addPaymentApi, addServiceApi, getExtraServicesApi,
+  extendStayApi, addMinibarChargesApi,
 } from '@/services/stays.service'
-import type { CheckInPayload } from '@/types'
+import type { CheckInPayload, MinibarItem } from '@/types'
 
 export function useStays(status?: string) {
   const queryClient = useQueryClient()
@@ -35,6 +36,22 @@ export function useStays(status?: string) {
       toast.error(e?.response?.data?.message ?? 'Error al realizar checkout.'),
   })
 
+  const extendMutation = useMutation({
+    mutationFn: ({ id, check_out_datetime }: { id: string; check_out_datetime: string }) =>
+      extendStayApi(id, { check_out_datetime }),
+    onSuccess: () => { toast.success('Estadía extendida.'); invalidate() },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e?.response?.data?.message ?? 'Error al extender estadía.'),
+  })
+
+  const minibarMutation = useMutation({
+    mutationFn: ({ stayId, items }: { stayId: string; items: MinibarItem[] }) =>
+      addMinibarChargesApi(stayId, { items }),
+    onSuccess: () => toast.success('Consumos de minibar registrados.'),
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e?.response?.data?.message ?? 'Error al registrar consumos.'),
+  })
+
   const transferMutation = useMutation({
     mutationFn: ({ stayId, ...payload }: { stayId: string; from_room_id: string; to_room_id: string; reason?: string }) =>
       transferRoomApi(stayId, payload),
@@ -62,11 +79,14 @@ export function useStays(status?: string) {
     isLoading,
     checkIn:      (payload: CheckInPayload) => checkInMutation.mutateAsync(payload),
     checkOut:     checkOutMutation.mutate,
+    extend:       extendMutation.mutateAsync,
+    addMinibar:   minibarMutation.mutateAsync,
     transfer:     transferMutation.mutate,
     addPayment:   paymentMutation.mutate,
     addService:   serviceMutation.mutate,
-    isCheckingIn: checkInMutation.isPending,
+    isCheckingIn:  checkInMutation.isPending,
     isCheckingOut: checkOutMutation.isPending,
+    isExtending:   extendMutation.isPending,
   }
 }
 

@@ -104,6 +104,16 @@ Route::prefix('v1')->group(function () {
              ->middleware('permission:view_reservations|manage_reservations|check_in');
         Route::patch('/stays/{stay}/checkout',  [StayController::class, 'checkout'])
              ->middleware('permission:check_out');
+        Route::get('/stays/{stay}/account',     [StayController::class, 'account'])
+             ->middleware('permission:check_out|check_in|manage_reservations');
+        Route::get('/stays/{stay}/receipt',     [StayController::class, 'receipt'])
+             ->middleware('permission:check_out|check_in|manage_reservations');
+        Route::post('/stays/{stay}/extend',     [StayController::class, 'extend'])
+             ->middleware('permission:check_out|check_in');
+        Route::post('/stays/{stay}/add-room',   [StayController::class, 'addRoom'])
+             ->middleware('permission:check_in');
+        Route::post('/stays/{stay}/minibar',    [StayController::class, 'minibarCharges'])
+             ->middleware('permission:check_out|check_in');
         Route::post('/stays/{stay}/transfer',   [StayController::class, 'transfer'])
              ->middleware('permission:check_in|check_out');
         Route::post('/stays/{stay}/payments',   [StayController::class, 'addPayment'])

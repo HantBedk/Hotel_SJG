@@ -225,12 +225,14 @@ export interface Stay {
   total_amount: string | null
   paid_amount: string
   notes: string | null
+  receipt_number: string | null
   guest?: Guest
   company?: Company | null
   stay_rooms?: StayRoom[]
   stay_guests?: StayGuest[]
   payments?: Payment[]
   services?: StayService[]
+  minibar_consumptions?: MinibarConsumption[]
   created_at: string
   updated_at: string
 }
@@ -356,6 +358,72 @@ export interface CalendarData {
   rooms: CalendarRoom[]
   reservations: CalendarEntry[]
   stays: CalendarEntry[]
+}
+
+// ── Minibar ───────────────────────────────────────────────────────────────────
+
+export type MinibarConsumptionType = 'consumed' | 'damaged' | 'missing'
+
+export interface MinibarConsumption {
+  id: string
+  stay_id: string
+  room_id: string
+  product_name: string
+  quantity: number
+  type: MinibarConsumptionType
+  unit_price: string
+  total: string
+  registered_at: string
+  registered_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface MinibarItem {
+  product_name: string
+  room_id: string
+  type: MinibarConsumptionType
+  quantity: number
+  unit_price: number
+}
+
+// ── Stay account breakdown ────────────────────────────────────────────────────
+
+export interface AccountRoom {
+  room_number: string
+  room_type: string
+  price_per_night: number
+  nights: number
+  subtotal: number
+  is_active: boolean
+}
+
+export interface AccountService {
+  name: string
+  quantity: number
+  unit_price: number
+  total: number
+}
+
+export interface AccountMinibar {
+  product_name: string
+  type: MinibarConsumptionType
+  quantity: number
+  unit_price: number
+  total: number
+}
+
+export interface StayAccount {
+  rooms: AccountRoom[]
+  services: AccountService[]
+  minibar: AccountMinibar[]
+  late_checkout_fee: number
+  subtotal: number
+  iva_pct: number
+  iva_amount: number
+  total: number
+  paid_amount: number
+  balance: number
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────────────

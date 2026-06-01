@@ -24,6 +24,7 @@ class Stay extends Model
         'paid_amount',
         'created_by',
         'notes',
+        'receipt_number',
     ];
 
     protected function casts(): array
@@ -86,6 +87,11 @@ class Stay extends Model
     public function services(): HasMany
     {
         return $this->hasMany(StayService::class);
+    }
+
+    public function minibarConsumptions(): HasMany
+    {
+        return $this->hasMany(MinibarConsumption::class);
     }
 
     public function scopeActive($query)

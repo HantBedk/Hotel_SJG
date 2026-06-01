@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { X, User, Building2, BedDouble, CreditCard, LogOut, Plus, Loader2, ArrowLeftRight, Sparkles } from 'lucide-react'
+import { X, User, Building2, BedDouble, CreditCard, LogOut, Plus, Loader2, ArrowLeftRight, Sparkles, Download, ExternalLink, CalendarClock } from 'lucide-react'
 import type { Stay } from '@/types'
 import { useStay, useExtraServices } from '@/hooks/useStays'
 import { useRooms } from '@/hooks/useRooms'
+import { downloadStayReceiptApi } from '@/services/stays.service'
+import toast from 'react-hot-toast'
 
 interface Props {
   stayId: string
@@ -20,6 +22,7 @@ interface Props {
   }) => void
   onAddService: (payload: { stayId: string; extra_service_id: string; quantity: number }) => void
   onTransfer: (payload: { stayId: string; from_room_id: string; to_room_id: string; reason?: string }) => void
+  onExtend: (payload: { id: string; check_out_datetime: string }) => Promise<unknown>
 }
 
 const DOC_LABELS: Record<string, string> = {
@@ -57,8 +60,7 @@ interface TransferForm {
   reason: string
 }
 
-export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckOut, onAddPayment, onAddService, onTransfer }: Props) {
-  // Use detail endpoint for fresh data (includes payments)
+export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckOut, onAddPayment, onAddService, onTransfer, onExtend }: Props) {
   const { data: freshStay, isLoading } = useStay(stayId)
   const stay = freshStay ?? initialStay
 
@@ -67,6 +69,10 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
 
   const [showPayForm, setShowPayForm] = useState(false)
   const [showTransferForm, setShowTransferForm] = useState(false)
+  const [showExtendForm, setShowExtendForm] = useState(false)
+  const [extendDate, setExtendDate] = useState('')
+  const [isExtending, setIsExtending] = useState(false)
+
   const activeRooms = stay.stay_rooms?.filter((sr) => sr.is_active) ?? []
   const [transferForm, setTransferForm] = useState<TransferForm>({
     from_room_id: activeRooms[0]?.room_id ?? '',
@@ -120,6 +126,36 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
     })
     setShowPayForm(false)
     setPayForm({ amount: '', payment_method: 'cash', payment_type: 'partial', paid_by: 'guest', notes: '' })
+  }
+
+  const handleExtend = async () => {
+    if (!extendDate) return
+    setIsExtending(true)
+    try {
+      await onExtend({ id: stayId, check_out_datetime: extendDate })
+      setShowExtendForm(false)
+      setExtendDate('')
+    } finally {
+      setIsExtending(false)
+    }
+  }
+
+  const handleReceipt = async (mode: 'view' | 'download') => {
+    try {
+      const blob = await downloadStayReceiptApi(stay.id)
+      const url  = window.URL.createObjectURL(blob)
+      if (mode === 'view') {
+        window.open(url, '_blank')
+      } else {
+        const link    = document.createElement('a')
+        link.href     = url
+        link.download = `comprobante-${stay.receipt_number ?? stay.id}.pdf`
+        link.click()
+        window.URL.revokeObjectURL(url)
+      }
+    } catch {
+      toast.error('Error al obtener comprobante.')
+    }
   }
 
   return (
@@ -254,6 +290,57 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
             </div>
           </section>
 
+          {/* Extend stay */}
+          {(stay.status === 'active' || stay.status === 'extended') && (
+            <section>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <CalendarClock size={15} style={{ color: 'var(--text-muted)' }} />
+                  <p className="text-xs font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Extender estadía</p>
+                </div>
+                {!showExtendForm && (
+                  <button
+                    onClick={() => setShowExtendForm(true)}
+                    className="text-xs px-2 py-1 rounded-lg border hover:opacity-80"
+                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                  >
+                    Extender
+                  </button>
+                )}
+              </div>
+              {showExtendForm && (
+                <div className="rounded-xl p-4 space-y-3 border"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
+                  <div>
+                    <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Nueva fecha de salida</p>
+                    <input
+                      type="datetime-local"
+                      value={extendDate}
+                      onChange={(e) => setExtendDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleExtend}
+                      disabled={!extendDate || isExtending}
+                      className="flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-40 hover:opacity-80"
+                      style={{ background: 'var(--color-primary)', color: '#fff' }}
+                    >
+                      {isExtending ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Confirmar'}
+                    </button>
+                    <button onClick={() => setShowExtendForm(false)}
+                      className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
+                      style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* Transfer room */}
           {stay.status === 'active' && activeRooms.length > 0 && (
             <section>
@@ -274,19 +361,15 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
               </div>
 
               {showTransferForm && (
-                <div
-                  className="rounded-xl p-4 space-y-3 border"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
-                >
+                <div className="rounded-xl p-4 space-y-3 border"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Desde</p>
-                      <select
-                        value={transferForm.from_room_id}
+                      <select value={transferForm.from_room_id}
                         onChange={(e) => setTransferForm((s) => ({ ...s, from_room_id: e.target.value }))}
                         className="w-full px-2 py-2 rounded-lg text-xs border outline-none"
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                      >
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
                         {activeRooms.map((sr) => (
                           <option key={sr.room_id} value={sr.room_id}>Hab. {sr.room?.number}</option>
                         ))}
@@ -294,12 +377,10 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                     </div>
                     <div>
                       <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Hacia</p>
-                      <select
-                        value={transferForm.to_room_id}
+                      <select value={transferForm.to_room_id}
                         onChange={(e) => setTransferForm((s) => ({ ...s, to_room_id: e.target.value }))}
                         className="w-full px-2 py-2 rounded-lg text-xs border outline-none"
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                      >
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
                         <option value="">Seleccionar...</option>
                         {availableRooms.map((r) => (
                           <option key={r.id} value={r.id}>Hab. {r.number}</option>
@@ -307,28 +388,20 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                       </select>
                     </div>
                   </div>
-                  <input
-                    type="text"
-                    placeholder="Motivo (opcional)"
-                    value={transferForm.reason}
+                  <input type="text" placeholder="Motivo (opcional)" value={transferForm.reason}
                     onChange={(e) => setTransferForm((s) => ({ ...s, reason: e.target.value }))}
                     className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
                     style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                   />
                   <div className="flex gap-2">
-                    <button
-                      onClick={handleTransfer}
-                      disabled={!transferForm.to_room_id}
+                    <button onClick={handleTransfer} disabled={!transferForm.to_room_id}
                       className="flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-40 hover:opacity-80"
-                      style={{ background: 'var(--color-primary)', color: '#fff' }}
-                    >
+                      style={{ background: 'var(--color-primary)', color: '#fff' }}>
                       Confirmar
                     </button>
-                    <button
-                      onClick={() => setShowTransferForm(false)}
+                    <button onClick={() => setShowTransferForm(false)}
                       className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
-                      style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-                    >
+                      style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
                       Cancelar
                     </button>
                   </div>
@@ -346,11 +419,9 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                   <p className="text-xs font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Servicios extra</p>
                 </div>
                 {!showServiceForm && (
-                  <button
-                    onClick={() => setShowServiceForm(true)}
+                  <button onClick={() => setShowServiceForm(true)}
                     className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:opacity-80"
-                    style={{ background: 'var(--color-primary)', color: '#fff' }}
-                  >
+                    style={{ background: 'var(--color-primary)', color: '#fff' }}>
                     <Plus size={12} /> Agregar
                   </button>
                 )}
@@ -372,17 +443,13 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
               )}
 
               {showServiceForm && (
-                <div
-                  className="rounded-xl p-4 space-y-3 border"
-                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
-                >
+                <div className="rounded-xl p-4 space-y-3 border"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
                   <div className="grid grid-cols-3 gap-2">
-                    <select
-                      value={serviceForm.extra_service_id}
+                    <select value={serviceForm.extra_service_id}
                       onChange={(e) => setServiceForm((s) => ({ ...s, extra_service_id: e.target.value }))}
                       className="col-span-2 px-2 py-2 rounded-lg text-xs border outline-none"
-                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                    >
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
                       <option value="">Seleccionar servicio...</option>
                       {extraServices.map((es) => (
                         <option key={es.id} value={es.id}>
@@ -390,30 +457,21 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                         </option>
                       ))}
                     </select>
-                    <input
-                      type="number"
-                      min={1}
-                      placeholder="Cant."
-                      value={serviceForm.quantity}
+                    <input type="number" min={1} placeholder="Cant." value={serviceForm.quantity}
                       onChange={(e) => setServiceForm((s) => ({ ...s, quantity: e.target.value }))}
                       className="px-2 py-2 rounded-lg text-xs border outline-none"
                       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                     />
                   </div>
                   <div className="flex gap-2">
-                    <button
-                      onClick={handleAddService}
-                      disabled={!serviceForm.extra_service_id}
+                    <button onClick={handleAddService} disabled={!serviceForm.extra_service_id}
                       className="flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-40 hover:opacity-80"
-                      style={{ background: 'var(--color-primary)', color: '#fff' }}
-                    >
+                      style={{ background: 'var(--color-primary)', color: '#fff' }}>
                       Confirmar
                     </button>
-                    <button
-                      onClick={() => setShowServiceForm(false)}
+                    <button onClick={() => setShowServiceForm(false)}
                       className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
-                      style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-                    >
+                      style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
                       Cancelar
                     </button>
                   </div>
@@ -430,13 +488,10 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                 <p className="text-xs font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Pagos</p>
               </div>
               {stay.status === 'active' && !showPayForm && (
-                <button
-                  onClick={() => setShowPayForm(true)}
+                <button onClick={() => setShowPayForm(true)}
                   className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:opacity-80"
-                  style={{ background: 'var(--color-primary)', color: '#fff' }}
-                >
-                  <Plus size={12} />
-                  Registrar
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                  <Plus size={12} /> Registrar
                 </button>
               )}
             </div>
@@ -456,83 +511,81 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
               </div>
             )}
 
-            {/* Add payment form */}
             {showPayForm && (
-              <div
-                className="rounded-xl p-4 space-y-3 border"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
-              >
-                <p className="text-xs font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>
-                  Nuevo pago
-                </p>
-                <input
-                  type="number"
-                  placeholder="Monto"
-                  value={payForm.amount}
+              <div className="rounded-xl p-4 space-y-3 border"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
+                <p className="text-xs font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Nuevo pago</p>
+                <input type="number" placeholder="Monto" value={payForm.amount}
                   onChange={(e) => setPayForm((s) => ({ ...s, amount: e.target.value }))}
                   className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
                   style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                 />
                 <div className="grid grid-cols-3 gap-2">
-                  <select
-                    value={payForm.payment_method}
-                    onChange={(e) => setPayForm((s) => ({ ...s, payment_method: e.target.value }))}
-                    className="px-2 py-2 rounded-lg text-xs border outline-none col-span-1"
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="cash">Efectivo</option>
-                    <option value="transfer">Transferencia</option>
-                    <option value="card">Tarjeta</option>
-                  </select>
-                  <select
-                    value={payForm.payment_type}
-                    onChange={(e) => setPayForm((s) => ({ ...s, payment_type: e.target.value }))}
-                    className="px-2 py-2 rounded-lg text-xs border outline-none col-span-1"
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="deposit">Depósito</option>
-                    <option value="partial">Parcial</option>
-                    <option value="final">Final</option>
-                  </select>
-                  <select
-                    value={payForm.paid_by}
-                    onChange={(e) => setPayForm((s) => ({ ...s, paid_by: e.target.value }))}
-                    className="px-2 py-2 rounded-lg text-xs border outline-none col-span-1"
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                  >
-                    <option value="guest">Huésped</option>
-                    <option value="company">Empresa</option>
-                    <option value="mixed">Mixto</option>
-                  </select>
+                  {['payment_method', 'payment_type', 'paid_by'].map((field) => (
+                    <select key={field} value={payForm[field as keyof PaymentForm]}
+                      onChange={(e) => setPayForm((s) => ({ ...s, [field]: e.target.value }))}
+                      className="px-2 py-2 rounded-lg text-xs border outline-none"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                      {field === 'payment_method' && <>
+                        <option value="cash">Efectivo</option>
+                        <option value="transfer">Transferencia</option>
+                        <option value="card">Tarjeta</option>
+                      </>}
+                      {field === 'payment_type' && <>
+                        <option value="deposit">Depósito</option>
+                        <option value="partial">Parcial</option>
+                        <option value="final">Final</option>
+                      </>}
+                      {field === 'paid_by' && <>
+                        <option value="guest">Huésped</option>
+                        <option value="company">Empresa</option>
+                        <option value="mixed">Mixto</option>
+                      </>}
+                    </select>
+                  ))}
                 </div>
-                <input
-                  type="text"
-                  placeholder="Observaciones (opcional)"
-                  value={payForm.notes}
+                <input type="text" placeholder="Observaciones (opcional)" value={payForm.notes}
                   onChange={(e) => setPayForm((s) => ({ ...s, notes: e.target.value }))}
                   className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
                   style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                 />
                 <div className="flex gap-2">
-                  <button
-                    onClick={handleAddPayment}
-                    disabled={!payForm.amount}
+                  <button onClick={handleAddPayment} disabled={!payForm.amount}
                     className="flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-40 hover:opacity-80"
-                    style={{ background: 'var(--color-primary)', color: '#fff' }}
-                  >
+                    style={{ background: 'var(--color-primary)', color: '#fff' }}>
                     Guardar
                   </button>
-                  <button
-                    onClick={() => setShowPayForm(false)}
+                  <button onClick={() => setShowPayForm(false)}
                     className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
-                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-                  >
+                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
                     Cancelar
                   </button>
                 </div>
               </div>
             )}
           </section>
+
+          {/* PDF Receipt — for checked_out stays */}
+          {stay.status === 'checked_out' && (
+            <section>
+              <p className="text-xs font-semibold uppercase mb-2" style={{ color: 'var(--text-muted)' }}>Comprobante</p>
+              {stay.receipt_number && (
+                <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>{stay.receipt_number}</p>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => handleReceipt('view')}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs border hover:opacity-80"
+                  style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+                  <ExternalLink size={13} /> Ver PDF
+                </button>
+                <button onClick={() => handleReceipt('download')}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-medium hover:opacity-80"
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                  <Download size={13} /> Descargar
+                </button>
+              </div>
+            </section>
+          )}
 
           {/* Notes */}
           {stay.notes && (
@@ -543,7 +596,7 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
           )}
         </div>
 
-        {/* Footer actions */}
+        {/* Footer — Checkout button (direct, from drawer, for active stays) */}
         {stay.status === 'active' && canCheckOut && (
           <div className="px-5 py-4 border-t flex-shrink-0" style={{ borderColor: 'var(--border-default)' }}>
             <button
@@ -552,7 +605,7 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
               style={{ background: 'var(--status-occupied)', color: '#fff' }}
             >
               <LogOut size={16} />
-              Realizar Checkout
+              Iniciar Checkout
             </button>
           </div>
         )}

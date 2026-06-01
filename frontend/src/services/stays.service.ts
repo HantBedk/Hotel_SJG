@@ -1,5 +1,5 @@
 import api from '@/lib/axios'
-import type { CheckInPayload, ExtraService, Stay, StayService } from '@/types'
+import type { CheckInPayload, ExtraService, MinibarItem, Stay, StayAccount, StayService } from '@/types'
 
 export const getStaysApi = async (status?: string): Promise<{ data: Stay[]; meta: unknown }> => {
   const params = status ? { status } : {}
@@ -23,6 +23,37 @@ export const checkoutStayApi = async (
 ): Promise<Stay> => {
   const res = await api.patch(`/v1/stays/${id}/checkout`, payload)
   return res.data.data
+}
+
+export const getStayAccountApi = async (id: string): Promise<StayAccount> => {
+  const res = await api.get(`/v1/stays/${id}/account`)
+  return res.data.data
+}
+
+export const extendStayApi = async (id: string, payload: { check_out_datetime: string }): Promise<Stay> => {
+  const res = await api.post(`/v1/stays/${id}/extend`, payload)
+  return res.data.data
+}
+
+export const addRoomToStayApi = async (
+  id: string,
+  payload: { room_id: string; price_per_night: number }
+): Promise<Stay> => {
+  const res = await api.post(`/v1/stays/${id}/add-room`, payload)
+  return res.data.data
+}
+
+export const addMinibarChargesApi = async (
+  id: string,
+  payload: { items: MinibarItem[] }
+): Promise<unknown> => {
+  const res = await api.post(`/v1/stays/${id}/minibar`, payload)
+  return res.data.data
+}
+
+export const downloadStayReceiptApi = async (id: string): Promise<Blob> => {
+  const res = await api.get(`/v1/stays/${id}/receipt`, { responseType: 'blob' })
+  return res.data
 }
 
 export const transferRoomApi = async (

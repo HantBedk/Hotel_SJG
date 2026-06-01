@@ -3,11 +3,12 @@ import { useStays } from '@/hooks/useStays'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { StayDrawer } from './components/StayDrawer'
+import { CheckoutWizard } from './components/CheckoutWizard'
 import type { Stay } from '@/types'
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  active:      { label: 'Activa',   color: 'var(--status-occupied)',  bg: '#FFF1F2' },
-  extended:    { label: 'Extendida', color: 'var(--status-reserved)', bg: '#FFFBEB' },
+  active:      { label: 'Activa',    color: 'var(--status-occupied)',  bg: '#FFF1F2' },
+  extended:    { label: 'Extendida', color: 'var(--status-reserved)',  bg: '#FFFBEB' },
   checked_out: { label: 'Cerrada',   color: 'var(--text-muted)',       bg: 'var(--bg-input)' },
 }
 
@@ -31,10 +32,10 @@ export default function StaysPage() {
 
   const [statusFilter, setStatusFilter] = useState<string>('active')
   const [selected, setSelected] = useState<Stay | null>(null)
+  const [checkoutStay, setCheckoutStay] = useState<Stay | null>(null)
 
-  const { stays, isLoading, checkOut, transfer, addPayment, addService, isCheckingOut } = useStays(statusFilter)
+  const { stays, isLoading, transfer, addPayment, addService, extend } = useStays(statusFilter)
 
-  // Sync selected when the list refetches after mutations
   useEffect(() => {
     if (selected) {
       const updated = (stays as Stay[]).find((s) => s.id === selected.id)
@@ -42,6 +43,11 @@ export default function StaysPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stays])
+
+  const handleCheckoutSuccess = () => {
+    setCheckoutStay(null)
+    setSelected(null)
+  }
 
   return (
     <div className="space-y-5">
@@ -131,10 +137,9 @@ export default function StaysPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            checkOut({ id: stay.id })
+                            setCheckoutStay(stay)
                           }}
-                          disabled={isCheckingOut}
-                          className="px-3 py-1 rounded-lg text-xs border hover:opacity-80 disabled:opacity-40"
+                          className="px-3 py-1 rounded-lg text-xs border hover:opacity-80"
                           style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
                         >
                           Checkout
@@ -157,12 +162,22 @@ export default function StaysPage() {
           onClose={() => setSelected(null)}
           canCheckOut={canCheckOut}
           onCheckOut={(id: string) => {
-            checkOut({ id })
-            setSelected(null)
+            const stay = (stays as Stay[]).find((s) => s.id === id)
+            if (stay) setCheckoutStay(stay)
           }}
           onAddPayment={addPayment}
           onAddService={addService}
           onTransfer={transfer}
+          onExtend={extend}
+        />
+      )}
+
+      {/* Checkout wizard */}
+      {checkoutStay && (
+        <CheckoutWizard
+          stay={checkoutStay}
+          onClose={() => setCheckoutStay(null)}
+          onSuccess={handleCheckoutSuccess}
         />
       )}
     </div>
