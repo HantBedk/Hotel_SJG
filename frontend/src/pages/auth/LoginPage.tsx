@@ -28,10 +28,10 @@ export default function LoginPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row overflow-hidden font-sans">
+    <div className="h-screen w-screen flex overflow-hidden font-sans">
 
       {/* Left — Branding */}
-      <div className="hidden md:flex md:w-1/2 lg:w-7/12 bg-[#0a192f] relative flex-col overflow-hidden">
+      <div className="hidden md:flex w-3/4 bg-[#0a192f] relative flex-col overflow-hidden">
         {/* Background effects */}
         <div className="absolute inset-0 z-0 overflow-hidden">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-900/40 via-[#0a192f] to-[#020c1b]" />
@@ -91,12 +91,17 @@ export default function LoginPage() {
       </div>
 
       {/* Right — Form */}
-      <div className="w-full md:w-1/2 lg:w-5/12 bg-white flex flex-col justify-center px-6 py-12 sm:px-12 lg:px-20 relative shadow-[-20px_0_40px_-10px_rgba(0,0,0,0.1)] z-10">
+      <div className="w-full md:w-1/4 relative flex flex-col justify-center px-6 sm:px-8 z-10 overflow-hidden bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
+        {/* Decorative orbs */}
+        <div className="absolute top-[-5%] right-[-5%] w-[40%] h-[40%] rounded-full bg-blue-100/60 blur-[80px] pointer-events-none" />
+        <div className="absolute bottom-[-5%] left-[-5%] w-[35%] h-[35%] rounded-full bg-indigo-100/40 blur-[80px] pointer-events-none" />
+        <div className="absolute top-[50%] left-[30%] w-[20%] h-[20%] rounded-full bg-cyan-100/30 blur-[60px] pointer-events-none" />
+
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="w-full max-w-sm mx-auto lg:max-w-md"
+          className="relative z-10 w-full mx-auto"
         >
           {/* Mobile logo */}
           <div className="md:hidden w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center mb-8 shadow-lg shadow-blue-600/20">
@@ -129,7 +134,7 @@ export default function LoginPage() {
                   {...register('email')}
                   placeholder="correo@hotelsjg.com"
                   className={cn(
-                    'w-full pl-12 pr-4 py-3.5 bg-white border rounded-xl text-slate-900',
+                    'w-full pl-12 pr-4 py-3.5 bg-white/80 backdrop-blur-sm border rounded-xl text-slate-900',
                     'focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all outline-none shadow-sm',
                     errors.email ? 'border-red-400' : 'border-slate-200',
                   )}
@@ -160,7 +165,7 @@ export default function LoginPage() {
                   {...register('password')}
                   placeholder="••••••••"
                   className={cn(
-                    'w-full pl-12 pr-12 py-3.5 bg-white border rounded-xl text-slate-900',
+                    'w-full pl-12 pr-12 py-3.5 bg-white/80 backdrop-blur-sm border rounded-xl text-slate-900',
                     'focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all outline-none shadow-sm',
                     errors.password ? 'border-red-400' : 'border-slate-200',
                   )}

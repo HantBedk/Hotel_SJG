@@ -45,3 +45,10 @@ export const getGuestStaysApi = async (id: string): Promise<Stay[]> => {
   const res = await api.get(`/v1/guests/${id}/stays`)
   return res.data.data
 }
+
+export const findGuestByDocumentApi = async (document: string): Promise<Guest | null> => {
+  const res = await api.get('/v1/guests', { params: { document: document.trim() } })
+  const raw = res.data.data
+  const guests: Guest[] = Array.isArray(raw) ? raw : (raw.data ?? [])
+  return guests.length > 0 ? guests[0] : null
+}

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ExtraService;
 use App\Models\Room;
 use App\Models\Stay;
+use App\Models\StayGuest;
 use App\Models\StayRoom;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,6 +36,7 @@ class StayController extends Controller
             'guest.companions',
             'company',
             'stayRooms.room.roomType',
+            'stayGuests.guest',
             'payments.receptionist',
             'transfers',
             'services.extraService',
@@ -47,15 +49,17 @@ class StayController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'guest_id'           => 'required|uuid|exists:guests,id',
-            'company_id'         => 'nullable|uuid|exists:companies,id',
-            'room_ids'           => 'required|array|min:1',
-            'room_ids.*'         => 'uuid|exists:rooms,id',
-            'check_in_datetime'  => 'required|date',
-            'check_out_datetime' => 'required|date|after:check_in_datetime',
-            'prices'             => 'required|array',  // keyed by room_id
-            'prices.*'           => 'numeric|min:0',
-            'notes'              => 'nullable|string',
+            'guest_id'               => 'required|uuid|exists:guests,id',
+            'company_id'             => 'nullable|uuid|exists:companies,id',
+            'room_ids'               => 'required|array|min:1',
+            'room_ids.*'             => 'uuid|exists:rooms,id',
+            'check_in_datetime'      => 'required|date',
+            'check_out_datetime'     => 'required|date|after:check_in_datetime',
+            'prices'                 => 'required|array',
+            'prices.*'               => 'numeric|min:0',
+            'notes'                  => 'nullable|string',
+            'additional_guest_ids'   => 'nullable|array',
+            'additional_guest_ids.*' => 'uuid|exists:guests,id|distinct',
         ]);
 
         $checkIn  = Carbon::parse($data['check_in_datetime']);
@@ -114,10 +118,18 @@ class StayController extends Controller
                 broadcast(new RoomStatusChanged($room->refresh()))->toOthers();
             }
 
+            // Register all guests linked to this stay
+            $stay->stayGuests()->create(['guest_id' => $data['guest_id'], 'is_primary' => true]);
+            foreach ($data['additional_guest_ids'] ?? [] as $guestId) {
+                if ($guestId !== $data['guest_id']) {
+                    $stay->stayGuests()->create(['guest_id' => $guestId, 'is_primary' => false]);
+                }
+            }
+
             return $stay;
         });
 
-        $stay->load(['guest', 'company', 'stayRooms.room.roomType', 'createdBy']);
+        $stay->load(['guest', 'company', 'stayRooms.room.roomType', 'stayGuests.guest', 'createdBy']);
 
         return response()->json(['success' => true, 'data' => $stay, 'message' => 'Check-in realizado.'], 201);
     }

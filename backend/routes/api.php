@@ -69,7 +69,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/guests/{guest}',    [GuestController::class, 'show'])
              ->middleware('permission:view_reservations|manage_reservations|check_in');
         Route::put('/guests/{guest}',    [GuestController::class, 'update'])
-             ->middleware('permission:manage_reservations');
+             ->middleware('permission:manage_reservations|check_in');
         Route::delete('/guests/{guest}', [GuestController::class, 'destroy'])
              ->middleware('permission:manage_reservations');
         Route::get('/guests/{guest}/companions',         [GuestController::class, 'companions'])

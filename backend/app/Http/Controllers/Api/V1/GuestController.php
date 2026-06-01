@@ -14,7 +14,9 @@ class GuestController extends Controller
     {
         $query = Guest::withCount('stays');
 
-        if ($search = $request->query('search')) {
+        if ($document = $request->query('document')) {
+            $query->where('document_number', $document);
+        } elseif ($search = $request->query('search')) {
             $query->search($search);
         }
 

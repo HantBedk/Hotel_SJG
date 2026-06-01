@@ -215,8 +215,21 @@ export interface Stay {
   guest?: Guest
   company?: Company | null
   stay_rooms?: StayRoom[]
+  stay_guests?: StayGuest[]
   payments?: Payment[]
   services?: StayService[]
+  created_at: string
+  updated_at: string
+}
+
+// ── Stay guests ───────────────────────────────────────────────────────────────
+
+export interface StayGuest {
+  id: string
+  stay_id: string
+  guest_id: string
+  is_primary: boolean
+  guest?: Guest
   created_at: string
   updated_at: string
 }
@@ -231,6 +244,7 @@ export interface CheckInPayload {
   check_out_datetime: string
   prices: Record<string, number>
   notes?: string
+  additional_guest_ids?: string[]
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────────────

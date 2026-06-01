@@ -58,6 +58,11 @@ class Stay extends Model
         return $this->hasMany(StayRoom::class);
     }
 
+    public function stayGuests(): HasMany
+    {
+        return $this->hasMany(StayGuest::class);
+    }
+
     public function activeStayRooms(): HasMany
     {
         return $this->hasMany(StayRoom::class)->where('is_active', true);
