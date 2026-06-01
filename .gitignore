@@ -1,0 +1,47 @@
+# Environment
+.env
+.env.*
+!.env.example
+!.env.production
+
+# Dependencies
+backend/vendor/
+frontend/node_modules/
+
+# Laravel generated
+backend/bootstrap/cache/*.php
+backend/storage/app/backups/
+backend/storage/app/comprobantes/
+backend/storage/logs/
+backend/storage/.seeded
+backend/public/hot
+
+# React build output (built inside Docker)
+frontend/dist/
+
+# Docker volumes
+postgres_data/
+
+# Planning docs (never committed)
+Planes/
+
+# Claude local config
+.claude/
+
+# Archivos de estructura vacía (directorios los crea Docker)
+.gitkeep
+
+# gitignore locales de subcarpetas (el root los cubre)
+backend/.gitignore
+frontend/.gitignore
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

@@ -1,0 +1,261 @@
+// ── API ──────────────────────────────────────────────────────────────────────
+
+export interface ApiResponse<T = unknown> {
+  success: boolean
+  data: T
+  message: string
+  errors: Record<string, string[]>
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+
+export interface AuthUser {
+  id: string
+  name: string
+  email: string
+  roles: string[]
+  permissions: string[]
+}
+
+export interface LoginPayload {
+  email: string
+  password: string
+}
+
+export interface LoginResponse {
+  token: string
+  user: AuthUser
+}
+
+// ── Roles / Permisos ─────────────────────────────────────────────────────────
+
+export type Role =
+  | 'superadmin'
+  | 'admin'
+  | 'receptionist'
+  | 'housekeeping'
+  | 'maintenance'
+
+export type Permission =
+  | 'view_dashboard'
+  | 'view_rooms'
+  | 'manage_rooms'
+  | 'view_reservations'
+  | 'manage_reservations'
+  | 'check_in'
+  | 'check_out'
+  | 'view_inventory'
+  | 'manage_inventory'
+  | 'view_settings'
+  | 'manage_settings'
+  | 'view_activity_log'
+  | 'manage_users'
+  | 'manage_roles'
+  | 'trigger_backup'
+  | 'restore_backup'
+  | 'view_reports'
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+export interface Setting {
+  key: string
+  value: string
+  type: 'string' | 'boolean' | 'integer' | 'json'
+  group: string
+}
+
+// ── Rooms ─────────────────────────────────────────────────────────────────────
+
+export type RoomStatus =
+  | 'available'
+  | 'occupied'
+  | 'reserved'
+  | 'cleaning'
+  | 'maintenance'
+  | 'blocked'
+
+export interface RoomType {
+  id: string
+  name: string
+  description: string | null
+  base_price: string
+  max_occupancy: number
+  amenities: string[] | null
+}
+
+export interface Room {
+  id: string
+  hotel_id: string
+  room_type_id: string
+  number: string
+  floor: number | null
+  status: RoomStatus
+  notes: string | null
+  is_active: boolean
+  room_type: RoomType
+  created_at: string
+  updated_at: string
+}
+
+// ── Guests ────────────────────────────────────────────────────────────────────
+
+export type DocumentType = 'cc' | 'ce' | 'passport' | 'nit'
+
+export interface GuestCompanion {
+  id: string
+  guest_id: string
+  name: string
+  document_type: DocumentType | null
+  document_number: string | null
+  relationship: string | null
+  age: number | null
+}
+
+export interface Guest {
+  id: string
+  full_name: string
+  document_type: DocumentType
+  document_number: string
+  email: string | null
+  phone: string | null
+  nationality: string | null
+  birth_date: string | null
+  notes: string | null
+  companions?: GuestCompanion[]
+  stays_count?: number
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ── Companies ─────────────────────────────────────────────────────────────────
+
+export interface Company {
+  id: string
+  name: string
+  nit: string
+  address: string | null
+  phone: string | null
+  email: string | null
+  contact_name: string | null
+  notes: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// ── Stays ─────────────────────────────────────────────────────────────────────
+
+export type StayStatus = 'active' | 'extended' | 'checked_out'
+export type PaymentMethod = 'cash' | 'transfer' | 'card'
+export type PaymentType = 'deposit' | 'partial' | 'final'
+export type PaidBy = 'guest' | 'company' | 'mixed'
+
+export interface StayRoom {
+  id: string
+  stay_id: string
+  room_id: string
+  room: Room
+  check_in_date: string
+  check_out_date: string
+  price_per_night: string
+  nights: number
+  subtotal: string
+  is_active: boolean
+}
+
+export interface ExtraService {
+  id: string
+  name: string
+  price: string
+  description: string | null
+  active: boolean
+}
+
+export interface StayService {
+  id: string
+  stay_id: string
+  extra_service_id: string
+  extra_service?: ExtraService
+  quantity: number
+  unit_price: string
+  total: string
+  applied_at: string
+  applied_by: string
+}
+
+export interface Payment {
+  id: string
+  stay_id: string
+  amount: string
+  payment_method: PaymentMethod
+  payment_type: PaymentType
+  paid_by: PaidBy
+  payment_split_details: Record<string, unknown> | null
+  receipt_path: string | null
+  receptionist_id: string
+  payment_date: string
+  notes: string | null
+  created_at: string
+}
+
+export interface Stay {
+  id: string
+  guest_id: string
+  company_id: string | null
+  reservation_id: string | null
+  status: StayStatus
+  check_in_datetime: string
+  check_out_datetime: string
+  actual_check_out_datetime: string | null
+  late_checkout_fee: string | null
+  total_amount: string | null
+  paid_amount: string
+  notes: string | null
+  guest?: Guest
+  company?: Company | null
+  stay_rooms?: StayRoom[]
+  stay_guests?: StayGuest[]
+  payments?: Payment[]
+  services?: StayService[]
+  created_at: string
+  updated_at: string
+}
+
+// ── Stay guests ───────────────────────────────────────────────────────────────
+
+export interface StayGuest {
+  id: string
+  stay_id: string
+  guest_id: string
+  is_primary: boolean
+  guest?: Guest
+  created_at: string
+  updated_at: string
+}
+
+// ── Check-in wizard payload ───────────────────────────────────────────────────
+
+export interface CheckInPayload {
+  guest_id: string
+  company_id?: string
+  room_ids: string[]
+  check_in_datetime: string
+  check_out_datetime: string
+  prices: Record<string, number>
+  notes?: string
+  additional_guest_ids?: string[]
+}
+
+// ── Dashboard ────────────────────────────────────────────────────────────────
+
+export interface DashboardStats {
+  rooms_by_status: Record<RoomStatus, number>
+  total_rooms: number
+  occupied: number
+  available: number
+  cleaning: number
+  checkins_today: number
+  active_stays: number
+  pending_balance: number
+}
