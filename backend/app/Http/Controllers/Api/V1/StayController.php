@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Events\NewCheckIn;
 use App\Events\RoomStatusChanged;
 use App\Http\Controllers\Controller;
 use App\Models\ExtraService;
@@ -125,6 +126,8 @@ class StayController extends Controller
                     $stay->stayGuests()->create(['guest_id' => $guestId, 'is_primary' => false]);
                 }
             }
+
+            broadcast(new NewCheckIn($stay->load('guest', 'stayRooms')))->toOthers();
 
             return $stay;
         });

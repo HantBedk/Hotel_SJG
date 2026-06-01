@@ -18,7 +18,7 @@ class RoomController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Room::with('roomType')
+        $query = Room::with(['roomType', 'house'])
             ->active()
             ->orderByRaw("floor NULLS LAST, number");
 
@@ -49,7 +49,7 @@ class RoomController extends Controller
             'room_number' => $room->number,
         ]);
 
-        return $this->created($room->load('roomType'), 'Habitación creada.');
+        return $this->created($room->load(['roomType', 'house']), 'Habitación creada.');
     }
 
     public function show(Room $room): JsonResponse
@@ -74,7 +74,7 @@ class RoomController extends Controller
             'room_number' => $room->number,
         ]);
 
-        return $this->success($room->load('roomType'), 'Habitación actualizada.');
+        return $this->success($room->load(['roomType', 'house']), 'Habitación actualizada.');
     }
 
     public function updateStatus(Request $request, Room $room): JsonResponse
@@ -96,7 +96,7 @@ class RoomController extends Controller
 
         broadcast(new RoomStatusChanged($room))->toOthers();
 
-        return $this->success($room->load('roomType'), 'Estado actualizado.');
+        return $this->success($room->load(['roomType', 'house']), 'Estado actualizado.');
     }
 
     public function destroy(Request $request, Room $room): JsonResponse

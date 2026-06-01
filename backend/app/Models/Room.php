@@ -13,6 +13,7 @@ class Room extends Model
     protected $fillable = [
         'hotel_id',
         'room_type_id',
+        'house_id',
         'number',
         'floor',
         'status',
@@ -36,6 +37,11 @@ class Room extends Model
     public function roomType(): BelongsTo
     {
         return $this->belongsTo(RoomType::class);
+    }
+
+    public function house(): BelongsTo
+    {
+        return $this->belongsTo(House::class);
     }
 
     public function scopeActive($query)

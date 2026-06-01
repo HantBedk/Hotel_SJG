@@ -64,6 +64,17 @@ export interface Setting {
   group: string
 }
 
+// ── Houses ───────────────────────────────────────────────────────────────────
+
+export interface House {
+  id: string
+  name: string
+  price: string
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
 // ── Rooms ─────────────────────────────────────────────────────────────────────
 
 export type RoomStatus =
@@ -87,12 +98,14 @@ export interface Room {
   id: string
   hotel_id: string
   room_type_id: string
+  house_id: string | null
   number: string
   floor: number | null
   status: RoomStatus
   notes: string | null
   is_active: boolean
   room_type: RoomType
+  house?: House | null
   created_at: string
   updated_at: string
 }

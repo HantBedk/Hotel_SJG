@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LogIn, X } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useRooms } from '@/hooks/useRooms'
 import { useReverb } from '@/hooks/useReverb'
@@ -23,9 +24,10 @@ export default function RoomsPage() {
   const { hasPermission } = useAuth()
   const canEdit = hasPermission('manage_rooms') || hasPermission('check_in')
 
-  const [filter, setFilter]     = useState<RoomStatus | 'all'>('all')
-  const [editing, setEditing]   = useState<Room | null>(null)
+  const [filter, setFilter]         = useState<RoomStatus | 'all'>('all')
+  const [editing, setEditing]       = useState<Room | null>(null)
   const [checkingIn, setCheckingIn] = useState<Room[]>([])
+  const [selectedRooms, setSelectedRooms] = useState<Room[]>([])
 
   const {
     rooms, isLoading,
@@ -33,11 +35,16 @@ export default function RoomsPage() {
     syncRoomStatus,
   } = useRooms(filter === 'all' ? undefined : filter)
 
-  // Sincroniza cambios de estado en tiempo real desde otros usuarios
   useReverb<{ id: string; status: RoomStatus }>({
     channel: 'hotel.rooms',
     event:   'room.status.changed',
-    onEvent: ({ id, status }) => syncRoomStatus(id, status),
+    onEvent: ({ id, status }) => {
+      syncRoomStatus(id, status)
+      // Remove from selection if no longer available
+      if (status !== 'available') {
+        setSelectedRooms(prev => prev.filter(r => r.id !== id))
+      }
+    },
     enabled: true,
   })
 
@@ -49,8 +56,23 @@ export default function RoomsPage() {
     )
   }
 
+  const toggleSelect = (room: Room) => {
+    setSelectedRooms(prev =>
+      prev.some(r => r.id === room.id)
+        ? prev.filter(r => r.id !== room.id)
+        : [...prev, room]
+    )
+  }
+
+  const clearSelection = () => setSelectedRooms([])
+
+  const openWizard = (rooms: Room[]) => {
+    setCheckingIn(rooms)
+    setSelectedRooms([])
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-20">
 
       {/* Filter bar */}
       <div className="flex flex-wrap gap-2">
@@ -100,13 +122,15 @@ export default function RoomsPage() {
               room={room}
               canEdit={canEdit}
               onChangeStatus={setEditing}
-              onCheckIn={canEdit ? (r) => setCheckingIn([r]) : undefined}
+              onCheckIn={canEdit ? (r) => openWizard([r]) : undefined}
+              isSelected={selectedRooms.some(r => r.id === room.id)}
+              onSelect={canEdit && room.status === 'available' ? toggleSelect : undefined}
             />
           ))}
         </div>
       )}
 
-      {/* Modal cambio de estado */}
+      {/* Status change modal */}
       {editing && (
         <RoomStatusModal
           room={editing}
@@ -116,12 +140,43 @@ export default function RoomsPage() {
         />
       )}
 
-      {/* Wizard de Check-in */}
+      {/* Check-in wizard */}
       {checkingIn.length > 0 && (
         <CheckInWizard
           rooms={checkingIn}
           onClose={() => setCheckingIn([])}
         />
+      )}
+
+      {/* Floating multi-select action bar */}
+      {selectedRooms.length > 0 && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-xl"
+          style={{ background: 'var(--bg-surface)', border: '2px solid var(--color-primary)' }}
+        >
+          <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+            {selectedRooms.length} habitación{selectedRooms.length !== 1 ? 'es' : ''} seleccionada{selectedRooms.length !== 1 ? 's' : ''}
+          </span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            {selectedRooms.map(r => `Hab. ${r.number}`).join(', ')}
+          </span>
+          <button
+            onClick={() => openWizard(selectedRooms)}
+            className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold"
+            style={{ background: 'var(--color-primary)', color: '#fff' }}
+          >
+            <LogIn size={13} />
+            Iniciar Check-in
+          </button>
+          <button
+            onClick={clearSelection}
+            className="p-1.5 rounded-lg hover:opacity-70"
+            style={{ color: 'var(--text-muted)' }}
+            aria-label="Cancelar selección"
+          >
+            <X size={15} />
+          </button>
+        </div>
       )}
     </div>
   )
