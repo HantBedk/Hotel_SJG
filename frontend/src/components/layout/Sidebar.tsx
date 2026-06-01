@@ -9,6 +9,7 @@ import {
   BarChart3,
   Settings,
   ClipboardList,
+  Package,
   LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { to: '/companies',    label: 'Empresas',      icon: Building2,       permission: 'check_in' },
   { to: '/reservations', label: 'Reservas',      icon: CalendarDays,    permission: 'view_reservations' },
   { to: '/calendar',     label: 'Calendario',    icon: CalendarRange,   permission: 'view_reservations' },
+  { to: '/inventory',    label: 'Inventario',    icon: Package,         permission: 'view_inventory' },
   { to: '/reports',      label: 'Reportes',      icon: BarChart3,       permission: 'view_reports' },
   { to: '/settings',     label: 'Configuración', icon: Settings,        permission: 'view_settings' },
 ]

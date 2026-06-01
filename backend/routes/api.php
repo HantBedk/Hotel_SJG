@@ -2,12 +2,16 @@
 
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\V1\AssetController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CalendarController;
 use App\Http\Controllers\Api\V1\CompanyController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\ExtraServiceController;
 use App\Http\Controllers\Api\V1\GuestController;
+use App\Http\Controllers\Api\V1\InventoryController;
+use App\Http\Controllers\Api\V1\MinibarController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\ReservationController;
 use App\Http\Controllers\Api\V1\RoomController;
 use App\Http\Controllers\Api\V1\SettingsController;
@@ -148,5 +152,72 @@ Route::prefix('v1')->group(function () {
         // Calendario
         Route::get('/calendar', [CalendarController::class, 'index'])
              ->middleware('permission:view_reservations|manage_reservations|view_rooms');
+
+        // ── Inventario ────────────────────────────────────────────────────────
+        Route::prefix('inventory')->middleware('permission:view_inventory|manage_inventory')->group(function () {
+            // Categorías
+            Route::get('/categories',  [InventoryController::class, 'categories']);
+            Route::post('/categories', [InventoryController::class, 'storeCategory'])
+                 ->middleware('permission:manage_inventory');
+
+            // Ítems
+            Route::get('/items',    [InventoryController::class, 'index']);
+            Route::post('/items',   [InventoryController::class, 'store'])
+                 ->middleware('permission:manage_inventory');
+            Route::get('/items/{inventoryItem}',    [InventoryController::class, 'show']);
+            Route::put('/items/{inventoryItem}',    [InventoryController::class, 'update'])
+                 ->middleware('permission:manage_inventory');
+            Route::delete('/items/{inventoryItem}', [InventoryController::class, 'destroy'])
+                 ->middleware('permission:manage_inventory');
+            Route::post('/items/{inventoryItem}/restock', [InventoryController::class, 'restock'])
+                 ->middleware('permission:manage_inventory');
+            Route::post('/items/{inventoryItem}/adjust',  [InventoryController::class, 'adjust'])
+                 ->middleware('permission:manage_inventory');
+            Route::post('/items/{inventoryItem}/deliver', [InventoryController::class, 'deliver'])
+                 ->middleware('permission:manage_inventory');
+            Route::get('/items/{inventoryItem}/transactions', [InventoryController::class, 'transactions']);
+
+            // Minibar — productos
+            Route::get('/minibar/products',               [MinibarController::class, 'productsIndex']);
+            Route::post('/minibar/products',              [MinibarController::class, 'productsStore'])
+                 ->middleware('permission:manage_inventory');
+            Route::put('/minibar/products/{minibarProduct}',    [MinibarController::class, 'productsUpdate'])
+                 ->middleware('permission:manage_inventory');
+            Route::delete('/minibar/products/{minibarProduct}', [MinibarController::class, 'productsDestroy'])
+                 ->middleware('permission:manage_inventory');
+            Route::get('/minibar/room-minibars', [MinibarController::class, 'roomMinibars']);
+            Route::post('/minibar/restock-room', [MinibarController::class, 'restockRoom'])
+                 ->middleware('permission:manage_inventory');
+
+            // Activos
+            Route::get('/assets',         [AssetController::class, 'index']);
+            Route::post('/assets',        [AssetController::class, 'store'])
+                 ->middleware('permission:manage_inventory');
+            Route::put('/assets/{asset}',    [AssetController::class, 'update'])
+                 ->middleware('permission:manage_inventory');
+            Route::delete('/assets/{asset}', [AssetController::class, 'destroy'])
+                 ->middleware('permission:manage_inventory');
+
+            // Mantenimientos
+            Route::get('/maintenances',                          [AssetController::class, 'maintenances']);
+            Route::post('/assets/{asset}/maintenance',           [AssetController::class, 'addMaintenance'])
+                 ->middleware('permission:manage_inventory');
+            Route::patch('/maintenance/{maintenance}/complete',  [AssetController::class, 'completeMaintenance'])
+                 ->middleware('permission:manage_inventory');
+
+            // Órdenes de reparación
+            Route::get('/repair-orders',                                [AssetController::class, 'repairOrders']);
+            Route::post('/repair-orders',                               [AssetController::class, 'createRepairOrder']);
+            Route::patch('/repair-orders/{repairOrder}/assign',         [AssetController::class, 'assignRepairOrder'])
+                 ->middleware('permission:manage_inventory');
+            Route::patch('/repair-orders/{repairOrder}/close',          [AssetController::class, 'closeRepairOrder'])
+                 ->middleware('permission:manage_inventory');
+        });
+
+        // ── Notificaciones ────────────────────────────────────────────────────
+        Route::get('/notifications',              [NotificationController::class, 'index']);
+        Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+        Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+        Route::post('/notifications/read-all',    [NotificationController::class, 'markAllRead']);
     });
 });

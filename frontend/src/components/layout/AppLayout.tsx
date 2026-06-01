@@ -10,6 +10,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/guests':       'Huéspedes',
   '/reservations': 'Reservaciones',
   '/reports':      'Reportes',
+  '/inventory':    'Inventario',
   '/settings':     'Configuración',
 }
 

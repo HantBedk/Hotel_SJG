@@ -1,0 +1,118 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Controller;
+use App\Models\InventoryItem;
+use App\Models\InventoryTransaction;
+use App\Models\MinibarProduct;
+use App\Models\Room;
+use App\Models\RoomMinibar;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class MinibarController extends Controller
+{
+    // ── Products ──────────────────────────────────────────────────────────────
+
+    public function productsIndex(): JsonResponse
+    {
+        $products = MinibarProduct::with('inventoryItem')->where('active', true)->orderBy('name')->get();
+        return response()->json(['success' => true, 'data' => $products]);
+    }
+
+    public function productsStore(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name'              => 'required|string|max:150',
+            'inventory_item_id' => 'nullable|uuid|exists:inventory_items,id',
+            'sale_price'        => 'required|numeric|min:0',
+            'cost_price'        => 'nullable|numeric|min:0',
+            'damage_price'      => 'nullable|numeric|min:0',
+            'description'       => 'nullable|string|max:255',
+        ]);
+
+        $product = MinibarProduct::create($data);
+        return response()->json(['success' => true, 'data' => $product, 'message' => 'Producto de minibar creado.'], 201);
+    }
+
+    public function productsUpdate(Request $request, MinibarProduct $minibarProduct): JsonResponse
+    {
+        $data = $request->validate([
+            'name'              => 'sometimes|string|max:150',
+            'inventory_item_id' => 'nullable|uuid|exists:inventory_items,id',
+            'sale_price'        => 'sometimes|numeric|min:0',
+            'cost_price'        => 'nullable|numeric|min:0',
+            'damage_price'      => 'nullable|numeric|min:0',
+            'description'       => 'nullable|string|max:255',
+            'active'            => 'sometimes|boolean',
+        ]);
+
+        $minibarProduct->update($data);
+        return response()->json(['success' => true, 'data' => $minibarProduct, 'message' => 'Producto actualizado.']);
+    }
+
+    public function productsDestroy(MinibarProduct $minibarProduct): JsonResponse
+    {
+        $minibarProduct->update(['active' => false]);
+        return response()->json(['success' => true, 'message' => 'Producto desactivado.']);
+    }
+
+    // ── Room minibars ─────────────────────────────────────────────────────────
+
+    public function roomMinibars(Request $request): JsonResponse
+    {
+        $request->validate(['room_id' => 'required|uuid|exists:rooms,id']);
+
+        $minibars = RoomMinibar::with(['product', 'restockedBy'])
+            ->where('room_id', $request->room_id)
+            ->get();
+
+        return response()->json(['success' => true, 'data' => $minibars]);
+    }
+
+    public function restockRoom(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'room_id'            => 'required|uuid|exists:rooms,id',
+            'minibar_product_id' => 'required|uuid|exists:minibar_products,id',
+            'quantity'           => 'required|integer|min:1',
+        ]);
+
+        $product = MinibarProduct::findOrFail($data['minibar_product_id']);
+
+        DB::transaction(function () use ($data, $product, $request) {
+            // Update or create room_minibar record
+            $rm = RoomMinibar::updateOrCreate(
+                ['room_id' => $data['room_id'], 'minibar_product_id' => $data['minibar_product_id']],
+                [
+                    'quantity'          => DB::raw("quantity + {$data['quantity']}"),
+                    'last_restocked_at' => now(),
+                    'restocked_by'      => $request->user()->id,
+                ]
+            );
+
+            // Deduct from inventory item if linked
+            if ($product->inventory_item_id) {
+                $item = InventoryItem::lockForUpdate()->findOrFail($product->inventory_item_id);
+                abort_if($item->current_stock < $data['quantity'], 409, 'Stock de inventario insuficiente.');
+
+                $item->decrement('current_stock', $data['quantity']);
+
+                InventoryTransaction::create([
+                    'inventory_item_id'  => $item->id,
+                    'type'               => 'exit_to_minibar',
+                    'quantity'           => -$data['quantity'],
+                    'unit_price'         => $item->cost_price,
+                    'total_value'        => $item->cost_price * $data['quantity'],
+                    'performed_by'       => $request->user()->id,
+                    'destination_room_id' => $data['room_id'],
+                    'notes'              => "Reposición minibar hab. " . Room::find($data['room_id'])?->number,
+                ]);
+            }
+        });
+
+        return response()->json(['success' => true, 'message' => 'Minibar repuesto.']);
+    }
+}

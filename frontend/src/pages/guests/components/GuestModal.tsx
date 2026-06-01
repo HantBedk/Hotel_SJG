@@ -24,7 +24,6 @@ const DOCUMENT_TYPES = [
   { value: 'cc',       label: 'Cédula de ciudadanía' },
   { value: 'ce',       label: 'Cédula de extranjería' },
   { value: 'passport', label: 'Pasaporte' },
-  { value: 'nit',      label: 'NIT' },
 ]
 
 export function GuestModal({ guest, onSave, onClose, isSaving }: Props) {

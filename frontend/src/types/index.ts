@@ -112,7 +112,7 @@ export interface Room {
 
 // ── Guests ────────────────────────────────────────────────────────────────────
 
-export type DocumentType = 'cc' | 'ce' | 'passport' | 'nit'
+export type DocumentType = 'cc' | 'ce' | 'passport'
 
 export interface GuestCompanion {
   id: string
@@ -424,6 +424,169 @@ export interface StayAccount {
   total: number
   paid_amount: number
   balance: number
+}
+
+// ── Inventory ────────────────────────────────────────────────────────────────
+
+export type InventoryCategoryType = 'consumable' | 'asset' | 'cleaning'
+
+export interface InventoryCategory {
+  id: string
+  name: string
+  type: InventoryCategoryType
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type InventoryTransactionType =
+  | 'entry'
+  | 'exit_to_minibar'
+  | 'exit_to_housekeeping'
+  | 'adjustment'
+  | 'sale'
+
+export interface InventoryTransaction {
+  id: string
+  inventory_item_id: string
+  type: InventoryTransactionType
+  quantity: number
+  unit_price: string
+  total_value: string
+  performed_by: string
+  destination_room_id: string | null
+  destination_user_id: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+  performed_by_user?: { id: string; name: string }
+  destination_room?: { id: string; number: string } | null
+  destination_user?: { id: string; name: string } | null
+}
+
+export interface InventoryItem {
+  id: string
+  category_id: string
+  code: string
+  name: string
+  brand: string | null
+  presentation: string | null
+  unit: string
+  cost_price: string
+  sale_price: string | null
+  current_stock: number
+  min_stock_threshold: number
+  expiry_date: string | null
+  supplier: string | null
+  invoice_number: string | null
+  location: string | null
+  active: boolean
+  category?: InventoryCategory
+  transactions?: InventoryTransaction[]
+  created_at: string
+  updated_at: string
+}
+
+// ── Minibar products ─────────────────────────────────────────────────────────
+
+export interface MinibarProduct {
+  id: string
+  name: string
+  inventory_item_id: string | null
+  sale_price: string
+  cost_price: string
+  damage_price: string | null
+  description: string | null
+  active: boolean
+  inventory_item?: InventoryItem | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RoomMinibar {
+  id: string
+  room_id: string
+  minibar_product_id: string
+  quantity: number
+  last_restocked_at: string | null
+  restocked_by: string | null
+  product?: MinibarProduct
+  restocked_by_user?: { id: string; name: string } | null
+  created_at: string
+  updated_at: string
+}
+
+// ── Assets ────────────────────────────────────────────────────────────────────
+
+export type AssetLocationType = 'room' | 'general'
+export type AssetStatus = 'active' | 'maintenance' | 'retired'
+export type MaintenanceStatus = 'pending' | 'completed' | 'cancelled'
+export type RepairOrderStatus = 'pending' | 'in_progress' | 'completed'
+
+export interface Asset {
+  id: string
+  asset_code: string
+  name: string
+  brand: string | null
+  model: string | null
+  serial_number: string | null
+  location_type: AssetLocationType
+  room_id: string | null
+  purchase_date: string | null
+  warranty_expiry: string | null
+  status: AssetStatus
+  room?: Room | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AssetMaintenance {
+  id: string
+  asset_id: string
+  scheduled_date: string
+  completed_date: string | null
+  description: string
+  cost: string | null
+  technician_id: string | null
+  next_maintenance_date: string | null
+  status: MaintenanceStatus
+  asset?: Asset
+  technician?: { id: string; name: string } | null
+  created_at: string
+  updated_at: string
+}
+
+export interface RepairOrder {
+  id: string
+  asset_id: string | null
+  room_id: string | null
+  description: string
+  reported_by: string
+  assigned_to: string | null
+  cost: string | null
+  status: RepairOrderStatus
+  completed_at: string | null
+  asset?: Asset | null
+  room?: Room | null
+  reported_by_user?: { id: string; name: string }
+  assigned_to_user?: { id: string; name: string } | null
+  created_at: string
+  updated_at: string
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: string
+  user_id: string
+  type: string
+  title: string
+  message: string
+  payload: Record<string, unknown> | null
+  is_read: boolean
+  read_at: string | null
+  created_at: string
+  updated_at: string
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────────────

@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('guests', function (Blueprint $table) {
             $table->uuid('id')->primary()->default(DB::raw('gen_random_uuid()'));
             $table->string('full_name');
-            $table->string('document_type', 20); // cc, ce, passport, nit
+            $table->string('document_type', 20); // cc, ce, passport
             $table->string('document_number', 50)->unique();
             $table->string('email')->nullable();
             $table->string('phone', 30)->nullable();

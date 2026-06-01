@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             RoomTypesSeeder::class,
             RoomsSeeder::class,
             ExtraServicesSeeder::class,
+            InventoryCategoriesSeeder::class,
         ]);
     }
 }

@@ -1,5 +1,9 @@
+import { useState } from 'react'
 import { Bell, Moon, Sun, Menu } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
+import { useQuery } from '@tanstack/react-query'
+import { getUnreadCountApi } from '@/services/notifications.service'
+import NotificationCenter from '@/components/notifications/NotificationCenter'
 
 interface HeaderProps {
   title: string
@@ -10,6 +14,13 @@ interface HeaderProps {
 
 export default function Header({ title, onToggleSidebar, darkMode, onToggleDark }: HeaderProps) {
   const user = useAuthStore((s) => s.user)
+  const [notifOpen, setNotifOpen] = useState(false)
+
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ['notifications-unread'],
+    queryFn: getUnreadCountApi,
+    refetchInterval: 60_000,
+  })
 
   return (
     <header
@@ -39,15 +50,20 @@ export default function Header({ title, onToggleSidebar, darkMode, onToggleDark 
       {/* Actions */}
       <div className="flex items-center gap-2">
         {/* Notifications */}
-        <button
-          className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors"
-          aria-label="Notificaciones"
-          style={{ color: 'var(--text-secondary)' }}
-        >
-          <Bell size={20} />
-          {/* Unread badge */}
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setNotifOpen((v) => !v)}
+            className="relative p-2 rounded-lg hover:bg-slate-100 transition-colors"
+            aria-label="Notificaciones"
+            style={{ color: 'var(--text-secondary)' }}
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+            )}
+          </button>
+          <NotificationCenter open={notifOpen} onClose={() => setNotifOpen(false)} />
+        </div>
 
         {/* Dark mode toggle */}
         <button

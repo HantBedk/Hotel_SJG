@@ -26,7 +26,7 @@ interface Props {
 }
 
 const DOC_LABELS: Record<string, string> = {
-  cc: 'CC', ce: 'CE', passport: 'Pasaporte', nit: 'NIT',
+  cc: 'CC', ce: 'CE', passport: 'Pasaporte',
 }
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {

@@ -10,6 +10,7 @@ import CompaniesPage from '@/pages/companies/CompaniesPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
 import ReservationsPage from '@/pages/reservations/ReservationsPage'
 import CalendarPage from '@/pages/calendar/CalendarPage'
+import InventoryPage from '@/pages/inventory/InventoryPage'
 
 // ── Route guards ──────────────────────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -99,6 +100,14 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission="view_reservations">
             <CalendarPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: 'inventory',
+        element: (
+          <RequirePermission permission="view_inventory">
+            <InventoryPage />
           </RequirePermission>
         ),
       },

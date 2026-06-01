@@ -10,6 +10,7 @@ import { createGuestApi, updateGuestApi, findGuestByDocumentApi } from '@/servic
 import { createCompanyApi } from '@/services/companies.service'
 import type { Room, Guest, Company, GuestCompanion } from '@/types'
 import { cn } from '@/lib/cn'
+import toast from 'react-hot-toast'
 
 interface Props {
   rooms: Room[]
@@ -53,7 +54,6 @@ const DOCUMENT_TYPES = [
   { value: 'cc',       label: 'Cédula de ciudadanía' },
   { value: 'ce',       label: 'Cédula de extranjería' },
   { value: 'passport', label: 'Pasaporte' },
-  { value: 'nit',      label: 'NIT' },
 ]
 
 function makeExtraForm(): AdditionalGuestForm {
@@ -213,7 +213,10 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
         })
       }
     } catch {
-      setExtra(idx, { isSearching: false })
+      setExtra(idx, {
+        isSearching: false, found: null, notFound: true,
+        newGuest: { ...makeExtraForm().newGuest, document_number: doc.trim() },
+      })
     }
   }
 
@@ -258,8 +261,9 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
         additional_guest_ids: additionalGuestIds.length > 0 ? additionalGuestIds : undefined,
       })
       onClose()
-    } catch {
-      // error shown by toast in useStays
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al procesar el check-in'
+      toast.error(msg)
     }
   }
 
