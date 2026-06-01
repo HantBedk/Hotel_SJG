@@ -260,6 +260,104 @@ export interface CheckInPayload {
   additional_guest_ids?: string[]
 }
 
+// ── Reservations ─────────────────────────────────────────────────────────────
+
+export type ReservationStatus = 'pending' | 'confirmed' | 'checked_in' | 'cancelled' | 'no_show'
+export type ReservationPaymentStatus = 'pending' | 'partial' | 'paid'
+
+export interface ReservationPayment {
+  id: string
+  reservation_id: string
+  amount: string
+  payment_method: PaymentMethod
+  payment_type: PaymentType
+  receptionist_id: string
+  payment_date: string
+  notes: string | null
+  created_at: string
+}
+
+export interface Reservation {
+  id: string
+  guest_id: string | null
+  company_id: string | null
+  room_id: string | null
+  house_id: string | null
+  status: ReservationStatus
+  start_date: string
+  end_date: string
+  nights: number
+  agreed_price: string
+  deposit_amount: string | null
+  payment_status: ReservationPaymentStatus
+  created_by: string
+  notes: string | null
+  guest?: Guest | null
+  company?: Company | null
+  room?: Room | null
+  house?: House | null
+  payments?: ReservationPayment[]
+  stay?: Stay | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ReservationPayload {
+  guest_id?: string
+  company_id?: string
+  room_id?: string
+  house_id?: string
+  start_date: string
+  end_date: string
+  agreed_price: number
+  deposit_amount?: number
+  notes?: string
+}
+
+// ── Seasons ───────────────────────────────────────────────────────────────────
+
+export interface Season {
+  id: string
+  name: string
+  start_date: string
+  end_date: string
+  multiplier: string
+  active: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ── Calendar ──────────────────────────────────────────────────────────────────
+
+export interface CalendarRoom {
+  id: string
+  number: string
+  status: RoomStatus
+  room_type: string | null
+  house: string | null
+}
+
+export interface CalendarEntry {
+  id: string
+  type: 'reservation' | 'stay'
+  room_id: string | null
+  house_id: string | null
+  status: string
+  start_date: string
+  end_date: string
+  nights: number
+  guest_name: string | null
+  company_name: string | null
+  agreed_price: string
+}
+
+export interface CalendarData {
+  rooms: CalendarRoom[]
+  reservations: CalendarEntry[]
+  stays: CalendarEntry[]
+}
+
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
 export interface DashboardStats {

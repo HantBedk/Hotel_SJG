@@ -3,10 +3,12 @@
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CalendarController;
 use App\Http\Controllers\Api\V1\CompanyController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\ExtraServiceController;
 use App\Http\Controllers\Api\V1\GuestController;
+use App\Http\Controllers\Api\V1\ReservationController;
 use App\Http\Controllers\Api\V1\RoomController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\StayController;
@@ -112,5 +114,29 @@ Route::prefix('v1')->group(function () {
         // Servicios extra (catálogo)
         Route::get('/extra-services', [ExtraServiceController::class, 'index'])
              ->middleware('permission:check_in|check_out|manage_reservations');
+
+        // Reservas
+        Route::get('/reservations', [ReservationController::class, 'index'])
+             ->middleware('permission:view_reservations|manage_reservations');
+        Route::post('/reservations', [ReservationController::class, 'store'])
+             ->middleware('permission:manage_reservations');
+        Route::get('/reservations/{reservation}', [ReservationController::class, 'show'])
+             ->middleware('permission:view_reservations|manage_reservations');
+        Route::put('/reservations/{reservation}', [ReservationController::class, 'update'])
+             ->middleware('permission:manage_reservations');
+        Route::delete('/reservations/{reservation}', [ReservationController::class, 'destroy'])
+             ->middleware('permission:manage_reservations');
+        Route::patch('/reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])
+             ->middleware('permission:manage_reservations');
+        Route::patch('/reservations/{reservation}/extend', [ReservationController::class, 'extend'])
+             ->middleware('permission:manage_reservations');
+        Route::post('/reservations/{reservation}/check-in', [ReservationController::class, 'checkIn'])
+             ->middleware('permission:check_in');
+        Route::post('/reservations/{reservation}/payments', [ReservationController::class, 'addPayment'])
+             ->middleware('permission:manage_reservations|check_in');
+
+        // Calendario
+        Route::get('/calendar', [CalendarController::class, 'index'])
+             ->middleware('permission:view_reservations|manage_reservations|view_rooms');
     });
 });

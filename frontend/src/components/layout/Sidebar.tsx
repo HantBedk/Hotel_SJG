@@ -5,6 +5,7 @@ import {
   Users,
   Building2,
   CalendarDays,
+  CalendarRange,
   BarChart3,
   Settings,
   ClipboardList,
@@ -20,6 +21,7 @@ const NAV_ITEMS = [
   { to: '/guests',       label: 'Huéspedes',     icon: Users,           permission: 'check_in' },
   { to: '/companies',    label: 'Empresas',      icon: Building2,       permission: 'check_in' },
   { to: '/reservations', label: 'Reservas',      icon: CalendarDays,    permission: 'view_reservations' },
+  { to: '/calendar',     label: 'Calendario',    icon: CalendarRange,   permission: 'view_reservations' },
   { to: '/reports',      label: 'Reportes',      icon: BarChart3,       permission: 'view_reports' },
   { to: '/settings',     label: 'Configuración', icon: Settings,        permission: 'view_settings' },
 ]

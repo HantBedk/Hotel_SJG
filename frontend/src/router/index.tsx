@@ -8,6 +8,8 @@ import RoomsPage from '@/pages/rooms/RoomsPage'
 import StaysPage from '@/pages/stays/StaysPage'
 import CompaniesPage from '@/pages/companies/CompaniesPage'
 import SettingsPage from '@/pages/settings/SettingsPage'
+import ReservationsPage from '@/pages/reservations/ReservationsPage'
+import CalendarPage from '@/pages/calendar/CalendarPage'
 
 // ── Route guards ──────────────────────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -81,6 +83,22 @@ export const router = createBrowserRouter([
         element: (
           <RequirePermission permission="check_in">
             <StaysPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: 'reservations',
+        element: (
+          <RequirePermission permission="view_reservations">
+            <ReservationsPage />
+          </RequirePermission>
+        ),
+      },
+      {
+        path: 'calendar',
+        element: (
+          <RequirePermission permission="view_reservations">
+            <CalendarPage />
           </RequirePermission>
         ),
       },
