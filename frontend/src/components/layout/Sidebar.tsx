@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Package,
   LogOut,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/hooks/useAuth'
@@ -24,15 +25,16 @@ const NAV_ITEMS = [
   { to: '/reservations', label: 'Reservas',      icon: CalendarDays,    permission: 'view_reservations' },
   { to: '/calendar',     label: 'Calendario',    icon: CalendarRange,   permission: 'view_reservations' },
   { to: '/inventory',    label: 'Inventario',    icon: Package,         permission: 'view_inventory' },
-  { to: '/reports',      label: 'Reportes',      icon: BarChart3,       permission: 'view_reports' },
+  { to: '/activity',     label: 'Historial',     icon: BarChart3,       permission: 'view_activity_log' },
   { to: '/settings',     label: 'Configuración', icon: Settings,        permission: 'view_settings' },
 ]
 
 interface SidebarProps {
   collapsed?: boolean
+  onClose?: () => void
 }
 
-export default function Sidebar({ collapsed = false }: SidebarProps) {
+export default function Sidebar({ collapsed = false, onClose }: SidebarProps) {
   const { logout, hasPermission } = useAuth()
 
   return (
@@ -44,7 +46,7 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
       style={{ background: 'var(--sidebar-bg)', color: 'var(--sidebar-text)' }}
       aria-label="Navegación principal"
     >
-      {/* Logo */}
+      {/* Logo + mobile close button */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-white/10">
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
@@ -54,7 +56,16 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
           <BedDouble size={16} className="text-white" />
         </div>
         {!collapsed && (
-          <span className="font-semibold text-sm text-white truncate">Hotel Manager</span>
+          <span className="font-semibold text-sm text-white truncate flex-1">Hotel Manager</span>
+        )}
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="Cerrar menú"
+            className="ml-auto p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X size={18} />
+          </button>
         )}
       </div>
 
@@ -71,7 +82,7 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
                   aria-label={collapsed ? label : undefined}
                   className={({ isActive }) =>
                     cn(
-                      'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors',
                       'hover:bg-white/10',
                       collapsed && 'justify-center',
                       isActive
@@ -104,7 +115,7 @@ export default function Sidebar({ collapsed = false }: SidebarProps) {
             onClick={logout}
             aria-label="Cerrar sesión"
             className={cn(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm w-full',
+              'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm w-full',
               'text-slate-400 hover:text-white hover:bg-white/10 transition-colors',
               collapsed && 'justify-center',
             )}

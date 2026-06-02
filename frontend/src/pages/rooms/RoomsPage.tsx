@@ -102,7 +102,7 @@ export default function RoomsPage() {
 
       {/* Grid */}
       {isLoading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {Array.from({ length: 14 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : rooms.length === 0 ? (
@@ -115,7 +115,7 @@ export default function RoomsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {rooms.map((room) => (
             <RoomCard
               key={room.id}

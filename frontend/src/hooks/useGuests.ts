@@ -19,7 +19,10 @@ export function useGuests(search?: string) {
       toast.success('Huésped creado.')
       queryClient.invalidateQueries({ queryKey: ['guests'] })
     },
-    onError: () => toast.error('Error al crear huésped.'),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Error al crear huésped.')
+    },
   })
 
   const updateMutation = useMutation({
@@ -29,7 +32,10 @@ export function useGuests(search?: string) {
       toast.success('Huésped actualizado.')
       queryClient.invalidateQueries({ queryKey: ['guests'] })
     },
-    onError: () => toast.error('Error al actualizar huésped.'),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg ?? 'Error al actualizar huésped.')
+    },
   })
 
   const deleteMutation = useMutation({

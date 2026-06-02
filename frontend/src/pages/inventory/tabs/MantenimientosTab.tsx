@@ -190,7 +190,7 @@ export default function MantenimientosTab() {
         <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>Sin mantenimientos.</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
                 {['Activo', 'Descripción', 'Programado', 'Completado', 'Costo', 'Estado', ''].map((h) => (

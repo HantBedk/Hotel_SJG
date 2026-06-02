@@ -6,6 +6,7 @@ use App\Events\NewCheckIn;
 use App\Events\ReservationStatusChanged;
 use App\Events\RoomStatusChanged;
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Reservation;
 use App\Models\ReservationPayment;
 use App\Models\Room;
@@ -121,6 +122,14 @@ class ReservationController extends Controller
 
         $reservation->load(['guest', 'company', 'room.roomType', 'house', 'createdBy']);
 
+        ActivityLog::record('reservation.created', $request->user()->id, [
+            'reservation_id' => $reservation->id,
+            'guest_name'     => $reservation->guest?->full_name,
+            'start_date'     => $data['start_date'],
+            'end_date'       => $data['end_date'],
+            'agreed_price'   => $data['agreed_price'],
+        ]);
+
         return response()->json(['success' => true, 'data' => $reservation, 'message' => 'Reserva creada.'], 201);
     }
 
@@ -184,6 +193,14 @@ class ReservationController extends Controller
 
         $reservation->load(['guest', 'company', 'room.roomType', 'house', 'createdBy']);
 
+        ActivityLog::record('reservation.updated', $request->user()->id, [
+            'reservation_id' => $reservation->id,
+            'guest_name'     => $reservation->guest?->full_name,
+            'status'         => $reservation->status,
+            'start_date'     => $reservation->start_date->toDateString(),
+            'end_date'       => $reservation->end_date->toDateString(),
+        ]);
+
         return response()->json(['success' => true, 'data' => $reservation, 'message' => 'Reserva actualizada.']);
     }
 
@@ -226,6 +243,11 @@ class ReservationController extends Controller
             ]);
             broadcast(new ReservationStatusChanged($reservation->load('guest', 'room')))->toOthers();
         });
+
+        ActivityLog::record('reservation.cancelled', $request->user()->id, [
+            'reservation_id' => $reservation->id,
+            'guest_name'     => $reservation->guest?->full_name,
+        ]);
 
         return response()->json(['success' => true, 'data' => $reservation, 'message' => 'Reserva cancelada.']);
     }
@@ -336,6 +358,15 @@ class ReservationController extends Controller
         });
 
         $stay->load(['guest', 'company', 'stayRooms.room.roomType', 'createdBy']);
+
+        ActivityLog::record('reservation.checkin', $request->user()->id, [
+            'reservation_id' => $reservation->id,
+            'stay_id'        => $stay->id,
+            'guest_name'     => $stay->guest?->full_name,
+            'room_ids'       => $data['room_ids'],
+            'check_in'       => $stay->check_in_datetime,
+            'check_out'      => $stay->check_out_datetime,
+        ]);
 
         return response()->json(['success' => true, 'data' => $stay, 'message' => 'Check-in desde reserva realizado.'], 201);
     }

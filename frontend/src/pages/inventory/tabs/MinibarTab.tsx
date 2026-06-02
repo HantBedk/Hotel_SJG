@@ -118,7 +118,7 @@ export default function MinibarTab() {
         <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>Sin productos de minibar.</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
                 {['Nombre', 'Precio venta', 'Precio costo', 'Precio daño', 'Estado', ''].map((h) => (

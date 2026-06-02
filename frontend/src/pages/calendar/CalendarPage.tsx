@@ -1,16 +1,74 @@
 import { useState, useCallback } from 'react'
-import { addDays, addMonths, addWeeks, format, startOfWeek, subMonths, subWeeks } from 'date-fns'
+import { addDays, addMonths, addWeeks, format, startOfWeek, subMonths, subWeeks, parseISO, isWithinInterval, eachDayOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, CalendarDays, LayoutGrid, AlignLeft, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
 import { useCalendar } from '@/hooks/useCalendar'
 import CalendarGrid from './components/CalendarGrid'
 import NewReservationWizard from '@/pages/reservations/components/NewReservationWizard'
-import type { CalendarEntry } from '@/types'
+import type { CalendarEntry, CalendarData } from '@/types'
 import { cn } from '@/lib/cn'
 
 type ViewMode = 'week' | 'twoWeeks' | 'month'
 
 const VIEW_DAYS: Record<ViewMode, number> = { week: 7, twoWeeks: 14, month: 30 }
+
+// ── Mobile list view ──────────────────────────────────────────────────────────
+function MobileCalendarList({ data, startDate, days }: { data: CalendarData; startDate: Date; days: number }) {
+  const dates = eachDayOfInterval({ start: startDate, end: addDays(startDate, days - 1) })
+  const allEntries = [...data.reservations, ...data.stays]
+
+  return (
+    <div className="space-y-3 pb-4">
+      {dates.map((date) => {
+        const dateStr = format(date, 'yyyy-MM-dd')
+        const entries = allEntries.filter((e) => {
+          try {
+            return isWithinInterval(date, {
+              start: parseISO(e.start_date),
+              end:   parseISO(e.end_date),
+            })
+          } catch { return false }
+        })
+
+        if (entries.length === 0) return null
+
+        return (
+          <div key={dateStr} className="rounded-xl border overflow-hidden" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
+            <div className="px-4 py-2 border-b font-semibold text-sm capitalize" style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)', background: 'var(--bg-input)' }}>
+              {format(date, "EEEE d 'de' MMMM", { locale: es })}
+            </div>
+            <ul className="divide-y" style={{ borderColor: 'var(--border-default)' }}>
+              {entries.map((entry, i) => (
+                <li key={i} className="px-4 py-3 flex items-start gap-3">
+                  <span className={cn(
+                    'mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0',
+                    entry.type === 'reservation'
+                      ? (entry.status === 'confirmed' ? 'bg-sky-600' : 'bg-sky-400')
+                      : (entry.status === 'extended'  ? 'bg-rose-700' : 'bg-rose-500'),
+                  )} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                      {entry.guest_name ?? entry.company_name ?? '—'}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {entry.type === 'reservation' ? 'Reserva' : 'Estadía'} · Hab. {data.rooms.find(r => r.id === entry.room_id)?.number ?? '?'}
+                      {' · '}{entry.start_date} → {entry.end_date}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      })}
+      {allEntries.length === 0 && (
+        <p className="text-center py-8 text-sm" style={{ color: 'var(--text-muted)' }}>
+          Sin eventos en este período.
+        </p>
+      )}
+    </div>
+  )
+}
 
 export default function CalendarPage() {
   const [view, setView]           = useState<ViewMode>('week')
@@ -51,16 +109,12 @@ export default function CalendarPage() {
   })()
 
   return (
-    <div className="flex flex-col h-full gap-4">
+    <div className="flex flex-col h-full gap-3">
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-bold mr-auto" style={{ color: 'var(--text-primary)' }}>
-          Calendario
-        </h1>
-
-        {/* View mode */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* View mode — hidden on smallest screens */}
         <div
-          className="flex rounded-lg overflow-hidden border text-sm"
+          className="hidden sm:flex rounded-lg overflow-hidden border text-sm"
           style={{ borderColor: 'var(--border-default)' }}
         >
           {(['week', 'twoWeeks', 'month'] as ViewMode[]).map((v) => (
@@ -120,15 +174,15 @@ export default function CalendarPage() {
 
         <button
           onClick={() => { setPrefillDate(undefined); setShowWizard(true) }}
-          className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white transition-colors hover:opacity-90"
+          className="ml-auto px-3 py-1.5 rounded-lg text-sm font-semibold text-white transition-colors hover:opacity-90"
           style={{ background: 'var(--color-primary)' }}
         >
           + Nueva reserva
         </button>
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 text-xs" style={{ color: 'var(--text-muted)' }}>
+      {/* Legend — hidden on mobile */}
+      <div className="hidden sm:flex flex-wrap gap-4 text-xs" style={{ color: 'var(--text-muted)' }}>
         <LegendDot color="bg-sky-400" label="Reserva pendiente" />
         <LegendDot color="bg-sky-600" label="Reserva confirmada" />
         <LegendDot color="bg-rose-500" label="Estadía activa" />
@@ -137,10 +191,10 @@ export default function CalendarPage() {
         <LegendDot color="bg-orange-500 opacity-50" label="Mantenimiento" />
       </div>
 
-      {/* Grid */}
-      <div className="flex-1 overflow-hidden">
+      {/* Desktop grid */}
+      <div className="hidden md:flex flex-1 overflow-hidden">
         {isLoading && !data ? (
-          <div className="flex items-center justify-center h-40 text-sm" style={{ color: 'var(--text-muted)' }}>
+          <div className="flex items-center justify-center h-40 text-sm w-full" style={{ color: 'var(--text-muted)' }}>
             Cargando...
           </div>
         ) : data ? (
@@ -151,6 +205,17 @@ export default function CalendarPage() {
             onEntryClick={setSelectedEntry}
             onCellClick={handleCellClick}
           />
+        ) : null}
+      </div>
+
+      {/* Mobile list view */}
+      <div className="md:hidden flex-1 overflow-y-auto">
+        {isLoading && !data ? (
+          <div className="flex items-center justify-center h-40 text-sm" style={{ color: 'var(--text-muted)' }}>
+            Cargando...
+          </div>
+        ) : data ? (
+          <MobileCalendarList data={data} startDate={anchor} days={days} />
         ) : null}
       </div>
 
@@ -188,12 +253,12 @@ function EntryDetailPanel({ entry, onClose }: { entry: CalendarEntry; onClose: (
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-4"
+      className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.4)' }}
       onClick={onClose}
     >
       <div
-        className="rounded-2xl p-5 w-full max-w-sm shadow-xl"
+        className="rounded-t-2xl sm:rounded-2xl p-5 w-full sm:max-w-sm shadow-xl"
         style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
         onClick={e => e.stopPropagation()}
       >

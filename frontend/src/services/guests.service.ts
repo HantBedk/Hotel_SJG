@@ -23,12 +23,18 @@ export const createGuestApi = async (payload: {
   notes?: string
   companions?: Partial<GuestCompanion>[]
 }): Promise<Guest> => {
-  const res = await api.post('/v1/guests', payload)
+  const clean = Object.fromEntries(
+    Object.entries(payload).filter(([, v]) => v !== '' && v !== undefined)
+  )
+  const res = await api.post('/v1/guests', clean)
   return res.data.data
 }
 
 export const updateGuestApi = async (id: string, payload: Partial<Guest>): Promise<Guest> => {
-  const res = await api.put(`/v1/guests/${id}`, payload)
+  const clean = Object.fromEntries(
+    Object.entries(payload).filter(([, v]) => v !== '' && v !== undefined)
+  )
+  const res = await api.put(`/v1/guests/${id}`, clean)
   return res.data.data
 }
 

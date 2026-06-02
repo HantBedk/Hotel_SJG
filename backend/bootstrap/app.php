@@ -2,6 +2,7 @@
 
 use App\Console\Commands\CheckInventoryAlerts;
 use App\Console\Commands\CheckReservationAlerts;
+use App\Console\Commands\GenerateSuggestions;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
         $schedule->command(CheckReservationAlerts::class)->hourly();
         $schedule->command(CheckInventoryAlerts::class)->dailyAt('08:00');
+        $schedule->command(GenerateSuggestions::class)->dailyAt('06:00');
     })
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([

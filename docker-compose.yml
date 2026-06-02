@@ -6,7 +6,7 @@ services:
     container_name: hotel_app
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "0.0.0.0:80:80"
     volumes:
       - ./backend/storage:/var/www/html/storage
       - ./backend/bootstrap/cache:/var/www/html/bootstrap/cache
@@ -56,7 +56,7 @@ services:
     container_name: hotel_reverb
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "0.0.0.0:8080:8080"
     environment:
       - REVERB_APP_ID=${REVERB_APP_ID:-hotel_sjg}
       - REVERB_APP_KEY=${REVERB_APP_KEY:-hotel_reverb_key}

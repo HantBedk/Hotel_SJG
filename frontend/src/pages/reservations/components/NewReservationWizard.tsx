@@ -108,12 +108,12 @@ export default function NewReservationWizard({ prefillStartDate, prefillRoom, on
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.5)' }}
     >
       <div
-        className="w-full max-w-lg rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-        style={{ background: 'var(--bg-surface)', maxHeight: '90vh' }}
+        className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        style={{ background: 'var(--bg-surface)', maxHeight: '92vh' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>

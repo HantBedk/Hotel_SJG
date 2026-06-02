@@ -1,16 +1,32 @@
+import { lazy, Suspense } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import AppLayout from '@/components/layout/AppLayout'
 import LoginPage from '@/pages/auth/LoginPage'
-import DashboardPage from '@/pages/dashboard/DashboardPage'
-import GuestsPage from '@/pages/guests/GuestsPage'
-import RoomsPage from '@/pages/rooms/RoomsPage'
-import StaysPage from '@/pages/stays/StaysPage'
-import CompaniesPage from '@/pages/companies/CompaniesPage'
-import SettingsPage from '@/pages/settings/SettingsPage'
-import ReservationsPage from '@/pages/reservations/ReservationsPage'
-import CalendarPage from '@/pages/calendar/CalendarPage'
-import InventoryPage from '@/pages/inventory/InventoryPage'
+
+// ── Lazy-loaded pages ─────────────────────────────────────────────────────────
+const DashboardPage   = lazy(() => import('@/pages/dashboard/DashboardPage'))
+const GuestsPage      = lazy(() => import('@/pages/guests/GuestsPage'))
+const RoomsPage       = lazy(() => import('@/pages/rooms/RoomsPage'))
+const StaysPage       = lazy(() => import('@/pages/stays/StaysPage'))
+const CompaniesPage   = lazy(() => import('@/pages/companies/CompaniesPage'))
+const SettingsPage    = lazy(() => import('@/pages/settings/SettingsPage'))
+const ReservationsPage= lazy(() => import('@/pages/reservations/ReservationsPage'))
+const CalendarPage    = lazy(() => import('@/pages/calendar/CalendarPage'))
+const InventoryPage   = lazy(() => import('@/pages/inventory/InventoryPage'))
+const ActivityPage    = lazy(() => import('@/pages/activity/ActivityPage'))
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-48">
+      <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  )
+}
+
+function Lazy({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<PageLoader />}>{children}</Suspense>
+}
 
 // ── Route guards ──────────────────────────────────────────────────────────────
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -54,12 +70,15 @@ export const router = createBrowserRouter([
       </RequireAuth>
     ),
     children: [
-      { index: true, element: <DashboardPage /> },
+      {
+        index: true,
+        element: <Lazy><DashboardPage /></Lazy>,
+      },
       {
         path: 'rooms',
         element: (
           <RequirePermission permission="view_rooms">
-            <RoomsPage />
+            <Lazy><RoomsPage /></Lazy>
           </RequirePermission>
         ),
       },
@@ -67,7 +86,7 @@ export const router = createBrowserRouter([
         path: 'guests',
         element: (
           <RequirePermission permission="check_in">
-            <GuestsPage />
+            <Lazy><GuestsPage /></Lazy>
           </RequirePermission>
         ),
       },
@@ -75,7 +94,7 @@ export const router = createBrowserRouter([
         path: 'companies',
         element: (
           <RequirePermission permission="check_in">
-            <CompaniesPage />
+            <Lazy><CompaniesPage /></Lazy>
           </RequirePermission>
         ),
       },
@@ -83,7 +102,7 @@ export const router = createBrowserRouter([
         path: 'stays',
         element: (
           <RequirePermission permission="check_in">
-            <StaysPage />
+            <Lazy><StaysPage /></Lazy>
           </RequirePermission>
         ),
       },
@@ -91,7 +110,7 @@ export const router = createBrowserRouter([
         path: 'reservations',
         element: (
           <RequirePermission permission="view_reservations">
-            <ReservationsPage />
+            <Lazy><ReservationsPage /></Lazy>
           </RequirePermission>
         ),
       },
@@ -99,7 +118,7 @@ export const router = createBrowserRouter([
         path: 'calendar',
         element: (
           <RequirePermission permission="view_reservations">
-            <CalendarPage />
+            <Lazy><CalendarPage /></Lazy>
           </RequirePermission>
         ),
       },
@@ -107,7 +126,15 @@ export const router = createBrowserRouter([
         path: 'inventory',
         element: (
           <RequirePermission permission="view_inventory">
-            <InventoryPage />
+            <Lazy><InventoryPage /></Lazy>
+          </RequirePermission>
+        ),
+      },
+      {
+        path: 'activity',
+        element: (
+          <RequirePermission permission="view_activity_log">
+            <Lazy><ActivityPage /></Lazy>
           </RequirePermission>
         ),
       },
@@ -115,7 +142,7 @@ export const router = createBrowserRouter([
         path: 'settings',
         element: (
           <RequirePermission permission="view_settings">
-            <SettingsPage />
+            <Lazy><SettingsPage /></Lazy>
           </RequirePermission>
         ),
       },

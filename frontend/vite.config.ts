@@ -24,6 +24,13 @@ export default defineConfig({
           if (assetInfo.name?.endsWith('.css')) return 'assets/index.css'
           return 'assets/[name]-[hash][extname]'
         },
+        manualChunks: {
+          'vendor-react':  ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query':  ['@tanstack/react-query'],
+          'vendor-charts': ['recharts'],
+          'vendor-dateFns':['date-fns'],
+          'vendor-echo':   ['laravel-echo', 'pusher-js'],
+        },
       },
     },
   },

@@ -204,7 +204,7 @@ class AdminController extends Controller
         return response()->json([
             'success' => true,
             'data'    => $type,
-            'message' => "Precio actualizado para tipo "{$type->name}".",
+            'message' => "Precio actualizado para tipo \"{$type->name}\".",
         ]);
     }
 

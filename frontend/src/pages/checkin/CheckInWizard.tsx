@@ -974,15 +974,15 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.5)' }}
       onClick={(e) => { if (e.target === e.currentTarget && isFirst) onClose() }}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="w-full max-w-lg rounded-2xl shadow-xl overflow-hidden"
-        style={{ background: 'var(--bg-surface)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+        className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden"
+        style={{ background: 'var(--bg-surface)', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}
       >
         {/* Header */}
         <div

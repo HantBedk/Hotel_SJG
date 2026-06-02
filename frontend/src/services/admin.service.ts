@@ -1,4 +1,4 @@
-import api from './api'
+import api from '@/lib/axios'
 import type {
   AdminUser,
   AdminUserPayload,

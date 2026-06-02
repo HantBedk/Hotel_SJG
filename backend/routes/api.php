@@ -2,10 +2,12 @@
 
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\V1\ActivityLogController;
 use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\AssetController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BackupController;
+use App\Http\Controllers\Api\V1\SuggestionsController;
 use App\Http\Controllers\Api\V1\CalendarController;
 use App\Http\Controllers\Api\V1\CompanyController;
 use App\Http\Controllers\Api\V1\DashboardController;
@@ -51,6 +53,8 @@ Route::prefix('v1')->group(function () {
 
         // Dashboard
         Route::get('/dashboard', [DashboardController::class, 'index'])
+             ->middleware('permission:view_dashboard');
+        Route::get('/dashboard/occupancy-history', [DashboardController::class, 'occupancyHistory'])
              ->middleware('permission:view_dashboard');
 
         // Habitaciones
@@ -221,6 +225,19 @@ Route::prefix('v1')->group(function () {
         Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
         Route::post('/notifications/read-all',    [NotificationController::class, 'markAllRead']);
+
+        // ── Actividad / Historial ─────────────────────────────────────────────
+        Route::middleware('permission:view_activity_log')->group(function () {
+            Route::get('/activity-logs',         [ActivityLogController::class, 'index']);
+            Route::get('/activity-logs/actions', [ActivityLogController::class, 'actions']);
+            Route::get('/reports/payments',      [ActivityLogController::class, 'payments']);
+        });
+
+        // ── Sugerencias ───────────────────────────────────────────────────────
+        Route::middleware('permission:view_dashboard')->group(function () {
+            Route::get('/suggestions',                        [SuggestionsController::class, 'index']);
+            Route::post('/suggestions/{suggestion}/dismiss',  [SuggestionsController::class, 'dismiss']);
+        });
 
         // ── Admin ─────────────────────────────────────────────────────────────
         Route::prefix('admin')->middleware('permission:manage_settings')->group(function () {

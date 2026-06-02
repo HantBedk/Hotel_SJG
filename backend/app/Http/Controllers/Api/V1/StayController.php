@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Events\NewCheckIn;
 use App\Events\RoomStatusChanged;
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\ExtraService;
 use App\Models\MinibarConsumption;
 use App\Models\Room;
@@ -135,6 +136,13 @@ class StayController extends Controller
 
         $stay->load(['guest', 'company', 'stayRooms.room.roomType', 'stayGuests.guest', 'createdBy']);
 
+        ActivityLog::record('stay.checkin', $request->user()->id, [
+            'stay_id'      => $stay->id,
+            'guest_name'   => $stay->guest?->full_name,
+            'rooms'        => $stay->stayRooms->pluck('room.number')->filter()->values(),
+            'total_amount' => (float) $stay->total_amount,
+        ]);
+
         return response()->json(['success' => true, 'data' => $stay, 'message' => 'Check-in realizado.'], 201);
     }
 
@@ -175,6 +183,12 @@ class StayController extends Controller
                 broadcast(new RoomStatusChanged($stayRoom->room->refresh()))->toOthers();
             }
         });
+
+        ActivityLog::record('stay.checkout', $request->user()->id, [
+            'stay_id'    => $stay->id,
+            'guest_name' => $stay->guest?->full_name,
+            'total'      => (float) $stay->refresh()->total_amount,
+        ]);
 
         return response()->json(['success' => true, 'data' => $stay->refresh(), 'message' => 'Checkout realizado.']);
     }
@@ -267,7 +281,16 @@ class StayController extends Controller
             ]);
         });
 
-        return response()->json(['success' => true, 'data' => $stay->refresh(), 'message' => 'Estadía extendida.']);
+        $stay->refresh();
+
+        ActivityLog::record('stay.extended', $request->user()->id, [
+            'stay_id'             => $stay->id,
+            'guest_name'          => $stay->guest?->full_name,
+            'new_check_out'       => $newCheckOut->toDateTimeString(),
+            'new_nights'          => $newNights,
+        ]);
+
+        return response()->json(['success' => true, 'data' => $stay, 'message' => 'Estadía extendida.']);
     }
 
     public function addRoom(Request $request, Stay $stay): JsonResponse
@@ -452,6 +475,13 @@ class StayController extends Controller
 
         $stay->load(['guest', 'stayRooms.room', 'transfers']);
 
+        ActivityLog::record('stay.transfer', $request->user()->id, [
+            'stay_id'      => $stay->id,
+            'from_room_id' => $data['from_room_id'],
+            'to_room_id'   => $data['to_room_id'],
+            'reason'       => $data['reason'] ?? null,
+        ]);
+
         return response()->json(['success' => true, 'data' => $stay, 'message' => 'Transferencia realizada.']);
     }
 
@@ -484,6 +514,13 @@ class StayController extends Controller
             return $payment;
         });
 
+        ActivityLog::record('stay.payment', $request->user()->id, [
+            'stay_id' => $stay->id,
+            'amount'  => (float) $data['amount'],
+            'method'  => $data['payment_method'],
+            'type'    => $data['payment_type'],
+        ]);
+
         return response()->json(['success' => true, 'data' => $payment, 'message' => 'Pago registrado.'], 201);
     }
 
@@ -513,6 +550,14 @@ class StayController extends Controller
 
             return $stayService;
         });
+
+        ActivityLog::record('stay.service', $request->user()->id, [
+            'stay_id'      => $stay->id,
+            'guest_name'   => $stay->guest?->full_name,
+            'service_name' => $service->name,
+            'quantity'     => $data['quantity'],
+            'total'        => $total,
+        ]);
 
         return response()->json([
             'success' => true,
