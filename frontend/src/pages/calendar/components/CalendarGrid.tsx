@@ -117,6 +117,7 @@ export default function CalendarGrid({ data, startDate, days, onEntryClick, onCe
                 width: COL_WIDTH,
                 minWidth: COL_WIDTH,
                 borderRight: '1px solid var(--border-default)',
+                borderLeft: today ? '2px dashed #EF4444' : undefined,
                 background: today ? 'var(--color-primary)' : undefined,
                 color: today ? 'white' : 'var(--text-secondary)',
               }}
@@ -210,13 +211,14 @@ function RoomRow({ room, dates, entryMap, spanMap, colWidth, labelWidth, rowHeig
           return (
             <div
               key={dateStr}
-              className={`flex-shrink-0 border-r cursor-pointer transition-colors ${!hasEntry && statusColor ? statusColor + ' opacity-30' : ''}`}
+              className={`flex-shrink-0 border-r cursor-pointer transition-colors relative ${!hasEntry && statusColor ? statusColor + ' opacity-30' : ''}`}
               style={{
                 width: colWidth,
                 minWidth: colWidth,
                 height: rowHeight,
                 borderColor: 'var(--border-default)',
                 background: today && !hasEntry ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : undefined,
+                borderLeft: today ? '2px dashed #EF4444' : undefined,
               }}
               onClick={() => !hasEntry && onCellClick?.(room.id, date)}
             />

@@ -163,6 +163,18 @@ button.icon-sm, a.icon-sm {
   animation: skeleton-pulse 1.5s ease-in-out infinite;
 }
 
+/* ── Touch targets (A11y) — mínimo 44×44px en móvil ────────────────────── */
+@media (pointer: coarse) {
+  button, [role="button"], a, input[type="checkbox"], input[type="radio"], select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  input[type="text"], input[type="email"], input[type="password"],
+  input[type="number"], input[type="date"], input[type="search"], textarea {
+    min-height: 44px;
+  }
+}
+
 /* ── prefers-reduced-motion (A11y) ──────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

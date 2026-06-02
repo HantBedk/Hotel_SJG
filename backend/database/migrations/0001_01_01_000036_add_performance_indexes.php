@@ -37,6 +37,9 @@ return new class extends Migration
 
         // guests: búsqueda por documento (pg_trgm para LIKE)
         DB::statement('CREATE INDEX IF NOT EXISTS idx_guests_document_trgm ON guests USING gin (document_number gin_trgm_ops) WHERE deleted_at IS NULL');
+
+        // inventory_items: búsqueda por código
+        DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_items_code ON inventory_items (code) WHERE deleted_at IS NULL');
     }
 
     public function down(): void
@@ -55,6 +58,7 @@ return new class extends Migration
             'idx_inventory_expiry',
             'idx_notifications_user_unread',
             'idx_guests_document_trgm',
+            'idx_inventory_items_code',
         ];
 
         foreach ($indexes as $index) {

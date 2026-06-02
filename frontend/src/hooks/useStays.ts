@@ -7,12 +7,14 @@ import {
 } from '@/services/stays.service'
 import type { CheckInPayload, MinibarItem } from '@/types'
 
-export function useStays(status?: string) {
+export function useStays(filters?: { status?: string; company_id?: string } | string) {
   const queryClient = useQueryClient()
 
+  const normalizedFilters = typeof filters === 'string' ? { status: filters } : (filters ?? {})
+
   const { data, isLoading } = useQuery({
-    queryKey: ['stays', status],
-    queryFn:  () => getStaysApi(status),
+    queryKey: ['stays', normalizedFilters],
+    queryFn:  () => getStaysApi(normalizedFilters),
   })
 
   const invalidate = () => {

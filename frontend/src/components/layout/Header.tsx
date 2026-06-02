@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { Bell, Moon, Sun, Menu } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUnreadCountApi } from '@/services/notifications.service'
 import NotificationCenter from '@/components/notifications/NotificationCenter'
+import { useReverb } from '@/hooks/useReverb'
 
 interface HeaderProps {
   title: string
@@ -14,12 +15,24 @@ interface HeaderProps {
 
 export default function Header({ title, onToggleSidebar, darkMode, onToggleDark }: HeaderProps) {
   const user = useAuthStore((s) => s.user)
+  const queryClient = useQueryClient()
   const [notifOpen, setNotifOpen] = useState(false)
 
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ['notifications-unread'],
     queryFn: getUnreadCountApi,
     refetchInterval: 60_000,
+  })
+
+  // Real-time notification badge via Reverb
+  useReverb({
+    channel: 'hotel.notifications',
+    event:   'notification.created',
+    onEvent: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications-unread'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+    enabled: true,
   })
 
   return (

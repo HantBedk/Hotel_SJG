@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Events\NewNotification;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -28,6 +29,10 @@ class Notification extends Model
     {
         static::creating(function (self $model) {
             $model->created_at ??= now();
+        });
+
+        static::created(function (self $model) {
+            broadcast(new NewNotification($model))->toOthers();
         });
     }
 

@@ -7,8 +7,11 @@ use App\Events\RoomStatusChanged;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\ExtraService;
+use App\Models\InventoryTransaction;
 use App\Models\MinibarConsumption;
+use App\Models\MinibarProduct;
 use App\Models\Room;
+use App\Models\RoomMinibar;
 use App\Models\Setting;
 use App\Models\Stay;
 use App\Models\StayGuest;
@@ -27,6 +30,10 @@ class StayController extends Controller
 
         if ($status = $request->query('status')) {
             $query->where('status', $status);
+        }
+
+        if ($companyId = $request->query('company_id')) {
+            $query->where('company_id', $companyId);
         }
 
         $stays = $query->paginate(20);
@@ -181,6 +188,37 @@ class StayController extends Controller
             foreach ($stay->activeStayRooms as $stayRoom) {
                 $stayRoom->room->update(['status' => 'cleaning']);
                 broadcast(new RoomStatusChanged($stayRoom->room->refresh()))->toOthers();
+            }
+
+            // Deduct consumed minibar items from room_minibars
+            $consumptions = $stay->minibarConsumptions()
+                ->whereIn('type', ['consumed', 'damaged'])
+                ->get();
+
+            foreach ($consumptions as $c) {
+                $product = MinibarProduct::where('name', $c->product_name)->first();
+                if (!$product) continue;
+
+                $minibar = RoomMinibar::where('room_id', $c->room_id)
+                    ->where('minibar_product_id', $product->id)
+                    ->first();
+
+                if ($minibar && $minibar->quantity > 0) {
+                    $minibar->decrement('quantity', min($c->quantity, $minibar->quantity));
+                }
+
+                // Create inventory_transaction if product has inventory item
+                if ($product->inventory_item_id) {
+                    InventoryTransaction::create([
+                        'inventory_item_id' => $product->inventory_item_id,
+                        'type'              => 'sale',
+                        'quantity'          => $c->quantity,
+                        'unit_price'        => $c->unit_price,
+                        'total_value'       => $c->total,
+                        'performed_by'      => $stay->created_by,
+                        'notes'             => "Checkout estadía #{$stay->id}",
+                    ]);
+                }
             }
         });
 
@@ -483,6 +521,16 @@ class StayController extends Controller
         ]);
 
         return response()->json(['success' => true, 'data' => $stay, 'message' => 'Transferencia realizada.']);
+    }
+
+    public function payments(Stay $stay): JsonResponse
+    {
+        $payments = $stay->payments()
+            ->with('receptionist:id,name')
+            ->orderByDesc('payment_date')
+            ->paginate(50);
+
+        return response()->json(['success' => true, 'data' => $payments]);
     }
 
     public function addPayment(Request $request, Stay $stay): JsonResponse

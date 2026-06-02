@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Search } from 'lucide-react'
 import { useStays } from '@/hooks/useStays'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonCard } from '@/components/ui/Skeleton'
@@ -31,18 +32,27 @@ export default function StaysPage() {
   const canCheckOut = hasPermission('check_out')
 
   const [statusFilter, setStatusFilter] = useState<string>('active')
+  const [guestSearch, setGuestSearch]   = useState('')
   const [selected, setSelected] = useState<Stay | null>(null)
   const [checkoutStay, setCheckoutStay] = useState<Stay | null>(null)
 
-  const { stays, isLoading, transfer, addPayment, addService, extend } = useStays(statusFilter)
+  const { stays: rawStays, isLoading, transfer, addPayment, addService, extend } = useStays({ status: statusFilter })
+
+  // Client-side filter by guest/company name
+  const stays = guestSearch.trim()
+    ? (rawStays as Stay[]).filter((s) =>
+        s.guest?.full_name?.toLowerCase().includes(guestSearch.toLowerCase()) ||
+        s.company?.name?.toLowerCase().includes(guestSearch.toLowerCase())
+      )
+    : (rawStays as Stay[])
 
   useEffect(() => {
     if (selected) {
-      const updated = (stays as Stay[]).find((s) => s.id === selected.id)
+      const updated = (rawStays as Stay[])?.find((s) => s.id === selected.id)
       if (updated) setSelected(updated)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stays])
+  }, [rawStays])
 
   const handleCheckoutSuccess = () => {
     setCheckoutStay(null)
@@ -52,8 +62,8 @@ export default function StaysPage() {
   return (
     <div className="space-y-5">
 
-      {/* Filter */}
-      <div className="flex gap-2">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map(({ key, label }) => (
           <button
             key={key}
@@ -68,6 +78,20 @@ export default function StaysPage() {
             {label}
           </button>
         ))}
+        {/* Search by guest / company */}
+        <div
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border ml-auto"
+          style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
+        >
+          <Search size={13} style={{ color: 'var(--text-muted)' }} />
+          <input
+            value={guestSearch}
+            onChange={(e) => setGuestSearch(e.target.value)}
+            placeholder="Buscar huésped o empresa…"
+            className="bg-transparent text-xs outline-none w-44"
+            style={{ color: 'var(--text-primary)' }}
+          />
+        </div>
       </div>
 
       {/* Table */}

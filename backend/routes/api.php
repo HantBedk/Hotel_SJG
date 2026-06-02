@@ -126,6 +126,8 @@ Route::prefix('v1')->group(function () {
              ->middleware('permission:check_out|check_in');
         Route::post('/stays/{stay}/transfer',   [StayController::class, 'transfer'])
              ->middleware('permission:check_in|check_out');
+        Route::get('/stays/{stay}/payments',    [StayController::class, 'payments'])
+             ->middleware('permission:check_in|check_out|manage_reservations');
         Route::post('/stays/{stay}/payments',   [StayController::class, 'addPayment'])
              ->middleware('permission:check_in|check_out|manage_reservations');
         Route::post('/stays/{stay}/services',   [StayController::class, 'addService'])
