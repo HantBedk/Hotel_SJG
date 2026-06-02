@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Asset;
 use App\Models\AssetMaintenance;
 use App\Models\RepairOrder;
+use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class AssetController extends Controller
 {
+    use Paginates;
+
     // ── Assets ────────────────────────────────────────────────────────────────
 
     public function index(Request $request): JsonResponse
@@ -28,7 +31,7 @@ class AssetController extends Controller
                 ->orWhere('serial_number', 'ilike', "%{$search}%"));
         }
 
-        return response()->json(['success' => true, 'data' => $query->paginate(30)]);
+        return response()->json(['success' => true, 'data' => $query->paginate($this->perPage($request, 30))]);
     }
 
     public function store(Request $request): JsonResponse
@@ -93,7 +96,7 @@ class AssetController extends Controller
             $query->where('asset_id', $assetId);
         }
 
-        return response()->json(['success' => true, 'data' => $query->paginate(30)]);
+        return response()->json(['success' => true, 'data' => $query->paginate($this->perPage($request, 30))]);
     }
 
     public function addMaintenance(Request $request, Asset $asset): JsonResponse
@@ -146,7 +149,7 @@ class AssetController extends Controller
             $query->where('status', $status);
         }
 
-        return response()->json(['success' => true, 'data' => $query->paginate(30)]);
+        return response()->json(['success' => true, 'data' => $query->paginate($this->perPage($request, 30))]);
     }
 
     public function createRepairOrder(Request $request): JsonResponse

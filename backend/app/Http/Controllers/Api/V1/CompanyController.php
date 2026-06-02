@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
+use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CompanyController extends Controller
 {
+    use Paginates;
+
     public function index(Request $request): JsonResponse
     {
         $query = Company::query();
@@ -17,7 +20,7 @@ class CompanyController extends Controller
             $query->search($search);
         }
 
-        $companies = $query->orderBy('name')->paginate(20);
+        $companies = $query->orderBy('name')->paginate($this->perPage($request, 20));
 
         return response()->json(['success' => true, 'data' => $companies]);
     }

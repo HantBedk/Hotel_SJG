@@ -49,7 +49,11 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
   const minibarMutation = useMutation({
     mutationFn: ({ stayId, items }: { stayId: string; items: MinibarItem[] }) =>
       addMinibarChargesApi(stayId, { items }),
-    onSuccess: () => toast.success('Consumos de minibar registrados.'),
+    onSuccess: () => {
+      toast.success('Consumos de minibar registrados.')
+      queryClient.invalidateQueries({ queryKey: ['stays'] })
+      queryClient.invalidateQueries({ queryKey: ['room-minibars'] })
+    },
     onError: (e: { response?: { data?: { message?: string } } }) =>
       toast.error(e?.response?.data?.message ?? 'Error al registrar consumos.'),
   })

@@ -14,6 +14,7 @@ import {
   createMinibarProductApi,
   updateMinibarProductApi,
   deleteMinibarProductApi,
+  getRoomMinibarsApi,
   restockRoomMinibarApi,
   getAssetsApi,
   createAssetApi,
@@ -132,6 +133,14 @@ export function useMinibarProducts() {
   })
 }
 
+export function useRoomMinibars(roomId: string | null) {
+  return useQuery({
+    queryKey: ['room-minibars', roomId],
+    queryFn: () => getRoomMinibarsApi(roomId as string),
+    enabled: !!roomId,
+  })
+}
+
 export function useMinibarProductMutations() {
   const qc = useQueryClient()
   const invalidate = () => qc.invalidateQueries({ queryKey: ['minibar-products'] })
@@ -157,7 +166,10 @@ export function useMinibarProductMutations() {
 
   const restockRoomMutation = useMutation({
     mutationFn: restockRoomMinibarApi,
-    onSuccess: () => toast.success('Minibar repuesto.'),
+    onSuccess: (_data, vars) => {
+      toast.success('Minibar repuesto.')
+      qc.invalidateQueries({ queryKey: ['room-minibars', vars.room_id] })
+    },
     onError: (e: ApiError) => toast.error(errMsg(e, 'Error al reponer minibar.')),
   })
 

@@ -1,8 +1,18 @@
 import api from '@/lib/axios'
 import type { Company } from '@/types'
 
-export const getCompaniesApi = async (search?: string): Promise<{ data: Company[]; meta: unknown }> => {
-  const params = search ? { search } : {}
+export interface CompanyFilters {
+  search?: string
+  page?: number
+  per_page?: number
+}
+
+export const getCompaniesApi = async (
+  filters?: string | CompanyFilters
+): Promise<{ data: Company[]; meta: unknown }> => {
+  const params = typeof filters === 'string'
+    ? (filters ? { search: filters } : {})
+    : (filters ?? {})
   const res = await api.get('/v1/companies', { params })
   return res.data.data
 }

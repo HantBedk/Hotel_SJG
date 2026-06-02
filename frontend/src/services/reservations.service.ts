@@ -9,6 +9,7 @@ export interface ReservationFilters {
   to?: string
   search?: string
   page?: number
+  per_page?: number
 }
 
 export const getReservationsApi = async (filters: ReservationFilters = {}): Promise<{ data: Reservation[]; meta: unknown }> => {

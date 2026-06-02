@@ -1,8 +1,19 @@
 import api from '@/lib/axios'
 import type { Guest, GuestCompanion, Stay } from '@/types'
 
-export const getGuestsApi = async (search?: string): Promise<{ data: Guest[]; meta: unknown }> => {
-  const params = search ? { search } : {}
+export interface GuestFilters {
+  search?: string
+  document?: string
+  page?: number
+  per_page?: number
+}
+
+export const getGuestsApi = async (
+  filters?: string | GuestFilters
+): Promise<{ data: Guest[]; meta: unknown }> => {
+  const params = typeof filters === 'string'
+    ? (filters ? { search: filters } : {})
+    : (filters ?? {})
   const res = await api.get('/v1/guests', { params })
   return res.data.data
 }

@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
+use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class InventoryController extends Controller
 {
+    use Paginates;
+
     public function categories(): JsonResponse
     {
         $categories = InventoryCategory::where('active', true)->orderBy('name')->get();
@@ -43,7 +46,7 @@ class InventoryController extends Controller
                 ->whereDate('expiry_date', '<=', now()->addDays($days));
         }
 
-        return response()->json(['success' => true, 'data' => $query->paginate(30)]);
+        return response()->json(['success' => true, 'data' => $query->paginate($this->perPage($request, 30))]);
     }
 
     public function store(Request $request): JsonResponse
@@ -213,12 +216,12 @@ class InventoryController extends Controller
         return response()->json(['success' => true, 'data' => $inventoryItem->refresh(), 'message' => 'Entrega registrada.']);
     }
 
-    public function transactions(InventoryItem $inventoryItem): JsonResponse
+    public function transactions(Request $request, InventoryItem $inventoryItem): JsonResponse
     {
         $transactions = $inventoryItem->transactions()
             ->with('performedBy', 'destinationRoom', 'destinationUser')
             ->latest()
-            ->paginate(30);
+            ->paginate($this->perPage($request, 30));
 
         return response()->json(['success' => true, 'data' => $transactions]);
     }

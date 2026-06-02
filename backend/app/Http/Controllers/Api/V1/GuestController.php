@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Guest;
 use App\Models\GuestCompanion;
+use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class GuestController extends Controller
 {
+    use Paginates;
+
     public function index(Request $request): JsonResponse
     {
         $query = Guest::withCount('stays');
@@ -20,7 +23,7 @@ class GuestController extends Controller
             $query->search($search);
         }
 
-        $guests = $query->orderBy('full_name')->paginate(20);
+        $guests = $query->orderBy('full_name')->paginate($this->perPage($request, 20));
 
         return response()->json(['success' => true, 'data' => $guests]);
     }

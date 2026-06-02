@@ -4,16 +4,19 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
+use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
+    use Paginates;
+
     public function index(Request $request): JsonResponse
     {
         $notifications = Notification::where('user_id', $request->user()->id)
             ->orderByDesc('created_at')
-            ->paginate(30);
+            ->paginate($this->perPage($request, 30));
 
         return response()->json(['success' => true, 'data' => $notifications]);
     }

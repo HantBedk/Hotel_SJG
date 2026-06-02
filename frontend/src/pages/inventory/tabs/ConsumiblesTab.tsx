@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { Plus, Search, Pencil, Trash2, RefreshCw, SlidersHorizontal, X } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, RefreshCw, SlidersHorizontal, X, Truck } from 'lucide-react'
 import { useInventoryItems, useInventoryCategories, useInventoryMutations } from '@/hooks/useInventory'
+import { useAdminUsers } from '@/hooks/useAdmin'
 import { useAuth } from '@/hooks/useAuth'
-import type { InventoryItem, InventoryCategory } from '@/types'
+import type { InventoryItem, InventoryCategory, AdminUser } from '@/types'
 
 function formatCurrency(v: string | number | null) {
   if (v == null) return '—'
@@ -187,6 +188,100 @@ function RestockModal({ item, onSave, onClose, saving }: RestockModalProps) {
   )
 }
 
+// ── Deliver to housekeeping modal ────────────────────────────────────────────
+interface DeliverModalProps {
+  item: InventoryItem
+  users: AdminUser[]
+  onSave: (data: { quantity: number; destination_user_id: string; notes?: string }) => void
+  onClose: () => void
+  saving: boolean
+}
+
+function DeliverModal({ item, users, onSave, onClose, saving }: DeliverModalProps) {
+  const [qty, setQty] = useState('1')
+  const [userId, setUserId] = useState('')
+  const [notes, setNotes] = useState('')
+
+  const eligibleUsers = users.filter(
+    (u) => u.is_active && (u.role === 'housekeeping' || u.role === 'maintenance')
+  )
+
+  const qtyNum = Number(qty)
+  const exceedsStock = qtyNum > item.current_stock
+  const valid = qtyNum > 0 && userId && !exceedsStock
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }}>
+      <div className="w-full max-w-sm rounded-xl shadow-2xl" style={{ background: 'var(--bg-surface)' }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+          <h2 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+            Entregar — {item.name}
+          </h2>
+          <button onClick={onClose}><X size={18} style={{ color: 'var(--text-secondary)' }} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Stock actual: <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{item.current_stock} {item.unit}</span>
+          </p>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Empleado destino *</label>
+            <select
+              required value={userId} onChange={(e) => setUserId(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            >
+              <option value="">Seleccionar…</option>
+              {eligibleUsers.map((u) => (
+                <option key={u.id} value={u.id}>{u.name} — {u.role}</option>
+              ))}
+            </select>
+            {eligibleUsers.length === 0 && (
+              <p className="text-xs mt-1" style={{ color: '#DC2626' }}>
+                No hay usuarios activos con rol housekeeping/maintenance.
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Cantidad *</label>
+            <input
+              type="number" min="1" max={item.current_stock} value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            />
+            {exceedsStock && (
+              <p className="text-xs mt-1" style={{ color: '#DC2626' }}>Excede el stock disponible.</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Notas</label>
+            <input
+              type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
+              placeholder="Motivo, sector, etc."
+              className="w-full px-3 py-2 rounded-lg border text-sm"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <button onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm border"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+              Cancelar
+            </button>
+            <button
+              disabled={saving || !valid}
+              onClick={() => onSave({ quantity: qtyNum, destination_user_id: userId, notes: notes || undefined })}
+              className="px-4 py-2 rounded-lg text-sm text-white font-medium disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}>
+              {saving ? 'Entregando…' : 'Entregar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main tab ──────────────────────────────────────────────────────────────────
 export default function ConsumiblesTab() {
   const { hasPermission } = useAuth()
@@ -197,9 +292,13 @@ export default function ConsumiblesTab() {
   const [lowStock, setLowStock] = useState(false)
   const [modalItem, setModalItem] = useState<InventoryItem | null | undefined>(undefined)
   const [restockItem, setRestockItem] = useState<InventoryItem | null>(null)
+  const [deliverItem, setDeliverItem] = useState<InventoryItem | null>(null)
 
   const { data: categoriesData } = useInventoryCategories()
   const categories = categoriesData ?? []
+
+  const { data: usersData } = useAdminUsers()
+  const users = usersData ?? []
 
   const filters = {
     search: search || undefined,
@@ -210,7 +309,7 @@ export default function ConsumiblesTab() {
   const { data, isLoading } = useInventoryItems(filters)
   const items = data?.data ?? []
 
-  const { createMutation, updateMutation, deleteMutation, restockMutation } = useInventoryMutations()
+  const { createMutation, updateMutation, deleteMutation, restockMutation, deliverMutation } = useInventoryMutations()
 
   const handleSave = (formData: Partial<InventoryItem>) => {
     if (modalItem?.id) {
@@ -223,6 +322,11 @@ export default function ConsumiblesTab() {
   const handleRestock = (data: { quantity: number; unit_price?: number; notes?: string }) => {
     if (!restockItem) return
     restockMutation.mutate({ id: restockItem.id, data }, { onSuccess: () => setRestockItem(null) })
+  }
+
+  const handleDeliver = (data: { quantity: number; destination_user_id: string; notes?: string }) => {
+    if (!deliverItem) return
+    deliverMutation.mutate({ id: deliverItem.id, data }, { onSuccess: () => setDeliverItem(null) })
   }
 
   return (
@@ -326,6 +430,15 @@ export default function ConsumiblesTab() {
                             <RefreshCw size={14} />
                           </button>
                           <button
+                            onClick={() => setDeliverItem(item)}
+                            disabled={item.current_stock <= 0}
+                            title={item.current_stock <= 0 ? 'Sin stock para entregar' : 'Entregar a housekeeping'}
+                            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-30"
+                            style={{ color: '#8B5CF6' }}
+                          >
+                            <Truck size={14} />
+                          </button>
+                          <button
                             onClick={() => setModalItem(item)}
                             title="Editar"
                             className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -369,6 +482,16 @@ export default function ConsumiblesTab() {
           onSave={handleRestock}
           onClose={() => setRestockItem(null)}
           saving={restockMutation.isPending}
+        />
+      )}
+
+      {deliverItem && (
+        <DeliverModal
+          item={deliverItem}
+          users={users}
+          onSave={handleDeliver}
+          onClose={() => setDeliverItem(null)}
+          saving={deliverMutation.isPending}
         />
       )}
     </div>

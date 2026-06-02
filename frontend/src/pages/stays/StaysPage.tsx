@@ -36,7 +36,7 @@ export default function StaysPage() {
   const [selected, setSelected] = useState<Stay | null>(null)
   const [checkoutStay, setCheckoutStay] = useState<Stay | null>(null)
 
-  const { stays: rawStays, isLoading, transfer, addPayment, addService, extend } = useStays({ status: statusFilter })
+  const { stays: rawStays, isLoading, transfer, addPayment, addService, addMinibar, extend } = useStays({ status: statusFilter })
 
   // Client-side filter by guest/company name
   const stays = guestSearch.trim()
@@ -191,6 +191,7 @@ export default function StaysPage() {
           }}
           onAddPayment={addPayment}
           onAddService={addService}
+          onAddMinibar={addMinibar}
           onTransfer={transfer}
           onExtend={extend}
         />

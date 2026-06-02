@@ -1,12 +1,18 @@
 import { useState } from 'react'
-import { Plus, Pencil, Trash2, X } from 'lucide-react'
-import { useMinibarProducts, useMinibarProductMutations } from '@/hooks/useInventory'
+import { Plus, Pencil, Trash2, X, RefreshCw, Clock } from 'lucide-react'
+import { useMinibarProducts, useMinibarProductMutations, useRoomMinibars } from '@/hooks/useInventory'
+import { useRooms } from '@/hooks/useRooms'
 import { useAuth } from '@/hooks/useAuth'
 import type { MinibarProduct } from '@/types'
 
 function formatCurrency(v: string | number | null) {
   if (v == null) return '—'
   return `$${Number(v).toLocaleString('es-CO')}`
+}
+
+function formatDateTime(iso: string | null) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
 }
 
 // ── Product form ──────────────────────────────────────────────────────────────
@@ -77,8 +83,79 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
   )
 }
 
-// ── Main tab ──────────────────────────────────────────────────────────────────
-export default function MinibarTab() {
+// ── Restock room modal ────────────────────────────────────────────────────────
+interface RestockRoomModalProps {
+  roomId: string
+  roomNumber: string
+  products: MinibarProduct[]
+  onSave: (data: { room_id: string; minibar_product_id: string; quantity: number }) => void
+  onClose: () => void
+  saving: boolean
+}
+
+function RestockRoomModal({ roomId, roomNumber, products, onSave, onClose, saving }: RestockRoomModalProps) {
+  const [productId, setProductId] = useState('')
+  const [qty, setQty] = useState('1')
+
+  const qtyNum = Number(qty)
+  const valid = productId && qtyNum > 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }}>
+      <div className="w-full max-w-sm rounded-xl shadow-2xl" style={{ background: 'var(--bg-surface)' }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+          <h2 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+            Reponer minibar — Hab. {roomNumber}
+          </h2>
+          <button onClick={onClose}><X size={18} style={{ color: 'var(--text-secondary)' }} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Producto *</label>
+            <select
+              required value={productId} onChange={(e) => setProductId(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            >
+              <option value="">Seleccionar…</option>
+              {products.filter(p => p.active).map((p) => (
+                <option key={p.id} value={p.id}>{p.name} — {formatCurrency(p.sale_price)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Cantidad a agregar *</label>
+            <input
+              type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            />
+          </div>
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            La cantidad se suma al stock actual del minibar de esta habitación.
+          </p>
+          <div className="flex justify-end gap-3">
+            <button onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm border"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+              Cancelar
+            </button>
+            <button
+              disabled={saving || !valid}
+              onClick={() => onSave({ room_id: roomId, minibar_product_id: productId, quantity: qtyNum })}
+              className="px-4 py-2 rounded-lg text-sm text-white font-medium disabled:opacity-40"
+              style={{ background: 'var(--color-primary)' }}>
+              {saving ? 'Reponiendo…' : 'Reponer'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Catalogue section ─────────────────────────────────────────────────────────
+function CatalogueSection() {
   const { hasPermission } = useAuth()
   const canManage = hasPermission('manage_inventory')
 
@@ -177,6 +254,158 @@ export default function MinibarTab() {
           saving={createMutation.isPending || updateMutation.isPending}
         />
       )}
+    </div>
+  )
+}
+
+// ── Per-room stock section ────────────────────────────────────────────────────
+function RoomStockSection() {
+  const { hasPermission } = useAuth()
+  const canManage = hasPermission('manage_inventory')
+
+  const { rooms } = useRooms()
+  const sortedRooms = [...rooms].sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }))
+
+  const [selectedRoomId, setSelectedRoomId] = useState<string>('')
+  const [restocking, setRestocking] = useState(false)
+
+  const { data: roomMinibars = [], isLoading } = useRoomMinibars(selectedRoomId || null)
+  const { data: products = [] }                = useMinibarProducts()
+  const { restockRoomMutation }                 = useMinibarProductMutations()
+
+  const selectedRoom = rooms.find(r => r.id === selectedRoomId)
+
+  const handleRestock = (data: { room_id: string; minibar_product_id: string; quantity: number }) => {
+    restockRoomMutation.mutate(data, { onSuccess: () => setRestocking(false) })
+  }
+
+  return (
+    <div className="rounded-xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
+      <div className="flex flex-wrap items-center gap-3 p-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
+        <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
+          Stock de minibar por habitación
+        </span>
+        <select
+          value={selectedRoomId}
+          onChange={(e) => setSelectedRoomId(e.target.value)}
+          className="px-3 py-2 rounded-lg border text-sm"
+          style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+        >
+          <option value="">Seleccionar habitación…</option>
+          {sortedRooms.map((r) => (
+            <option key={r.id} value={r.id}>Hab. {r.number}</option>
+          ))}
+        </select>
+        {canManage && selectedRoomId && (
+          <button onClick={() => setRestocking(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white font-medium ml-auto"
+            style={{ background: 'var(--color-primary)' }}>
+            <RefreshCw size={14} />Reponer
+          </button>
+        )}
+      </div>
+
+      {!selectedRoomId ? (
+        <div className="text-center py-16 text-sm" style={{ color: 'var(--text-muted)' }}>
+          Selecciona una habitación para ver su minibar.
+        </div>
+      ) : isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : roomMinibars.length === 0 ? (
+        <div className="text-center py-16 text-sm" style={{ color: 'var(--text-muted)' }}>
+          Esta habitación aún no tiene productos en su minibar.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-sm">
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
+                {['Producto', 'Cantidad', 'Precio venta', 'Última reposición', 'Por'].map((h) => (
+                  <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {roomMinibars.map((rm) => (
+                <tr key={rm.id}
+                  className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                  style={{ borderBottom: '1px solid var(--border-default)' }}>
+                  <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>
+                    {rm.product?.name ?? '—'}
+                  </td>
+                  <td className="px-4 py-3" style={{ color: 'var(--text-primary)' }}>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background: rm.quantity > 0 ? '#F0FDF4' : '#FEF2F2', color: rm.quantity > 0 ? '#16A34A' : '#DC2626' }}>
+                      {rm.quantity}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
+                    {formatCurrency(rm.product?.sale_price ?? null)}
+                  </td>
+                  <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock size={11} style={{ color: 'var(--text-muted)' }} />
+                      {formatDateTime(rm.last_restocked_at)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>
+                    {rm.restocked_by_user?.name ?? '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {restocking && selectedRoom && (
+        <RestockRoomModal
+          roomId={selectedRoom.id}
+          roomNumber={selectedRoom.number}
+          products={products}
+          onSave={handleRestock}
+          onClose={() => setRestocking(false)}
+          saving={restockRoomMutation.isPending}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Main tab ──────────────────────────────────────────────────────────────────
+const SUB_TABS = [
+  { key: 'catalogue', label: 'Catálogo' },
+  { key: 'room-stock', label: 'Stock por habitación' },
+] as const
+
+type SubTab = (typeof SUB_TABS)[number]['key']
+
+export default function MinibarTab() {
+  const [sub, setSub] = useState<SubTab>('catalogue')
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1 p-1 rounded-lg w-fit" style={{ background: 'var(--bg-input)' }}>
+        {SUB_TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setSub(key)}
+            className="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
+            style={
+              sub === key
+                ? { background: 'var(--bg-surface)', color: 'var(--color-primary)', boxShadow: '0 1px 3px rgba(0,0,0,.08)' }
+                : { color: 'var(--text-secondary)' }
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {sub === 'catalogue'  && <CatalogueSection />}
+      {sub === 'room-stock' && <RoomStockSection />}
     </div>
   )
 }

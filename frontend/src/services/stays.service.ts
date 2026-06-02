@@ -1,7 +1,9 @@
 import api from '@/lib/axios'
 import type { CheckInPayload, ExtraService, MinibarItem, Stay, StayAccount, StayService } from '@/types'
 
-export const getStaysApi = async (filters?: { status?: string; company_id?: string }): Promise<{ data: Stay[]; meta: unknown }> => {
+export const getStaysApi = async (
+  filters?: { status?: string; company_id?: string; page?: number; per_page?: number }
+): Promise<{ data: Stay[]; meta: unknown }> => {
   const res = await api.get('/v1/stays', { params: filters ?? {} })
   return res.data.data
 }

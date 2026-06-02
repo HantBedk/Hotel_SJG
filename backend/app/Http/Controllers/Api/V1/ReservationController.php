@@ -13,6 +13,7 @@ use App\Models\Room;
 use App\Models\Stay;
 use App\Models\StayGuest;
 use App\Models\StayRoom;
+use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\DB;
 
 class ReservationController extends Controller
 {
+    use Paginates;
+
     public function index(Request $request): JsonResponse
     {
         $query = Reservation::with(['guest', 'company', 'room.roomType', 'house', 'createdBy'])
@@ -52,7 +55,7 @@ class ReservationController extends Controller
             );
         }
 
-        $reservations = $query->paginate(20);
+        $reservations = $query->paginate($this->perPage($request, 20));
 
         return response()->json(['success' => true, 'data' => $reservations]);
     }

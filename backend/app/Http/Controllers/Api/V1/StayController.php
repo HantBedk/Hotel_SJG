@@ -17,6 +17,7 @@ use App\Models\Setting;
 use App\Models\Stay;
 use App\Models\StayGuest;
 use App\Models\StayRoom;
+use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -24,6 +25,8 @@ use Illuminate\Support\Facades\DB;
 
 class StayController extends Controller
 {
+    use Paginates;
+
     public function index(Request $request): JsonResponse
     {
         $query = Stay::with(['guest', 'company', 'stayRooms.room.roomType'])
@@ -37,7 +40,7 @@ class StayController extends Controller
             $query->where('company_id', $companyId);
         }
 
-        $stays = $query->paginate(20);
+        $stays = $query->paginate($this->perPage($request, 20));
 
         return response()->json(['success' => true, 'data' => $stays]);
     }
@@ -528,12 +531,12 @@ class StayController extends Controller
         return response()->json(['success' => true, 'data' => $stay, 'message' => 'Transferencia realizada.']);
     }
 
-    public function payments(Stay $stay): JsonResponse
+    public function payments(Request $request, Stay $stay): JsonResponse
     {
         $payments = $stay->payments()
             ->with('receptionist:id,name')
             ->orderByDesc('payment_date')
-            ->paginate(50);
+            ->paginate($this->perPage($request, 50));
 
         return response()->json(['success' => true, 'data' => $payments]);
     }

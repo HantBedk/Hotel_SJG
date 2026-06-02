@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\Payment;
+use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ActivityLogController extends Controller
 {
+    use Paginates;
+
     private const ACTION_LABELS = [
         'login'                  => 'Inicio de sesión',
         'login_failed'           => 'Login fallido',
@@ -51,7 +54,7 @@ class ActivityLogController extends Controller
             $query->whereDate('created_at', '<=', $to);
         }
 
-        $logs = $query->paginate(50)->through(fn($log) => [
+        $logs = $query->paginate($this->perPage($request, 50))->through(fn($log) => [
             'id'         => $log->id,
             'action'     => $log->action,
             'action_label' => self::ACTION_LABELS[$log->action] ?? $log->action,
@@ -103,7 +106,7 @@ class ActivityLogController extends Controller
             );
         }
 
-        $payments = $query->paginate(50)->through(fn($p) => [
+        $payments = $query->paginate($this->perPage($request, 50))->through(fn($p) => [
             'id'             => $p->id,
             'stay_id'        => $p->stay_id,
             'guest_name'     => $p->stay?->guest?->full_name ?? '—',

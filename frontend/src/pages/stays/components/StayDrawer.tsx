@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { X, User, Building2, BedDouble, CreditCard, LogOut, Plus, Loader2, ArrowLeftRight, Sparkles, Download, ExternalLink, CalendarClock } from 'lucide-react'
-import type { Stay } from '@/types'
+import { X, User, Building2, BedDouble, CreditCard, LogOut, Plus, Loader2, ArrowLeftRight, Sparkles, Download, ExternalLink, CalendarClock, ShoppingCart } from 'lucide-react'
+import type { Stay, MinibarItem, MinibarConsumptionType } from '@/types'
 import { useStay, useExtraServices } from '@/hooks/useStays'
 import { useRooms } from '@/hooks/useRooms'
+import { useMinibarProducts } from '@/hooks/useInventory'
 import { downloadStayReceiptApi } from '@/services/stays.service'
 import toast from 'react-hot-toast'
 
@@ -21,6 +22,7 @@ interface Props {
     notes?: string
   }) => void
   onAddService: (payload: { stayId: string; extra_service_id: string; quantity: number }) => void
+  onAddMinibar: (payload: { stayId: string; items: MinibarItem[] }) => Promise<unknown>
   onTransfer: (payload: { stayId: string; from_room_id: string; to_room_id: string; reason?: string }) => void
   onExtend: (payload: { id: string; check_out_datetime: string }) => Promise<unknown>
 }
@@ -60,7 +62,7 @@ interface TransferForm {
   reason: string
 }
 
-export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckOut, onAddPayment, onAddService, onTransfer, onExtend }: Props) {
+export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckOut, onAddPayment, onAddService, onAddMinibar, onTransfer, onExtend }: Props) {
   const { data: freshStay, isLoading } = useStay(stayId)
   const stay = freshStay ?? initialStay
 
@@ -82,9 +84,20 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
 
   const { rooms: availableRooms } = useRooms('available')
   const { data: extraServices = [] } = useExtraServices()
+  const { data: minibarProducts = [] } = useMinibarProducts()
 
   const [showServiceForm, setShowServiceForm] = useState(false)
   const [serviceForm, setServiceForm] = useState({ extra_service_id: '', quantity: '1' })
+
+  const [showMinibarForm, setShowMinibarForm] = useState(false)
+  const [minibarForm, setMinibarForm] = useState({
+    minibar_product_id: '',
+    room_id:            activeRooms[0]?.room_id ?? '',
+    type:               'consumed' as MinibarConsumptionType,
+    quantity:           '1',
+    unit_price:         '',
+  })
+  const [isSavingMinibar, setIsSavingMinibar] = useState(false)
 
   const [payForm, setPayForm] = useState<PaymentForm>({
     amount: '',
@@ -111,6 +124,57 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
     onAddService({ stayId, extra_service_id: serviceForm.extra_service_id, quantity: qty })
     setShowServiceForm(false)
     setServiceForm({ extra_service_id: '', quantity: '1' })
+  }
+
+  const handleAddMinibar = async () => {
+    const product = minibarProducts.find(p => p.id === minibarForm.minibar_product_id)
+    const qty     = parseInt(minibarForm.quantity, 10)
+    const unit    = parseFloat(minibarForm.unit_price)
+    if (!product || !minibarForm.room_id || !qty || qty < 1 || !(unit >= 0)) return
+    setIsSavingMinibar(true)
+    try {
+      await onAddMinibar({
+        stayId,
+        items: [{
+          product_name: product.name,
+          room_id:      minibarForm.room_id,
+          type:         minibarForm.type,
+          quantity:     qty,
+          unit_price:   unit,
+        }],
+      })
+      setShowMinibarForm(false)
+      setMinibarForm({
+        minibar_product_id: '',
+        room_id:            activeRooms[0]?.room_id ?? '',
+        type:               'consumed',
+        quantity:           '1',
+        unit_price:         '',
+      })
+    } finally {
+      setIsSavingMinibar(false)
+    }
+  }
+
+  // Auto-fill unit_price when product or type changes
+  const onMinibarProductChange = (productId: string) => {
+    const product = minibarProducts.find(p => p.id === productId)
+    const priceByType = product
+      ? minibarForm.type === 'damaged'
+        ? (product.damage_price ?? product.sale_price)
+        : product.sale_price
+      : ''
+    setMinibarForm(s => ({ ...s, minibar_product_id: productId, unit_price: String(priceByType ?? '') }))
+  }
+
+  const onMinibarTypeChange = (type: MinibarConsumptionType) => {
+    const product = minibarProducts.find(p => p.id === minibarForm.minibar_product_id)
+    const priceByType = product
+      ? type === 'damaged'
+        ? (product.damage_price ?? product.sale_price)
+        : product.sale_price
+      : minibarForm.unit_price
+    setMinibarForm(s => ({ ...s, type, unit_price: String(priceByType ?? '') }))
   }
 
   const handleAddPayment = () => {
@@ -470,6 +534,120 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                       Confirmar
                     </button>
                     <button onClick={() => setShowServiceForm(false)}
+                      className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
+                      style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Minibar */}
+          {stay.status === 'active' && (
+            <section>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart size={15} style={{ color: 'var(--text-muted)' }} />
+                  <p className="text-xs font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Minibar</p>
+                </div>
+                {!showMinibarForm && (
+                  <button onClick={() => setShowMinibarForm(true)}
+                    className="flex items-center gap-1 text-xs px-2 py-1 rounded-lg hover:opacity-80"
+                    style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                    <Plus size={12} /> Registrar
+                  </button>
+                )}
+              </div>
+
+              {stay.minibar_consumptions && stay.minibar_consumptions.length > 0 && (
+                <div className="space-y-1.5 mb-3">
+                  {stay.minibar_consumptions.map((m) => (
+                    <div key={m.id} className="flex justify-between text-sm">
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {m.product_name} × {m.quantity}
+                        {m.type !== 'consumed' && (
+                          <span className="ml-1 text-xs" style={{ color: m.type === 'damaged' ? '#DC2626' : '#D97706' }}>
+                            ({m.type === 'damaged' ? 'dañado' : 'faltante'})
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                        {formatCurrency(m.total)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {showMinibarForm && (
+                <div className="rounded-xl p-4 space-y-3 border"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
+                  <select
+                    value={minibarForm.minibar_product_id}
+                    onChange={(e) => onMinibarProductChange(e.target.value)}
+                    className="w-full px-2 py-2 rounded-lg text-xs border outline-none"
+                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                    <option value="">Seleccionar producto…</option>
+                    {minibarProducts.filter(p => p.active).map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — {formatCurrency(p.sale_price)}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {activeRooms.length > 1 ? (
+                      <select
+                        value={minibarForm.room_id}
+                        onChange={(e) => setMinibarForm(s => ({ ...s, room_id: e.target.value }))}
+                        className="px-2 py-2 rounded-lg text-xs border outline-none"
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                        {activeRooms.map((sr) => (
+                          <option key={sr.room_id} value={sr.room_id}>Hab. {sr.room?.number}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="px-2 py-2 rounded-lg text-xs border"
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
+                        Hab. {activeRooms[0]?.room?.number ?? '—'}
+                      </div>
+                    )}
+                    <select
+                      value={minibarForm.type}
+                      onChange={(e) => onMinibarTypeChange(e.target.value as MinibarConsumptionType)}
+                      className="px-2 py-2 rounded-lg text-xs border outline-none"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                      <option value="consumed">Consumido</option>
+                      <option value="damaged">Dañado</option>
+                      <option value="missing">Faltante</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="number" min={1} placeholder="Cant."
+                      value={minibarForm.quantity}
+                      onChange={(e) => setMinibarForm(s => ({ ...s, quantity: e.target.value }))}
+                      className="px-2 py-2 rounded-lg text-xs border outline-none"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                    />
+                    <input type="number" min={0} step="any" placeholder="Precio unit."
+                      value={minibarForm.unit_price}
+                      onChange={(e) => setMinibarForm(s => ({ ...s, unit_price: e.target.value }))}
+                      className="px-2 py-2 rounded-lg text-xs border outline-none"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={handleAddMinibar}
+                      disabled={!minibarForm.minibar_product_id || !minibarForm.room_id || isSavingMinibar}
+                      className="flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-40 hover:opacity-80"
+                      style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                      {isSavingMinibar ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Confirmar'}
+                    </button>
+                    <button onClick={() => setShowMinibarForm(false)}
                       className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
                       style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
                       Cancelar

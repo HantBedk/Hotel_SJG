@@ -30,6 +30,7 @@ export interface ItemFilters {
   low_stock?: boolean
   expiring_in_days?: number
   page?: number
+  per_page?: number
 }
 
 export const getItemsApi = async (filters?: ItemFilters): Promise<{ data: InventoryItem[]; meta: unknown }> => {
@@ -129,6 +130,8 @@ export const restockRoomMinibarApi = async (data: {
 export const getAssetsApi = async (filters?: {
   status?: string
   search?: string
+  page?: number
+  per_page?: number
 }): Promise<{ data: Asset[]; meta: unknown }> => {
   const res = await api.get('/v1/inventory/assets', { params: filters })
   return res.data.data
@@ -153,6 +156,8 @@ export const retireAssetApi = async (id: string): Promise<void> => {
 export const getMaintenancesApi = async (filters?: {
   status?: string
   asset_id?: string
+  page?: number
+  per_page?: number
 }): Promise<{ data: AssetMaintenance[]; meta: unknown }> => {
   const res = await api.get('/v1/inventory/maintenances', { params: filters })
   return res.data.data
@@ -188,6 +193,8 @@ export const completeMaintenanceApi = async (
 
 export const getRepairOrdersApi = async (filters?: {
   status?: string
+  page?: number
+  per_page?: number
 }): Promise<{ data: RepairOrder[]; meta: unknown }> => {
   const res = await api.get('/v1/inventory/repair-orders', { params: filters })
   return res.data.data

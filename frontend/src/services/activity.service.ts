@@ -9,6 +9,7 @@ export interface ActivityFilters {
   date_from?: string
   date_to?: string
   page?: number
+  per_page?: number
 }
 
 export const getActivityLogsApi = (filters: ActivityFilters = {}) =>
@@ -31,6 +32,7 @@ export interface PaymentFilters {
   receptionist_id?: string
   guest?: string
   page?: number
+  per_page?: number
 }
 
 export const getPaymentsHistoryApi = (filters: PaymentFilters = {}) =>
