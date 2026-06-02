@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, Plus, CalendarDays, XCircle } from 'lucide-react'
+import { Search, Plus, CalendarDays, XCircle, CreditCard } from 'lucide-react'
 import { useReservations } from '@/hooks/useReservations'
 import { useRooms } from '@/hooks/useRooms'
 import NewReservationWizard from './components/NewReservationWizard'
@@ -31,7 +31,7 @@ export default function ReservationsPage() {
   const [checkingIn, setCheckingIn]       = useState<Reservation | null>(null)
   const [selected, setSelected]           = useState<Reservation | null>(null)
 
-  const { reservations, isLoading, cancel } = useReservations({
+  const { reservations, isLoading, cancel, addPayment } = useReservations({
     status:  status || undefined,
     search:  search || undefined,
   })
@@ -115,6 +115,7 @@ export default function ReservationsPage() {
           onClose={() => setSelected(null)}
           onCheckIn={() => { setCheckingIn(selected); setSelected(null) }}
           onCancel={() => handleCancel(selected)}
+          onAddPayment={(payload) => addPayment({ id: selected.id, ...payload })}
         />
       )}
 
@@ -213,19 +214,43 @@ function ReservationCard({
   )
 }
 
+interface PayForm {
+  amount: string
+  payment_method: string
+  payment_type: string
+}
+
 function ReservationDetailPanel({
   reservation: res,
   onClose,
   onCheckIn,
   onCancel,
+  onAddPayment,
 }: {
   reservation: Reservation
   onClose: () => void
   onCheckIn: () => void
   onCancel: () => void
+  onAddPayment: (payload: { amount: number; payment_method: string; payment_type: string }) => void
 }) {
-  const canCheckIn = ['pending', 'confirmed'].includes(res.status)
-  const canCancel  = ['pending', 'confirmed'].includes(res.status)
+  const canCheckIn  = ['pending', 'confirmed'].includes(res.status)
+  const canCancel   = ['pending', 'confirmed'].includes(res.status)
+  const canPayment  = ['pending', 'confirmed'].includes(res.status) && res.payment_status !== 'paid'
+
+  const [showPayForm, setShowPayForm] = useState(false)
+  const [payForm, setPayForm] = useState<PayForm>({
+    amount: '',
+    payment_method: 'cash',
+    payment_type:   'deposit',
+  })
+
+  const handlePay = () => {
+    const amount = parseFloat(payForm.amount)
+    if (!amount || amount <= 0) return
+    onAddPayment({ amount, payment_method: payForm.payment_method, payment_type: payForm.payment_type })
+    setShowPayForm(false)
+    setPayForm({ amount: '', payment_method: 'cash', payment_type: 'deposit' })
+  }
 
   return (
     <div
@@ -255,14 +280,68 @@ function ReservationDetailPanel({
           <DetailRow label="Salida" value={res.end_date} />
           <DetailRow label="Noches" value={String(res.nights)} />
           <DetailRow label="Precio total" value={`$${Number(res.agreed_price).toLocaleString('es-CO')}`} />
-          {res.deposit_amount && (
-            <DetailRow label="Depósito" value={`$${Number(res.deposit_amount).toLocaleString('es-CO')}`} />
+          {res.deposit_amount && Number(res.deposit_amount) > 0 && (
+            <DetailRow label="Abonado" value={`$${Number(res.deposit_amount).toLocaleString('es-CO')}`} />
           )}
           <DetailRow label="Pago" value={res.payment_status === 'paid' ? 'Pagado' : res.payment_status === 'partial' ? 'Parcial' : 'Pendiente'} />
           {res.notes && <DetailRow label="Notas" value={res.notes} />}
+
+          {/* Payment form */}
+          {showPayForm && (
+            <div className="rounded-xl p-4 space-y-3 border mt-2"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
+              <p className="text-xs font-semibold uppercase" style={{ color: 'var(--text-muted)' }}>Registrar pago</p>
+              <input
+                type="number" min="0" placeholder="Monto"
+                value={payForm.amount}
+                onChange={e => setPayForm(s => ({ ...s, amount: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <select value={payForm.payment_method}
+                  onChange={e => setPayForm(s => ({ ...s, payment_method: e.target.value }))}
+                  className="px-2 py-2 rounded-lg text-xs border outline-none"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                  <option value="cash">Efectivo</option>
+                  <option value="transfer">Transferencia</option>
+                  <option value="card">Tarjeta</option>
+                </select>
+                <select value={payForm.payment_type}
+                  onChange={e => setPayForm(s => ({ ...s, payment_type: e.target.value }))}
+                  className="px-2 py-2 rounded-lg text-xs border outline-none"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                  <option value="deposit">Depósito</option>
+                  <option value="partial">Parcial</option>
+                  <option value="final">Total</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handlePay} disabled={!payForm.amount}
+                  className="flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-40 hover:opacity-80"
+                  style={{ background: 'var(--color-primary)', color: '#fff' }}>
+                  Guardar
+                </button>
+                <button onClick={() => setShowPayForm(false)}
+                  className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
+                  style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="flex gap-2 px-5 pb-5">
+        <div className="flex flex-wrap gap-2 px-5 pb-5">
+          {canPayment && !showPayForm && (
+            <button
+              onClick={() => setShowPayForm(true)}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium border hover:opacity-80"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+            >
+              <CreditCard size={14} /> Pago
+            </button>
+          )}
           {canCheckIn && (
             <button
               onClick={onCheckIn}

@@ -173,8 +173,8 @@ class StayController extends Controller
             $lateFee       = (float) ($data['late_checkout_fee'] ?? 0);
             $subtotal      = (float) $roomsTotal + (float) $servicesTotal + (float) $minibarTotal + $lateFee;
 
-            $ivaEnabled = Setting::get('iva_enabled', false);
-            $ivaPct     = $ivaEnabled ? (float) Setting::get('iva_pct', 19) : 0;
+            $ivaEnabled = Setting::get('hotel.iva_enabled', false);
+            $ivaPct     = $ivaEnabled ? (float) Setting::get('hotel.iva_rate', 19) : 0;
             $ivaAmount  = $ivaEnabled ? round($subtotal * ($ivaPct / 100), 2) : 0;
             $total      = $subtotal + $ivaAmount;
 
@@ -266,8 +266,8 @@ class StayController extends Controller
         $lateFee       = (float) ($stay->late_checkout_fee ?? 0);
         $subtotal      = $roomsTotal + $servicesTotal + $minibarTotal + $lateFee;
 
-        $ivaEnabled = Setting::get('iva_enabled', false);
-        $ivaPct     = $ivaEnabled ? (float) Setting::get('iva_pct', 19) : 0;
+        $ivaEnabled = Setting::get('hotel.iva_enabled', false);
+        $ivaPct     = $ivaEnabled ? (float) Setting::get('hotel.iva_rate', 19) : 0;
         $ivaAmount  = $ivaEnabled ? round($subtotal * ($ivaPct / 100), 2) : 0;
         $total      = $subtotal + $ivaAmount;
 
@@ -443,8 +443,8 @@ class StayController extends Controller
         $lateFee       = (float) ($stay->late_checkout_fee ?? 0);
         $subtotal      = $roomsTotal + $servicesTotal + $minibarTotal + $lateFee;
 
-        $ivaEnabled = Setting::get('iva_enabled', false);
-        $ivaPct     = $ivaEnabled ? (float) Setting::get('iva_pct', 19) : 0;
+        $ivaEnabled = Setting::get('hotel.iva_enabled', false);
+        $ivaPct     = $ivaEnabled ? (float) Setting::get('hotel.iva_rate', 19) : 0;
         $ivaAmount  = $ivaEnabled ? round($subtotal * ($ivaPct / 100), 2) : 0;
         $total      = $subtotal + $ivaAmount;
 

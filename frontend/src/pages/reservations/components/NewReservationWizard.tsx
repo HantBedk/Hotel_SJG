@@ -3,7 +3,7 @@ import { X, ChevronRight, ChevronLeft, Search, User, Building2, CheckCircle } fr
 import { useGuestSearch } from '@/hooks/useGuests'
 import { useCompanySearch } from '@/hooks/useCompanies'
 import { useReservations } from '@/hooks/useReservations'
-import type { Guest, Company } from '@/types'
+import type { Guest, Company, Room } from '@/types'
 
 interface Props {
   prefillStartDate?: string

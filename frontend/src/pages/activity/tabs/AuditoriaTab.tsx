@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, Search } from 'lucide-react'
 import { useActivityLogs, useActivityActions } from '@/hooks/useActivity'
+import { useAdminUsers } from '@/hooks/useAdmin'
 import type { ActivityFilters } from '@/services/activity.service'
 import type { ActivityLogEntry } from '@/types'
 import { SkeletonText } from '@/components/ui/Skeleton'
@@ -62,6 +63,7 @@ export default function AuditoriaTab() {
   const [filters, setFilters] = useState<ActivityFilters>({ page: 1 })
   const { data, isLoading }   = useActivityLogs(filters)
   const { data: actions = [] } = useActivityActions()
+  const { data: users = [] }  = useAdminUsers()
 
   const logs  = data?.data ?? []
   const total = data?.total ?? 0
@@ -102,6 +104,17 @@ export default function AuditoriaTab() {
         >
           <option value="">Todas las acciones</option>
           {actions.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+        </select>
+        <select
+          value={filters.user_id ?? ''}
+          onChange={e => setFilter('user_id', e.target.value)}
+          className="px-3 py-1.5 rounded-lg text-xs border focus:outline-none"
+          style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+        >
+          <option value="">Todos los usuarios</option>
+          {users.map(u => (
+            <option key={u.id} value={u.id}>{u.name}</option>
+          ))}
         </select>
         <span className="ml-auto text-xs self-center" style={{ color: 'var(--text-muted)' }}>
           {total} registros
