@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { Package, Wrench, ShoppingCart, AlertTriangle, ClipboardList } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import { useReverb } from '@/hooks/useReverb'
 import ConsumiblesTab from './tabs/ConsumiblesTab'
 import ActivosTab from './tabs/ActivosTab'
 import MinibarTab from './tabs/MinibarTab'
@@ -16,8 +19,29 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]['key']
 
+const INVENTORY_ALERT_TYPES = new Set(['low_stock', 'expiring_product', 'maintenance_due'])
+
+interface NotificationEvent {
+  id: string
+  type: string
+  title: string
+  message: string
+}
+
 export default function InventoryPage() {
   const [tab, setTab] = useState<TabKey>('consumibles')
+  const queryClient = useQueryClient()
+
+  useReverb<NotificationEvent>({
+    channel: 'hotel.notifications',
+    event:   'notification.created',
+    onEvent: (data) => {
+      if (!INVENTORY_ALERT_TYPES.has(data.type)) return
+      toast(data.title, { icon: '⚠️', duration: 6000 })
+      queryClient.invalidateQueries({ queryKey: ['inventory-items'] })
+      queryClient.invalidateQueries({ queryKey: ['maintenances'] })
+    },
+  })
 
   return (
     <div className="space-y-5">

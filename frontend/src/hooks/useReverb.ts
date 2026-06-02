@@ -61,11 +61,12 @@ export function useReverb<T = unknown>({
     const echo = getEcho()
     if (!echo) return
 
+    const handler = (data: T) => onEventRef.current(data)
     const ch = echo.private(channel)
-    ch.listen(event, (data: T) => onEventRef.current(data))
+    ch.listen(event, handler)
 
     return () => {
-      ch.stopListening(event)
+      ch.stopListening(event, handler)
     }
   }, [channel, event, enabled])
 }

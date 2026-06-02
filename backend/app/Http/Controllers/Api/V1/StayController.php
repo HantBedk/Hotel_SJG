@@ -7,6 +7,7 @@ use App\Events\RoomStatusChanged;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\ExtraService;
+use App\Models\Hotel;
 use App\Models\InventoryTransaction;
 use App\Models\MinibarConsumption;
 use App\Models\MinibarProduct;
@@ -388,9 +389,11 @@ class StayController extends Controller
         ]);
 
         $records = DB::transaction(function () use ($stay, $data, $request) {
-            $records = [];
+            $records    = [];
+            $batchTotal = 0;
             foreach ($data['items'] as $item) {
-                $itemTotal = $item['unit_price'] * $item['quantity'];
+                $itemTotal   = $item['unit_price'] * $item['quantity'];
+                $batchTotal += $itemTotal;
                 $records[] = $stay->minibarConsumptions()->create([
                     'room_id'       => $item['room_id'],
                     'product_name'  => $item['product_name'],
@@ -402,6 +405,7 @@ class StayController extends Controller
                     'registered_by' => $request->user()->id,
                 ]);
             }
+            $stay->increment('total_amount', $batchTotal);
             return $records;
         });
 
@@ -444,9 +448,10 @@ class StayController extends Controller
         $ivaAmount  = $ivaEnabled ? round($subtotal * ($ivaPct / 100), 2) : 0;
         $total      = $subtotal + $ivaAmount;
 
-        $hotelName  = Setting::get('hotel_name', 'Hotel');
-        $hotelPhone = Setting::get('hotel_phone', '');
-        $hotelAddr  = Setting::get('hotel_address', '');
+        $hotel      = Hotel::first();
+        $hotelName  = $hotel?->name  ?? Setting::get('hotel_name', 'Hotel');
+        $hotelPhone = $hotel?->phone ?? Setting::get('hotel_phone', '');
+        $hotelAddr  = $hotel?->address ?? Setting::get('hotel_address', '');
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.receipt', compact(
             'stay', 'compNumber', 'roomLines', 'serviceLines', 'minibarLines',
