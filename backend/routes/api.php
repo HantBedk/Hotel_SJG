@@ -2,8 +2,10 @@
 
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\AssetController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BackupController;
 use App\Http\Controllers\Api\V1\CalendarController;
 use App\Http\Controllers\Api\V1\CompanyController;
 use App\Http\Controllers\Api\V1\DashboardController;
@@ -219,5 +221,84 @@ Route::prefix('v1')->group(function () {
         Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
         Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
         Route::post('/notifications/read-all',    [NotificationController::class, 'markAllRead']);
+
+        // ── Admin ─────────────────────────────────────────────────────────────
+        Route::prefix('admin')->middleware('permission:manage_settings')->group(function () {
+
+            // Hotel
+            Route::get('/hotel',       [AdminController::class, 'getHotelInfo']);
+            Route::put('/hotel',       [AdminController::class, 'updateHotelInfo']);
+            Route::post('/hotel/logo', [AdminController::class, 'uploadLogo']);
+
+            // Tipos de habitación
+            Route::get('/room-types',             [AdminController::class, 'getRoomTypes']);
+            Route::post('/room-types',            [AdminController::class, 'storeRoomType']);
+            Route::put('/room-types/{roomType}',  [AdminController::class, 'updateRoomType']);
+            Route::delete('/room-types/{roomType}', [AdminController::class, 'destroyRoomType']);
+
+            // Casas
+            Route::get('/houses',          [AdminController::class, 'getHouses']);
+            Route::post('/houses',         [AdminController::class, 'storeHouse']);
+            Route::put('/houses/{house}',  [AdminController::class, 'updateHouse']);
+            Route::delete('/houses/{house}', [AdminController::class, 'destroyHouse']);
+
+            // Habitaciones (vista admin)
+            Route::get('/rooms',               [AdminController::class, 'getAllRooms']);
+            Route::post('/rooms',              [AdminController::class, 'storeRoom']);
+            Route::put('/rooms/{room}',        [AdminController::class, 'updateRoom']);
+            Route::delete('/rooms/{room}',     [AdminController::class, 'destroyRoom']);
+            Route::patch('/rooms/mass-update', [AdminController::class, 'massUpdateRoomPrices']);
+
+            // Temporadas
+            Route::get('/seasons',             [AdminController::class, 'getSeasons']);
+            Route::post('/seasons',            [AdminController::class, 'storeSeason']);
+            Route::put('/seasons/{season}',    [AdminController::class, 'updateSeason']);
+            Route::delete('/seasons/{season}', [AdminController::class, 'destroySeason']);
+
+            // Servicios extra
+            Route::get('/extra-services',                    [AdminController::class, 'getExtraServices']);
+            Route::post('/extra-services',                   [AdminController::class, 'storeExtraService']);
+            Route::put('/extra-services/{extraService}',     [AdminController::class, 'updateExtraService']);
+            Route::delete('/extra-services/{extraService}',  [AdminController::class, 'destroyExtraService']);
+
+            // Usuarios
+            Route::get('/users',           [AdminController::class, 'getUsers'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:manage_users|manage_settings');
+            Route::post('/users',          [AdminController::class, 'storeUser'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:manage_users');
+            Route::put('/users/{user}',    [AdminController::class, 'updateUser'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:manage_users');
+            Route::delete('/users/{user}', [AdminController::class, 'destroyUser'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:manage_users');
+
+            // Roles y permisos
+            Route::get('/roles',                          [AdminController::class, 'getRoles'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:manage_roles|manage_users');
+            Route::get('/permissions',                    [AdminController::class, 'getPermissions'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:manage_roles');
+            Route::put('/roles/{role}/permissions',       [AdminController::class, 'updateRolePermissions'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:manage_roles');
+
+            // Backups
+            Route::get('/backups',                            [BackupController::class, 'index'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:trigger_backup|restore_backup');
+            Route::post('/backups',                           [BackupController::class, 'create'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:trigger_backup');
+            Route::get('/backups/{filename}/download',        [BackupController::class, 'download'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:trigger_backup|restore_backup');
+            Route::post('/backups/restore',                   [BackupController::class, 'restore'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:restore_backup');
+        });
     });
 });

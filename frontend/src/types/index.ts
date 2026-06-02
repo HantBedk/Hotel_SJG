@@ -589,6 +589,33 @@ export interface AppNotification {
   updated_at: string
 }
 
+// ── Admin — Users ─────────────────────────────────────────────────────────────
+
+export interface AdminUser {
+  id: string
+  name: string
+  email: string
+  is_active: boolean
+  role: string | null
+  created_at: string
+}
+
+export interface AdminUserPayload {
+  name: string
+  email: string
+  password?: string
+  role: string
+  is_active?: boolean
+}
+
+// ── Admin — Backups ───────────────────────────────────────────────────────────
+
+export interface BackupFile {
+  filename: string
+  size: number
+  created_at: string
+}
+
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
 export interface DashboardStats {
