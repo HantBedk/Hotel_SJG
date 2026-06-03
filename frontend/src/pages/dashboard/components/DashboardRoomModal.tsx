@@ -16,6 +16,7 @@ interface Props {
   isChangingStatus: boolean
   onChangeStatus: (id: string, status: RoomStatus, notes?: string) => void
   onStartCheckIn: (room: Room) => void
+  onStartCheckOut?: (stay: Stay) => void
   onClose: () => void
 }
 
@@ -34,7 +35,7 @@ function formatDateShort(iso: string): string {
 
 export function DashboardRoomModal({
   room, stay, housekeepers, isChangingStatus,
-  onChangeStatus, onStartCheckIn, onClose,
+  onChangeStatus, onStartCheckIn, onStartCheckOut, onClose,
 }: Props) {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
@@ -227,7 +228,14 @@ export function DashboardRoomModal({
                   )}
                   {stay && (
                     <ActionButton
-                      onClick={() => go(`/stays?id=${stay.id}&action=checkout`)}
+                      onClick={() => {
+                        if (onStartCheckOut) {
+                          onClose()
+                          onStartCheckOut(stay)
+                        } else {
+                          go(`/stays?id=${stay.id}&action=checkout`)
+                        }
+                      }}
                       disabled={!canCheckOut}
                       icon={<LogOut size={15} />}
                       label="Procesar check-out"

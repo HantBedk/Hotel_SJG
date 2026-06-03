@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, CheckCircle2, X } from 'lucide-react'
 import { useMaintenances, useMaintenanceMutations, useAssets } from '@/hooks/useInventory'
 import { useAuth } from '@/hooks/useAuth'
+import { SkeletonTable } from '@/components/ui/Skeleton'
 import type { AssetMaintenance, MaintenanceStatus } from '@/types'
 
 function formatDate(d: string | null) {
@@ -183,9 +184,7 @@ export default function MantenimientosTab() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <div className="py-4"><SkeletonTable rows={5} cols={5} /></div>
       ) : maintenances.length === 0 ? (
         <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>Sin mantenimientos.</div>
       ) : (

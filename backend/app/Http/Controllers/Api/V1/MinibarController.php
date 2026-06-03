@@ -8,6 +8,7 @@ use App\Models\InventoryTransaction;
 use App\Models\MinibarProduct;
 use App\Models\Room;
 use App\Models\RoomMinibar;
+use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -70,6 +71,80 @@ class MinibarController extends Controller
             ->get();
 
         return response()->json(['success' => true, 'data' => $minibars]);
+    }
+
+    public function getTemplate(): JsonResponse
+    {
+        $raw = Setting::get('minibar.default_template', '[]');
+        $template = is_string($raw) ? json_decode($raw, true) ?? [] : (array) $raw;
+
+        // Enriquecer con datos del producto
+        $productIds = collect($template)->pluck('minibar_product_id')->filter()->values();
+        $products = MinibarProduct::whereIn('id', $productIds)->get()->keyBy('id');
+
+        $items = collect($template)->map(function ($row) use ($products) {
+            $product = $products->get($row['minibar_product_id'] ?? null);
+            return [
+                'minibar_product_id' => $row['minibar_product_id'] ?? null,
+                'quantity'           => (int) ($row['quantity'] ?? 0),
+                'product'            => $product ? [
+                    'id'   => $product->id,
+                    'name' => $product->name,
+                ] : null,
+            ];
+        })->values();
+
+        return response()->json(['success' => true, 'data' => $items]);
+    }
+
+    public function saveTemplate(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'items'                       => 'required|array',
+            'items.*.minibar_product_id'  => 'required|uuid|exists:minibar_products,id',
+            'items.*.quantity'            => 'required|integer|min:1',
+        ]);
+
+        Setting::set('minibar.default_template', json_encode($data['items']), 'json', 'minibar');
+
+        return response()->json(['success' => true, 'message' => 'Plantilla actualizada.']);
+    }
+
+    public function applyTemplate(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'room_id' => 'required|uuid|exists:rooms,id',
+            'replace' => 'sometimes|boolean',
+        ]);
+
+        $raw = Setting::get('minibar.default_template', '[]');
+        $template = is_string($raw) ? json_decode($raw, true) ?? [] : (array) $raw;
+
+        if (empty($template)) {
+            return response()->json(['success' => false, 'message' => 'No hay plantilla configurada.'], 422);
+        }
+
+        DB::transaction(function () use ($template, $data, $request) {
+            if (!empty($data['replace'])) {
+                RoomMinibar::where('room_id', $data['room_id'])->delete();
+            }
+            foreach ($template as $row) {
+                $productId = $row['minibar_product_id'] ?? null;
+                $qty       = (int) ($row['quantity'] ?? 0);
+                if (!$productId || $qty <= 0) continue;
+
+                RoomMinibar::updateOrCreate(
+                    ['room_id' => $data['room_id'], 'minibar_product_id' => $productId],
+                    [
+                        'quantity'          => $qty,
+                        'last_restocked_at' => now(),
+                        'restocked_by'      => $request->user()->id,
+                    ]
+                );
+            }
+        });
+
+        return response()->json(['success' => true, 'message' => 'Plantilla aplicada al minibar.']);
     }
 
     public function restockRoom(Request $request): JsonResponse

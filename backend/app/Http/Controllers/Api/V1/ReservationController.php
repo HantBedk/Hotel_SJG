@@ -136,6 +136,80 @@ class ReservationController extends Controller
         return response()->json(['success' => true, 'data' => $reservation, 'message' => 'Reserva creada.'], 201);
     }
 
+    public function bulkStore(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'guest_id'       => 'required_without:company_id|nullable|uuid|exists:guests,id',
+            'company_id'     => 'nullable|uuid|exists:companies,id',
+            'room_ids'       => 'required|array|min:2',
+            'room_ids.*'     => 'uuid|exists:rooms,id',
+            'start_date'     => 'required|date|after_or_equal:today',
+            'end_date'       => 'required|date|after:start_date',
+            'prices'         => 'required|array',
+            'prices.*'       => 'numeric|min:0',
+            'billing_mode'   => 'required|in:single,individual',
+            'deposit_amount' => 'nullable|numeric|min:0',
+            'notes'          => 'nullable|string',
+        ]);
+
+        $start  = Carbon::parse($data['start_date']);
+        $end    = Carbon::parse($data['end_date']);
+        $nights = max(1, (int) $start->diffInDays($end));
+        $groupId = (string) \Illuminate\Support\Str::uuid();
+
+        $reservations = DB::transaction(function () use ($data, $nights, $groupId, $request) {
+            foreach ($data['room_ids'] as $roomId) {
+                $this->assertNoOverlap($roomId, $data['start_date'], $data['end_date']);
+            }
+
+            $created = [];
+            foreach ($data['room_ids'] as $roomId) {
+                $price = $data['prices'][$roomId] ?? 0;
+                $reservation = Reservation::create([
+                    'group_id'       => $groupId,
+                    'billing_mode'   => $data['billing_mode'],
+                    'guest_id'       => $data['guest_id'] ?? null,
+                    'company_id'     => $data['company_id'] ?? null,
+                    'room_id'        => $roomId,
+                    'status'         => 'pending',
+                    'start_date'     => $data['start_date'],
+                    'end_date'       => $data['end_date'],
+                    'nights'         => $nights,
+                    'agreed_price'   => $price * $nights,
+                    'deposit_amount' => null,
+                    'payment_status' => 'pending',
+                    'created_by'     => $request->user()->id,
+                    'notes'          => $data['notes'] ?? null,
+                ]);
+
+                $room = Room::find($roomId);
+                if ($room && $room->status === 'available') {
+                    $room->update(['status' => 'reserved']);
+                    broadcast(new RoomStatusChanged($room->refresh()))->toOthers();
+                }
+
+                broadcast(new ReservationStatusChanged($reservation->load('guest', 'room')))->toOthers();
+                $created[] = $reservation;
+            }
+
+            return $created;
+        });
+
+        ActivityLog::record('reservation.group_created', $request->user()->id, [
+            'group_id'      => $groupId,
+            'room_count'    => count($data['room_ids']),
+            'billing_mode'  => $data['billing_mode'],
+            'start_date'    => $data['start_date'],
+            'end_date'      => $data['end_date'],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data'    => ['group_id' => $groupId, 'reservations' => $reservations],
+            'message' => 'Reservas masivas creadas.',
+        ], 201);
+    }
+
     public function update(Request $request, Reservation $reservation): JsonResponse
     {
         abort_if(in_array($reservation->status, ['checked_in', 'cancelled', 'no_show']), 409, 'No se puede modificar esta reserva.');

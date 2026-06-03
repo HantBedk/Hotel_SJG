@@ -4,6 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import type { MinibarItem, StayAccount, Stay, MinibarConsumptionType } from '@/types'
 import { addMinibarChargesApi, checkoutStayApi, addPaymentApi, getStayAccountApi, downloadStayReceiptApi } from '@/services/stays.service'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 
 interface Props {
   stay: Stay
@@ -109,10 +110,24 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
     checkoutMutation.mutate()
   }
 
+  const [pdfInclude, setPdfInclude] = useState({
+    rooms:    true,
+    services: true,
+    minibar:  true,
+    late_fee: true,
+  })
+
+  const includeParams = () => ({
+    include_rooms:    pdfInclude.rooms,
+    include_services: pdfInclude.services,
+    include_minibar:  pdfInclude.minibar,
+    include_late_fee: pdfInclude.late_fee,
+  })
+
   const handleDownloadReceipt = async () => {
     const id = receiptStayId ?? stay.id
     try {
-      const blob = await downloadStayReceiptApi(id)
+      const blob = await downloadStayReceiptApi(id, includeParams())
       const url  = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href     = url
@@ -127,7 +142,7 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
   const handleViewReceipt = async () => {
     const id = receiptStayId ?? stay.id
     try {
-      const blob = await downloadStayReceiptApi(id)
+      const blob = await downloadStayReceiptApi(id, includeParams())
       const url  = window.URL.createObjectURL(blob)
       window.open(url, '_blank')
     } catch {
@@ -152,12 +167,17 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
   const STEPS: Step[] = ['minibar', 'cuenta', 'pago', 'done']
   const stepIdx = STEPS.indexOf(step)
 
+  const dialogRef = useFocusTrap<HTMLDivElement>(true, step === 'minibar' ? onClose : undefined)
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.5)' }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Checkout ${stay.guest?.full_name ?? ''}`}
         className="w-full max-w-2xl rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col"
         style={{ background: 'var(--bg-surface)', maxHeight: '92vh' }}
       >
@@ -484,6 +504,29 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
                 <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
                   {stay.guest?.full_name ?? '—'} ha sido registrado como salida.
                 </p>
+              </div>
+
+              <div className="w-full max-w-md rounded-xl border px-4 py-3" style={{ borderColor: 'var(--border-default)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                  Conceptos en el comprobante
+                </p>
+                <div className="grid grid-cols-2 gap-1.5 text-sm">
+                  {([
+                    ['rooms', 'Habitaciones'],
+                    ['services', 'Servicios'],
+                    ['minibar', 'Minibar'],
+                    ['late_fee', 'Cargo late checkout'],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--text-primary)' }}>
+                      <input
+                        type="checkbox"
+                        checked={pdfInclude[key]}
+                        onChange={(e) => setPdfInclude((p) => ({ ...p, [key]: e.target.checked }))}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div className="flex gap-3">

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { addDays, format, isToday, parseISO, eachDayOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
 import type { CalendarData, CalendarEntry, CalendarRoom } from '@/types'
@@ -9,6 +9,7 @@ interface Props {
   days: number
   onEntryClick?: (entry: CalendarEntry) => void
   onCellClick?: (roomId: string, date: Date) => void
+  onRangeSelect?: (roomId: string, start: Date, end: Date) => void
 }
 
 function entryColor(entry: CalendarEntry): string {
@@ -29,7 +30,7 @@ function roomStatusColor(status: string): string {
   }
 }
 
-export default function CalendarGrid({ data, startDate, days, onEntryClick, onCellClick }: Props) {
+export default function CalendarGrid({ data, startDate, days, onEntryClick, onCellClick, onRangeSelect }: Props) {
   const dates = useMemo(
     () => eachDayOfInterval({ start: startDate, end: addDays(startDate, days - 1) }),
     [startDate, days]
@@ -145,6 +146,7 @@ export default function CalendarGrid({ data, startDate, days, onEntryClick, onCe
           days={days}
           onEntryClick={onEntryClick}
           onCellClick={onCellClick}
+          onRangeSelect={onRangeSelect}
         />
       ))}
 
@@ -170,9 +172,26 @@ interface RoomRowProps {
   days: number
   onEntryClick?: (entry: CalendarEntry) => void
   onCellClick?: (roomId: string, date: Date) => void
+  onRangeSelect?: (roomId: string, start: Date, end: Date) => void
 }
 
-function RoomRow({ room, dates, entryMap, spanMap, colWidth, labelWidth, rowHeight, allEntries, startDate, days, onEntryClick, onCellClick }: RoomRowProps) {
+function RoomRow({ room, dates, entryMap, spanMap, colWidth, labelWidth, rowHeight, allEntries, startDate, days, onEntryClick, onCellClick, onRangeSelect }: RoomRowProps) {
+  const [dragRange, setDragRange] = useState<{ startIdx: number; currIdx: number } | null>(null)
+
+  useEffect(() => {
+    if (!dragRange) return
+    const handleUp = () => {
+      if (dragRange.startIdx !== dragRange.currIdx) {
+        const lo = Math.min(dragRange.startIdx, dragRange.currIdx)
+        const hi = Math.max(dragRange.startIdx, dragRange.currIdx)
+        onRangeSelect?.(room.id, dates[lo], dates[hi])
+      }
+      setDragRange(null)
+    }
+    window.addEventListener('mouseup', handleUp)
+    return () => window.removeEventListener('mouseup', handleUp)
+  }, [dragRange, dates, room.id, onRangeSelect])
+
   const startStr = format(startDate, 'yyyy-MM-dd')
   const endStr   = format(addDays(startDate, days - 1), 'yyyy-MM-dd')
 
@@ -201,12 +220,13 @@ function RoomRow({ room, dates, entryMap, spanMap, colWidth, labelWidth, rowHeig
       </div>
 
       {/* Day cells — background grid */}
-      <div className="flex flex-1 relative">
-        {dates.map((date) => {
+      <div className="flex flex-1 relative select-none">
+        {dates.map((date, idx) => {
           const dateStr = format(date, 'yyyy-MM-dd')
           const today   = isToday(date)
           const statusColor = roomStatusColor(room.status)
           const hasEntry    = !!entryMap[dateStr]?.length
+          const inDrag = dragRange != null && idx >= Math.min(dragRange.startIdx, dragRange.currIdx) && idx <= Math.max(dragRange.startIdx, dragRange.currIdx)
 
           return (
             <div
@@ -217,10 +237,26 @@ function RoomRow({ room, dates, entryMap, spanMap, colWidth, labelWidth, rowHeig
                 minWidth: colWidth,
                 height: rowHeight,
                 borderColor: 'var(--border-default)',
-                background: today && !hasEntry ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)' : undefined,
+                background: inDrag
+                  ? 'color-mix(in srgb, var(--color-primary) 25%, transparent)'
+                  : today && !hasEntry
+                    ? 'color-mix(in srgb, var(--color-primary) 8%, transparent)'
+                    : undefined,
                 borderLeft: today ? '2px dashed #EF4444' : undefined,
               }}
-              onClick={() => !hasEntry && onCellClick?.(room.id, date)}
+              onMouseDown={(e) => {
+                if (hasEntry) return
+                e.preventDefault()
+                setDragRange({ startIdx: idx, currIdx: idx })
+              }}
+              onMouseEnter={() => {
+                if (dragRange && !hasEntry) setDragRange((d) => d ? { ...d, currIdx: idx } : null)
+              }}
+              onClick={() => {
+                if (hasEntry) return
+                if (dragRange && dragRange.startIdx !== dragRange.currIdx) return
+                onCellClick?.(room.id, date)
+              }}
             />
           )
         })}
@@ -242,7 +278,7 @@ function RoomRow({ room, dates, entryMap, spanMap, colWidth, labelWidth, rowHeig
           return (
             <button
               key={entry.id + entry.type}
-              className={`absolute rounded-md text-xs font-medium truncate px-2 flex items-center cursor-pointer transition-opacity hover:opacity-80 ${entryColor(entry)}`}
+              className={`absolute rounded-md text-xs font-medium truncate px-2 flex items-center gap-1 cursor-pointer transition-opacity hover:opacity-80 ${entryColor(entry)}`}
               style={{
                 left,
                 top: 6,
@@ -251,9 +287,14 @@ function RoomRow({ room, dates, entryMap, spanMap, colWidth, labelWidth, rowHeig
                 zIndex: 5,
               }}
               onClick={() => onEntryClick?.(entry)}
-              title={`${entry.guest_name ?? entry.company_name ?? '—'} · ${entry.nights} noche(s)`}
+              title={`${entry.guest_name ?? entry.company_name ?? '—'} · ${entry.nights} noche(s)${entry.group_id ? ' · Reserva de grupo' : ''}`}
             >
-              {entry.guest_name ?? entry.company_name ?? '—'}
+              {entry.group_id && (
+                <span className="text-[10px] font-bold uppercase px-1 rounded bg-white/30 flex-shrink-0">
+                  Grupo
+                </span>
+              )}
+              <span className="truncate">{entry.guest_name ?? entry.company_name ?? '—'}</span>
             </button>
           )
         })}

@@ -415,7 +415,7 @@ class StayController extends Controller
         return response()->json(['success' => true, 'data' => $records, 'message' => 'Consumos registrados.'], 201);
     }
 
-    public function receipt(Stay $stay): mixed
+    public function receipt(Request $request, Stay $stay): mixed
     {
         abort_if($stay->status !== 'checked_out', 422, 'El comprobante solo está disponible para estadías cerradas.');
 
@@ -435,15 +435,23 @@ class StayController extends Controller
             $stay->refresh();
         }
 
+        // R31: checkboxes de gastos — permitir excluir secciones
+        $include = [
+            'rooms'    => $request->boolean('include_rooms',   true),
+            'services' => $request->boolean('include_services', true),
+            'minibar'  => $request->boolean('include_minibar',  true),
+            'late_fee' => $request->boolean('include_late_fee', true),
+        ];
+
         $compNumber   = $stay->receipt_number;
-        $roomLines    = $stay->stayRooms;
-        $serviceLines = $stay->services;
-        $minibarLines = $stay->minibarConsumptions;
+        $roomLines    = $include['rooms']    ? $stay->stayRooms           : collect();
+        $serviceLines = $include['services'] ? $stay->services            : collect();
+        $minibarLines = $include['minibar']  ? $stay->minibarConsumptions : collect();
 
         $roomsTotal    = (float) $roomLines->sum('subtotal');
         $servicesTotal = (float) $serviceLines->sum('total');
         $minibarTotal  = (float) $minibarLines->sum('total');
-        $lateFee       = (float) ($stay->late_checkout_fee ?? 0);
+        $lateFee       = $include['late_fee'] ? (float) ($stay->late_checkout_fee ?? 0) : 0;
         $subtotal      = $roomsTotal + $servicesTotal + $minibarTotal + $lateFee;
 
         $ivaEnabled = Setting::get('hotel.iva_enabled', false);
@@ -460,8 +468,16 @@ class StayController extends Controller
             'stay', 'compNumber', 'roomLines', 'serviceLines', 'minibarLines',
             'roomsTotal', 'servicesTotal', 'minibarTotal', 'lateFee',
             'subtotal', 'ivaPct', 'ivaAmount', 'total',
-            'hotelName', 'hotelPhone', 'hotelAddr'
+            'hotelName', 'hotelPhone', 'hotelAddr', 'include'
         ));
+
+        // Guardar copia en storage/app/comprobantes/{YYYY-MM}/COMP-XXXX.pdf
+        try {
+            $relativePath = "comprobantes/" . now()->format('Y-m') . "/{$compNumber}.pdf";
+            \Illuminate\Support\Facades\Storage::disk('local')->put($relativePath, $pdf->output());
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('No se pudo guardar copia del comprobante', ['stay_id' => $stay->id, 'error' => $e->getMessage()]);
+        }
 
         return $pdf->stream("comprobante-{$compNumber}.pdf");
     }

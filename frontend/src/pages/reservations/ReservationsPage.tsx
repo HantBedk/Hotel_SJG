@@ -1,9 +1,11 @@
 import { useState } from 'react'
-import { Search, Plus, CalendarDays, XCircle, CreditCard } from 'lucide-react'
+import { Search, Plus, CalendarDays, XCircle, CreditCard, Users } from 'lucide-react'
 import { useReservations } from '@/hooks/useReservations'
 import { useRooms } from '@/hooks/useRooms'
 import NewReservationWizard from './components/NewReservationWizard'
+import BulkReservationWizard from './components/BulkReservationWizard'
 import CheckInFromReservationModal from './components/CheckInFromReservationModal'
+import { Skeleton } from '@/components/ui/Skeleton'
 import type { Reservation, ReservationStatus } from '@/types'
 
 const STATUS_LABELS: Record<ReservationStatus, string> = {
@@ -28,6 +30,7 @@ export default function ReservationsPage() {
   const [search, setSearch]               = useState('')
   const [status, setStatus]               = useState<ReservationStatus | ''>('')
   const [showWizard, setShowWizard]       = useState(false)
+  const [showBulk, setShowBulk]           = useState(false)
   const [checkingIn, setCheckingIn]       = useState<Reservation | null>(null)
   const [selected, setSelected]           = useState<Reservation | null>(null)
 
@@ -49,6 +52,13 @@ export default function ReservationsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold mr-auto" style={{ color: 'var(--text-primary)' }}>Reservas</h1>
+        <button
+          onClick={() => setShowBulk(true)}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border"
+          style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+        >
+          <Users size={15} /> Reserva grupal
+        </button>
         <button
           onClick={() => setShowWizard(true)}
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white"
@@ -87,8 +97,10 @@ export default function ReservationsPage() {
       {/* List */}
       <div className="flex-1 overflow-y-auto space-y-2">
         {isLoading ? (
-          <div className="flex items-center justify-center h-32 text-sm" style={{ color: 'var(--text-muted)' }}>
-            Cargando...
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full rounded-xl" />
+            ))}
           </div>
         ) : (reservations as Reservation[]).length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 gap-2" style={{ color: 'var(--text-muted)' }}>
@@ -124,6 +136,13 @@ export default function ReservationsPage() {
         <NewReservationWizard
           onClose={() => setShowWizard(false)}
           onSuccess={() => setShowWizard(false)}
+        />
+      )}
+
+      {showBulk && (
+        <BulkReservationWizard
+          onClose={() => setShowBulk(false)}
+          onSuccess={() => setShowBulk(false)}
         />
       )}
 

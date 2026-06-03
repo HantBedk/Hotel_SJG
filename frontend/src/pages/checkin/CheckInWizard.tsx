@@ -6,6 +6,7 @@ import {
 import { useGuestSearch } from '@/hooks/useGuests'
 import { useCompanySearch } from '@/hooks/useCompanies'
 import { useStays } from '@/hooks/useStays'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { createGuestApi, updateGuestApi, findGuestByDocumentApi, addCompanionApi } from '@/services/guests.service'
 import { createCompanyApi } from '@/services/companies.service'
 import type { Room, Guest, Company, GuestCompanion } from '@/types'
@@ -1092,15 +1093,18 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
 
   const canGoNext = canAdvance(currentStep)
 
+  const dialogRef = useFocusTrap<HTMLDivElement>(true, isFirst ? onClose : undefined)
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.5)' }}
       onClick={(e) => { if (e.target === e.currentTarget && isFirst) onClose() }}
-      role="dialog"
-      aria-modal="true"
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Check-in habitaciones ${rooms.map((r) => r.number).join(', ')}`}
         className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden"
         style={{ background: 'var(--bg-surface)', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}
       >

@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\AssetMaintenance;
+use App\Models\InventoryItem;
 use App\Models\Room;
+use App\Models\Setting;
 use App\Models\Stay;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -37,6 +40,19 @@ class DashboardController extends Controller
             ->selectRaw('COALESCE(SUM(total_amount - paid_amount), 0) as balance')
             ->value('balance');
 
+        // Inventory alerts
+        $expiryDays = (int) Setting::get('inventory.expiry_alert_days', 7);
+        $lowStock = InventoryItem::where('active', true)
+            ->whereRaw('current_stock <= min_stock_threshold')
+            ->count();
+        $expiring = InventoryItem::where('active', true)
+            ->whereNotNull('expiry_date')
+            ->whereBetween('expiry_date', [today(), today()->addDays($expiryDays)])
+            ->count();
+        $maintenancesSoon = AssetMaintenance::where('status', 'pending')
+            ->whereBetween('scheduled_date', [today(), today()->addDays(3)])
+            ->count();
+
         return $this->success([
             'rooms_by_status' => $statusCounts,
             'total_rooms'     => $totalRooms,
@@ -46,6 +62,12 @@ class DashboardController extends Controller
             'checkins_today'  => $checkinsToday,
             'active_stays'    => $activeStays,
             'pending_balance' => (float) $pendingBalance,
+            'inventory_alerts' => [
+                'low_stock'         => $lowStock,
+                'expiring'          => $expiring,
+                'maintenances_soon' => $maintenancesSoon,
+                'total'             => $lowStock + $expiring + $maintenancesSoon,
+            ],
         ]);
     }
 

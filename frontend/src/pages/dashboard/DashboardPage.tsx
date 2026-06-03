@@ -13,6 +13,7 @@ import { useNotifications } from '@/hooks/useNotifications'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import CheckInWizard from '@/pages/checkin/CheckInWizard'
+import { CheckoutWizard } from '@/pages/stays/components/CheckoutWizard'
 import { DashboardChart } from './components/DashboardChart'
 import { DashboardRoomModal } from './components/DashboardRoomModal'
 import type { Room, RoomStatus, Suggestion, Stay } from '@/types'
@@ -181,6 +182,7 @@ export default function DashboardPage() {
   const { data: housekeepers = [] } = useHousekeepers()
 
   const [checkingIn, setCheckingIn] = useState<Room[]>([])
+  const [checkoutStay, setCheckoutStay] = useState<Stay | null>(null)
   const [showOccupancy, setShowOccupancy] = useState(false)
   const [showBalance, setShowBalance] = useState(false)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
@@ -262,11 +264,27 @@ export default function DashboardPage() {
     },
   ]
 
+  const invAlerts = stats?.inventory_alerts
+  if (invAlerts && invAlerts.total > 0) {
+    const parts: string[] = []
+    if (invAlerts.low_stock > 0)         parts.push(`${invAlerts.low_stock} stock bajo`)
+    if (invAlerts.expiring > 0)          parts.push(`${invAlerts.expiring} por vencer`)
+    if (invAlerts.maintenances_soon > 0) parts.push(`${invAlerts.maintenances_soon} mant.`)
+    kpis.push({
+      label:   'Alertas inventario',
+      value:   invAlerts.total,
+      sub:     parts.join(' · '),
+      icon:    AlertTriangle,
+      color:   '#D97706',
+      colorBg: '#FFFBEB',
+    })
+  }
+
   return (
     <div className="flex flex-col gap-4 min-h-0 animate-in fade-in duration-300">
 
       {/* ── KPI cards ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 shrink-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4 shrink-0">
         {isLoading
           ? Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
           : kpis.map(({ label, value, sub, icon: Icon, color, colorBg, circular, pct, onClick }) => (
@@ -707,8 +725,18 @@ export default function DashboardPage() {
         isChangingStatus={isChanging}
         onChangeStatus={handleRoomStatusChange}
         onStartCheckIn={(room) => setCheckingIn([room])}
+        onStartCheckOut={(stay) => setCheckoutStay(stay)}
         onClose={() => setSelectedRoom(null)}
       />
+
+      {/* Checkout wizard (desde modal de habitación) */}
+      {checkoutStay && (
+        <CheckoutWizard
+          stay={checkoutStay}
+          onClose={() => setCheckoutStay(null)}
+          onSuccess={() => setCheckoutStay(null)}
+        />
+      )}
     </div>
   )
 }

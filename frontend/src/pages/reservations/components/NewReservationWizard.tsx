@@ -3,6 +3,7 @@ import { X, ChevronRight, ChevronLeft, Search, User, Building2, CheckCircle } fr
 import { useGuestSearch } from '@/hooks/useGuests'
 import { useCompanySearch } from '@/hooks/useCompanies'
 import { useReservations } from '@/hooks/useReservations'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import type { Guest, Company, Room } from '@/types'
 
 interface Props {
@@ -106,12 +107,17 @@ export default function NewReservationWizard({ prefillStartDate, prefillRoom, on
   const set = <K extends keyof WizardState>(key: K, value: WizardState[K]) =>
     setState(prev => ({ ...prev, [key]: value }))
 
+  const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose)
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ background: 'rgba(0,0,0,0.5)' }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Nueva reserva"
         className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         style={{ background: 'var(--bg-surface)', maxHeight: '92vh' }}
       >

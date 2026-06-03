@@ -24,6 +24,8 @@ class SettingsSeeder extends Seeder
             ['key' => 'hotel.cleaning_alerts',          'value' => 'true',  'type' => 'boolean', 'group' => 'hotel'],
             ['key' => 'hotel.cleaning_hour',            'value' => '10:00', 'type' => 'string',  'group' => 'hotel'],
             ['key' => 'hotel.notify_cleaning_done',     'value' => 'true',  'type' => 'boolean', 'group' => 'hotel'],
+            ['key' => 'hotel.admin_alert_hours',        'value' => '06:00,20:00', 'type' => 'string', 'group' => 'hotel'],
+            ['key' => 'minibar.default_template',       'value' => '[]',    'type' => 'json',    'group' => 'minibar'],
             // System
             ['key' => 'system.date_format',             'value' => 'DD/MM/YYYY', 'type' => 'string', 'group' => 'system'],
             ['key' => 'system.time_format',             'value' => 'HH:mm',      'type' => 'string', 'group' => 'system'],

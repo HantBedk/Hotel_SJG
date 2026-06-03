@@ -53,6 +53,7 @@ class CalendarController extends Controller
                 'guest_name'   => $res->guest?->full_name,
                 'company_name' => $res->company?->name,
                 'agreed_price' => $res->agreed_price,
+                'group_id'     => $res->group_id,
             ]);
 
         // Active stay rooms overlapping the range

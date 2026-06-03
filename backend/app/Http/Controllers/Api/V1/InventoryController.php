@@ -49,6 +49,35 @@ class InventoryController extends Controller
         return response()->json(['success' => true, 'data' => $query->paginate($this->perPage($request, 30))]);
     }
 
+    public function similar(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name'         => 'required|string|max:150',
+            'brand'        => 'nullable|string|max:100',
+            'presentation' => 'nullable|string|max:100',
+        ]);
+
+        $query = InventoryItem::where('active', true);
+        $name = trim($data['name']);
+        $brand = trim($data['brand'] ?? '');
+        $pres  = trim($data['presentation'] ?? '');
+
+        $query->where(function ($q) use ($name, $brand, $pres) {
+            $q->where('name', 'ilike', "%{$name}%");
+            if ($brand) {
+                $q->orWhere(function ($q2) use ($brand, $pres) {
+                    $q2->where('brand', 'ilike', "%{$brand}%");
+                    if ($pres) $q2->where('presentation', 'ilike', "%{$pres}%");
+                });
+            }
+        });
+
+        return response()->json([
+            'success' => true,
+            'data'    => $query->limit(5)->get(['id', 'code', 'name', 'brand', 'presentation', 'current_stock', 'unit']),
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([

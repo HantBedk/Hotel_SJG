@@ -146,6 +146,8 @@ Route::prefix('v1')->group(function () {
              ->middleware('permission:view_reservations|manage_reservations');
         Route::post('/reservations', [ReservationController::class, 'store'])
              ->middleware('permission:manage_reservations');
+        Route::post('/reservations/bulk', [ReservationController::class, 'bulkStore'])
+             ->middleware('permission:manage_reservations');
         Route::get('/reservations/{reservation}', [ReservationController::class, 'show'])
              ->middleware('permission:view_reservations|manage_reservations');
         Route::put('/reservations/{reservation}', [ReservationController::class, 'update'])
@@ -174,6 +176,8 @@ Route::prefix('v1')->group(function () {
 
             // Ítems
             Route::get('/items',    [InventoryController::class, 'index']);
+            Route::post('/items/similar', [InventoryController::class, 'similar'])
+                 ->middleware('permission:manage_inventory');
             Route::post('/items',   [InventoryController::class, 'store'])
                  ->middleware('permission:manage_inventory');
             Route::get('/items/{inventoryItem}',    [InventoryController::class, 'show']);
@@ -199,6 +203,11 @@ Route::prefix('v1')->group(function () {
                  ->middleware('permission:manage_inventory');
             Route::get('/minibar/room-minibars', [MinibarController::class, 'roomMinibars']);
             Route::post('/minibar/restock-room', [MinibarController::class, 'restockRoom'])
+                 ->middleware('permission:manage_inventory');
+            Route::get('/minibar/template',  [MinibarController::class, 'getTemplate']);
+            Route::put('/minibar/template',  [MinibarController::class, 'saveTemplate'])
+                 ->middleware('permission:manage_inventory');
+            Route::post('/minibar/apply-template', [MinibarController::class, 'applyTemplate'])
                  ->middleware('permission:manage_inventory');
 
             // Activos

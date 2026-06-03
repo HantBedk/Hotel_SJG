@@ -3,6 +3,7 @@ import { Plus, Search, Pencil, Trash2, RefreshCw, SlidersHorizontal, X, Truck } 
 import { useInventoryItems, useInventoryCategories, useInventoryMutations } from '@/hooks/useInventory'
 import { useAdminUsers } from '@/hooks/useAdmin'
 import { useAuth } from '@/hooks/useAuth'
+import { SkeletonTable } from '@/components/ui/Skeleton'
 import type { InventoryItem, InventoryCategory, AdminUser } from '@/types'
 
 function formatCurrency(v: string | number | null) {
@@ -402,13 +403,64 @@ export default function ConsumiblesTab() {
 
       {/* Table */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <div className="py-4"><SkeletonTable rows={6} cols={6} /></div>
       ) : items.length === 0 ? (
         <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>Sin productos.</div>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        {/* Mobile cards (< md) */}
+        <div className="md:hidden space-y-3">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className="rounded-xl p-4"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+            >
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div className="min-w-0">
+                  <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{item.name}</p>
+                  <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{item.code}{item.brand ? ` · ${item.brand}` : ''}</p>
+                </div>
+                <StockBadge item={item} />
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+                <div><span style={{ color: 'var(--text-muted)' }}>Categoría:</span> {item.category?.name ?? '—'}</div>
+                <div><span style={{ color: 'var(--text-muted)' }}>Costo:</span> {formatCurrency(item.cost_price)}</div>
+                <div className="col-span-2">
+                  <span style={{ color: 'var(--text-muted)' }}>Vence:</span>{' '}
+                  {item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('es-CO') : '—'}
+                </div>
+              </div>
+              {canManage && (
+                <div className="flex gap-2">
+                  <button onClick={() => setRestockItem(item)}
+                    className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs border"
+                    style={{ borderColor: 'var(--border-default)', color: 'var(--color-primary)' }}>
+                    <RefreshCw size={13} /> Recargar
+                  </button>
+                  <button onClick={() => setDeliverItem(item)} disabled={item.current_stock <= 0}
+                    className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs border disabled:opacity-30"
+                    style={{ borderColor: 'var(--border-default)', color: '#8B5CF6' }}>
+                    <Truck size={13} /> Entregar
+                  </button>
+                  <button onClick={() => setModalItem(item)}
+                    className="p-2 rounded-lg border"
+                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+                    <Pencil size={13} />
+                  </button>
+                  <button onClick={() => { if (confirm('¿Eliminar este producto?')) deleteMutation.mutate(item.id) }}
+                    className="p-2 rounded-lg border text-red-500"
+                    style={{ borderColor: 'var(--border-default)' }}>
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table (md+) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
@@ -484,6 +536,7 @@ export default function ConsumiblesTab() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {modalItem !== undefined && (

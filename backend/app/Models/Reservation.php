@@ -14,6 +14,8 @@ class Reservation extends Model
     use HasUuids, SoftDeletes;
 
     protected $fillable = [
+        'group_id',
+        'billing_mode',
         'guest_id',
         'company_id',
         'room_id',

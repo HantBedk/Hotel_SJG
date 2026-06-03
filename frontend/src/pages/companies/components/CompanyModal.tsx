@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { X } from 'lucide-react'
 import type { Company } from '@/types'
+import { companySchema, validate, type CompanyInput } from '@/lib/validators'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 
 export interface CompanyFormData {
   name: string
@@ -55,15 +57,24 @@ export function CompanyModal({ company, onSave, onClose, isSaving }: Props) {
   }
   const inputClass = 'w-full px-3 py-2 rounded-lg text-sm border outline-none focus:ring-1 focus:ring-[var(--color-primary)]'
 
+  const validation = useMemo(() => validate<CompanyInput>(companySchema, form), [form])
+  const errors = validation.ok ? {} : validation.errors
+  const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose)
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.5)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      role="dialog"
-      aria-modal="true"
     >
-      <div className="w-full max-w-md rounded-2xl shadow-xl overflow-hidden" style={{ background: 'var(--bg-surface)' }}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={company ? 'Editar empresa' : 'Nueva empresa'}
+        className="w-full max-w-md rounded-2xl shadow-xl overflow-hidden"
+        style={{ background: 'var(--bg-surface)' }}
+      >
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
           <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
             {company ? 'Editar empresa' : 'Nueva empresa'}
@@ -74,11 +85,23 @@ export function CompanyModal({ company, onSave, onClose, isSaving }: Props) {
         </div>
 
         <div className="px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
-          <input placeholder="Razón social *" className={inputClass} style={inputStyle} {...field('name')} />
-          <input placeholder="NIT *" className={inputClass} style={inputStyle} {...field('nit')} />
+          <div>
+            <input placeholder="Razón social *" className={inputClass} style={inputStyle} {...field('name')} />
+            {errors.name && <p className="text-xs mt-1 text-red-500">{errors.name}</p>}
+          </div>
+          <div>
+            <input placeholder="NIT *" className={inputClass} style={inputStyle} {...field('nit')} />
+            {errors.nit && <p className="text-xs mt-1 text-red-500">{errors.nit}</p>}
+          </div>
           <input placeholder="Dirección" className={inputClass} style={inputStyle} {...field('address')} />
-          <input placeholder="Teléfono" className={inputClass} style={inputStyle} {...field('phone')} />
-          <input placeholder="Email" type="email" className={inputClass} style={inputStyle} {...field('email')} />
+          <div>
+            <input placeholder="Teléfono" className={inputClass} style={inputStyle} {...field('phone')} />
+            {errors.phone && <p className="text-xs mt-1 text-red-500">{errors.phone}</p>}
+          </div>
+          <div>
+            <input placeholder="Email" type="email" className={inputClass} style={inputStyle} {...field('email')} />
+            {errors.email && <p className="text-xs mt-1 text-red-500">{errors.email}</p>}
+          </div>
           <input placeholder="Nombre del contacto" className={inputClass} style={inputStyle} {...field('contact_name')} />
           <textarea
             placeholder="Observaciones"
@@ -98,7 +121,7 @@ export function CompanyModal({ company, onSave, onClose, isSaving }: Props) {
             Cancelar
           </button>
           <button
-            disabled={isSaving || !form.name.trim() || !form.nit.trim()}
+            disabled={isSaving || !validation.ok}
             onClick={() => onSave(form)}
             className="flex-1 py-2 rounded-lg text-sm font-medium disabled:opacity-40"
             style={{ background: 'var(--color-primary)', color: '#fff' }}

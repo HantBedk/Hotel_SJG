@@ -4,12 +4,14 @@ import {
   getReservationsApi,
   getReservationApi,
   createReservationApi,
+  createBulkReservationsApi,
   updateReservationApi,
   cancelReservationApi,
   extendReservationApi,
   checkInFromReservationApi,
   addReservationPaymentApi,
   type ReservationFilters,
+  type BulkReservationPayload,
 } from '@/services/reservations.service'
 import type { ReservationPayload } from '@/types'
 
@@ -33,6 +35,13 @@ export function useReservations(filters: ReservationFilters = {}) {
     onSuccess: () => { toast.success('Reserva creada.'); invalidate() },
     onError: (e: { response?: { data?: { message?: string } } }) =>
       toast.error(e?.response?.data?.message ?? 'Error al crear reserva.'),
+  })
+
+  const bulkMutation = useMutation({
+    mutationFn: createBulkReservationsApi,
+    onSuccess: (res) => { toast.success(`${res.reservations.length} reservas creadas.`); invalidate() },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e?.response?.data?.message ?? 'Error al crear reservas masivas.'),
   })
 
   const updateMutation = useMutation({
@@ -82,6 +91,8 @@ export function useReservations(filters: ReservationFilters = {}) {
     meta:          (data as { meta: unknown })?.meta,
     isLoading,
     create:        (payload: ReservationPayload) => createMutation.mutateAsync(payload),
+    createBulk:    (payload: BulkReservationPayload) => bulkMutation.mutateAsync(payload),
+    isCreatingBulk: bulkMutation.isPending,
     update:        updateMutation.mutate,
     cancel:        cancelMutation.mutate,
     extend:        extendMutation.mutate,

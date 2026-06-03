@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { useRepairOrders, useRepairOrderMutations, useAssets } from '@/hooks/useInventory'
 import { useAuth } from '@/hooks/useAuth'
+import { SkeletonTable } from '@/components/ui/Skeleton'
 import type { RepairOrder, RepairOrderStatus } from '@/types'
 
 function formatDate(d: string | null) {
@@ -170,9 +171,7 @@ export default function ReparacionesTab() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <div className="py-4"><SkeletonTable rows={5} cols={5} /></div>
       ) : orders.length === 0 ? (
         <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>Sin órdenes de reparación.</div>
       ) : (

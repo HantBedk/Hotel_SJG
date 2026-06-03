@@ -52,8 +52,15 @@ export const addMinibarChargesApi = async (
   return res.data.data
 }
 
-export const downloadStayReceiptApi = async (id: string): Promise<Blob> => {
-  const res = await api.get(`/stays/${id}/receipt`, { responseType: 'blob' })
+export interface ReceiptIncludes {
+  include_rooms?: boolean
+  include_services?: boolean
+  include_minibar?: boolean
+  include_late_fee?: boolean
+}
+
+export const downloadStayReceiptApi = async (id: string, includes?: ReceiptIncludes): Promise<Blob> => {
+  const res = await api.get(`/stays/${id}/receipt`, { responseType: 'blob', params: includes })
   return res.data
 }
 

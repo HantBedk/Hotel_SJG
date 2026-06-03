@@ -783,6 +783,23 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
             </section>
           )}
 
+          {/* Comprobante de check-in — disponible para estadías activas o cerradas */}
+          <section>
+            <p className="text-xs font-semibold uppercase mb-2" style={{ color: 'var(--text-muted)' }}>Comprobante de check-in</p>
+            <div className="flex gap-2">
+              <button onClick={() => handleCheckInReceipt('view')}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs border hover:opacity-80"
+                style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+                <ExternalLink size={13} /> Ver PDF
+              </button>
+              <button onClick={() => handleCheckInReceipt('download')}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs border hover:opacity-80"
+                style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+                <Download size={13} /> Descargar
+              </button>
+            </div>
+          </section>
+
           {/* Notes */}
           {stay.notes && (
             <section>

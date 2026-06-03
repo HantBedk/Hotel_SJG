@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, Search, Pencil, Archive, X } from 'lucide-react'
 import { useAssets, useAssetMutations } from '@/hooks/useInventory'
 import { useAuth } from '@/hooks/useAuth'
+import { SkeletonTable } from '@/components/ui/Skeleton'
 import type { Asset, AssetLocationType, AssetStatus } from '@/types'
 
 function formatDate(d: string | null) {
@@ -153,9 +154,7 @@ export default function ActivosTab() {
 
       {/* Table */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <div className="py-4"><SkeletonTable rows={5} cols={5} /></div>
       ) : assets.length === 0 ? (
         <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>Sin activos.</div>
       ) : (

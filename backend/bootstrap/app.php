@@ -3,6 +3,7 @@
 use App\Console\Commands\CheckInventoryAlerts;
 use App\Console\Commands\CheckReservationAlerts;
 use App\Console\Commands\GenerateSuggestions;
+use App\Console\Commands\SendAdminAlertSummary;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,6 +22,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command(CheckReservationAlerts::class)->hourly();
         $schedule->command(CheckInventoryAlerts::class)->dailyAt('08:00');
         $schedule->command(GenerateSuggestions::class)->dailyAt('06:00');
+        // Resumen admin: corre cada hora; el comando filtra contra hotel.admin_alert_hours
+        $schedule->command(SendAdminAlertSummary::class)->hourly();
     })
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->alias([

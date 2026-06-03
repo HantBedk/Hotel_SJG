@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, X, RefreshCw, Clock } from 'lucide-react'
 import { useMinibarProducts, useMinibarProductMutations, useRoomMinibars } from '@/hooks/useInventory'
 import { useRooms } from '@/hooks/useRooms'
 import { useAuth } from '@/hooks/useAuth'
+import { SkeletonTable } from '@/components/ui/Skeleton'
 import type { MinibarProduct } from '@/types'
 
 function formatCurrency(v: string | number | null) {
@@ -188,9 +189,7 @@ function CatalogueSection() {
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <div className="py-4"><SkeletonTable rows={5} cols={5} /></div>
       ) : products.length === 0 ? (
         <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>Sin productos de minibar.</div>
       ) : (
@@ -310,9 +309,7 @@ function RoomStockSection() {
           Selecciona una habitación para ver su minibar.
         </div>
       ) : isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <div className="py-4"><SkeletonTable rows={4} cols={4} /></div>
       ) : roomMinibars.length === 0 ? (
         <div className="text-center py-16 text-sm" style={{ color: 'var(--text-muted)' }}>
           Esta habitación aún no tiene productos en su minibar.

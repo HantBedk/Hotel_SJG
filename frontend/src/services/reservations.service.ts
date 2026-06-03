@@ -27,6 +27,23 @@ export const createReservationApi = async (payload: ReservationPayload): Promise
   return res.data.data
 }
 
+export interface BulkReservationPayload {
+  guest_id?: string
+  company_id?: string
+  room_ids: string[]
+  start_date: string
+  end_date: string
+  prices: Record<string, number>
+  billing_mode: 'single' | 'individual'
+  deposit_amount?: number
+  notes?: string
+}
+
+export const createBulkReservationsApi = async (payload: BulkReservationPayload): Promise<{ group_id: string; reservations: Reservation[] }> => {
+  const res = await api.post('/reservations/bulk', payload)
+  return res.data.data
+}
+
 export const updateReservationApi = async (id: string, payload: Partial<ReservationPayload> & { status?: string }): Promise<Reservation> => {
   const res = await api.put(`/reservations/${id}`, payload)
   return res.data.data

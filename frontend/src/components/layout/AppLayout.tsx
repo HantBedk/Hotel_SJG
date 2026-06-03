@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import NotificationModal from '@/components/notifications/NotificationModal'
 
 const PAGE_TITLES: Record<string, string> = {
   '/':             'Dashboard',
@@ -97,6 +98,8 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      <NotificationModal />
     </div>
   )
 }

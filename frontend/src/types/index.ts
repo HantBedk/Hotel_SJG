@@ -281,6 +281,8 @@ export interface ReservationPayment {
 
 export interface Reservation {
   id: string
+  group_id?: string | null
+  billing_mode?: 'single' | 'individual' | null
   guest_id: string | null
   company_id: string | null
   room_id: string | null
@@ -352,6 +354,7 @@ export interface CalendarEntry {
   guest_name: string | null
   company_name: string | null
   agreed_price: string
+  group_id?: string | null
 }
 
 export interface CalendarData {
@@ -582,6 +585,8 @@ export interface AppNotification {
   type: string
   title: string
   message: string
+  severity?: 'info' | 'warning' | 'critical'
+  is_modal?: boolean
   payload: Record<string, unknown> | null
   is_read: boolean
   read_at: string | null
@@ -671,4 +676,10 @@ export interface DashboardStats {
   checkins_today: number
   active_stays: number
   pending_balance: number
+  inventory_alerts?: {
+    low_stock: number
+    expiring: number
+    maintenances_soon: number
+    total: number
+  }
 }
