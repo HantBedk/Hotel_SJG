@@ -281,12 +281,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 min-h-0 animate-in fade-in duration-300">
+    <div className="flex flex-col gap-4 animate-in fade-in duration-300">
 
       {/* ── KPI cards ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-4 shrink-0">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${kpis.length === 6 ? 'xl:grid-cols-6' : 'xl:grid-cols-5'} gap-4`}>
         {isLoading
-          ? Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
+          ? Array.from({ length: kpis.length }).map((_, i) => <SkeletonCard key={i} />)
           : kpis.map(({ label, value, sub, icon: Icon, color, colorBg, circular, pct, onClick }) => (
             <div
               key={label}
@@ -336,65 +336,63 @@ export default function DashboardPage() {
         }
       </div>
 
-      {/* ── Main grid ──────────────────────────────────────────────────────── */}
-      <div className="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-4 min-h-0">
+      {/* ── Main grid: room grid (izq) + actividad/limpieza apiladas (der) ── */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
 
-        {/* ── Left: room grid ──────────────────────────────────────────────── */}
+        {/* ── Left: room grid (más ancho para mejor visualización) ─────────── */}
         <div
-          className="xl:col-span-5 rounded-xl shadow-sm p-4 flex flex-col min-h-0"
+          className="xl:col-span-7 rounded-xl shadow-sm p-4 flex flex-col"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
         >
-          <h3 className="text-[15px] font-bold mb-4 shrink-0" style={{ color: 'var(--text-primary)' }}>
+          <h3 className="text-[15px] font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
             Estado de Habitaciones
           </h3>
 
-          <div className="flex-1 overflow-y-auto pr-2">
-            {loadingRooms ? (
-              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 xl:grid-cols-5 gap-2.5">
-                {Array.from({ length: 15 }).map((_, i) => (
-                  <div key={i} className="aspect-[4/3] rounded-lg animate-pulse" style={{ background: 'var(--bg-input)' }} />
-                ))}
-              </div>
-            ) : rooms.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin habitaciones configuradas</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 xl:grid-cols-5 gap-2.5">
-                {rooms.map((room) => {
-                  const bg = ROOM_COLOR[room.status] ?? '#94A3B8'
-                  const StatusIcon =
-                    room.status === 'cleaning'    ? Sparkles  :
-                    room.status === 'maintenance' ? Wrench    :
-                    room.status === 'blocked'     ? XCircle   :
-                    room.status === 'reserved'    ? Calendar  :
-                    room.status === 'occupied'    ? Check     :
-                    null
+          {loadingRooms ? (
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-8 gap-2.5">
+              {Array.from({ length: 16 }).map((_, i) => (
+                <div key={i} className="aspect-[4/3] rounded-lg animate-pulse" style={{ background: 'var(--bg-input)' }} />
+              ))}
+            </div>
+          ) : rooms.length === 0 ? (
+            <div className="flex items-center justify-center py-10">
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin habitaciones configuradas</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-8 gap-2.5">
+              {rooms.map((room) => {
+                const bg = ROOM_COLOR[room.status] ?? '#94A3B8'
+                const StatusIcon =
+                  room.status === 'cleaning'    ? Sparkles  :
+                  room.status === 'maintenance' ? Wrench    :
+                  room.status === 'blocked'     ? XCircle   :
+                  room.status === 'reserved'    ? Calendar  :
+                  room.status === 'occupied'    ? Check     :
+                  null
 
-                  return (
-                    <div
-                      key={room.id}
-                      onClick={() => setSelectedRoom(room)}
-                      className="text-white rounded-lg p-1.5 aspect-[4/3] flex flex-col items-center justify-between shadow-sm transition-transform hover:scale-105 cursor-pointer"
-                      style={{ background: bg }}
-                      title={`Hab. ${room.number} — ${ROOM_LABEL[room.status]} (click para ver detalle)`}
-                    >
-                      <span className="self-end">
-                        {StatusIcon && <StatusIcon className="w-3.5 h-3.5 opacity-90" />}
-                      </span>
-                      <span className="font-bold text-sm leading-none">{room.number}</span>
-                      <span />
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+                return (
+                  <div
+                    key={room.id}
+                    onClick={() => setSelectedRoom(room)}
+                    className="text-white rounded-lg p-1.5 aspect-[4/3] flex flex-col items-center justify-between shadow-sm transition-transform hover:scale-105 cursor-pointer"
+                    style={{ background: bg }}
+                    title={`Hab. ${room.number} — ${ROOM_LABEL[room.status]} (click para ver detalle)`}
+                  >
+                    <span className="self-end">
+                      {StatusIcon && <StatusIcon className="w-3.5 h-3.5 opacity-90" />}
+                    </span>
+                    <span className="font-bold text-sm leading-none">{room.number}</span>
+                    <span />
+                  </div>
+                )
+              })}
+            </div>
+          )}
 
           {/* Leyenda */}
           <div
-            className="flex items-center justify-between mt-4 pt-3 shrink-0 text-[10px] font-bold uppercase tracking-wider"
-            style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
+            className="flex flex-wrap items-center justify-between gap-2 mt-auto pt-3 text-[10px] font-bold uppercase tracking-wider"
+            style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-muted)', marginTop: '1rem' }}
           >
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.available }}></div> Disponible</div>
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.occupied }}></div> Ocupada</div>
@@ -404,109 +402,110 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── Right column ─────────────────────────────────────────────────── */}
-        <div className="xl:col-span-7 flex flex-col gap-4 min-h-0">
+        {/* ── Right column: Actividad + En limpieza apiladas verticalmente ─── */}
+        <div className="xl:col-span-5 flex flex-col gap-4">
 
-          {/* Top row: actividad + en limpieza */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0">
-
-            {/* Actividad reciente */}
-            <div
-              className="rounded-xl p-4 flex flex-col min-h-0"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
-            >
-              <div className="flex items-center gap-2 mb-3 shrink-0">
-                <Activity size={14} style={{ color: 'var(--text-muted)' }} />
-                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Actividad reciente
-                </h3>
-              </div>
-              <div className="flex-1 overflow-y-auto space-y-1.5">
-                {(activityData?.data ?? []).slice(0, 8).map(log => (
-                  <div
-                    key={log.id}
-                    className="flex items-center justify-between py-1.5 border-b"
-                    style={{ borderColor: 'var(--border-default)' }}
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-                        {ACTION_LABELS[log.action] ?? log.action_label}
-                      </p>
-                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                        {log.user_name}
-                      </p>
-                    </div>
-                    <p className="text-[10px] ml-2 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
-                      {new Date(log.created_at).toLocaleString('es-CO', { timeStyle: 'short', dateStyle: 'short' })}
+          {/* Actividad reciente */}
+          <div
+            className="rounded-xl p-4 flex flex-col flex-1"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', minHeight: '240px' }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <Activity size={14} style={{ color: 'var(--text-muted)' }} />
+              <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                Actividad reciente
+              </h3>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-1.5">
+              {(activityData?.data ?? []).slice(0, 8).map(log => (
+                <div
+                  key={log.id}
+                  className="flex items-center justify-between py-1.5 border-b"
+                  style={{ borderColor: 'var(--border-default)' }}
+                >
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                      {ACTION_LABELS[log.action] ?? log.action_label}
+                    </p>
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      {log.user_name}
                     </p>
                   </div>
-                ))}
-                {(activityData?.data ?? []).length === 0 && (
-                  <p className="text-xs text-center py-4" style={{ color: 'var(--text-muted)' }}>
-                    Sin actividad reciente
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* En limpieza */}
-            <div
-              className="rounded-xl p-4 flex flex-col min-h-0"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
-            >
-              <div className="flex items-center gap-2 mb-4 shrink-0">
-                <Sparkles size={14} style={{ color: '#8B5CF6' }} />
-                <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                  En limpieza
-                </h3>
-              </div>
-
-              {cleaningRooms.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    Sin habitaciones en limpieza
+                  <p className="text-[10px] ml-2 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                    {new Date(log.created_at).toLocaleString('es-CO', { timeStyle: 'short', dateStyle: 'short' })}
                   </p>
                 </div>
-              ) : (
-                <div className="flex-1 overflow-y-auto space-y-2">
-                  {cleaningRooms.map((room) => {
-                    const mins    = minutesSince(room.updated_at)
-                    const overdue = mins > 60
-                    return (
-                      <div
-                        key={room.id}
-                        className="flex items-center justify-between py-2 border-b"
-                        style={{ borderColor: 'var(--border-default)' }}
-                      >
-                        <div>
-                          <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                            Hab. {room.number}
-                          </p>
-                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                            {room.room_type.name}
-                          </p>
-                        </div>
-                        <div
-                          className="flex items-center gap-1 text-xs font-semibold"
-                          style={{ color: overdue ? '#EF4444' : 'var(--text-secondary)' }}
-                        >
-                          <Clock size={11} />
-                          {formatMinutes(mins)}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+              ))}
+              {(activityData?.data ?? []).length === 0 && (
+                <p className="text-xs text-center py-4" style={{ color: 'var(--text-muted)' }}>
+                  Sin actividad reciente
+                </p>
               )}
             </div>
           </div>
 
-          {/* Bottom: alertas + suggestions + occupancy chart */}
-          <AlertsWidget />
-          <SuggestionsWidget />
-          <DashboardChart />
+          {/* En limpieza */}
+          <div
+            className="rounded-xl p-4 flex flex-col flex-1"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', minHeight: '240px' }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles size={14} style={{ color: '#8B5CF6' }} />
+              <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                En limpieza
+              </h3>
+            </div>
+
+            {cleaningRooms.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  Sin habitaciones en limpieza
+                </p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-2">
+                {cleaningRooms.map((room) => {
+                  const mins    = minutesSince(room.updated_at)
+                  const overdue = mins > 60
+                  return (
+                    <div
+                      key={room.id}
+                      className="flex items-center justify-between py-2 border-b"
+                      style={{ borderColor: 'var(--border-default)' }}
+                    >
+                      <div>
+                        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                          Hab. {room.number}
+                        </p>
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {room.room_type.name}
+                        </p>
+                      </div>
+                      <div
+                        className="flex items-center gap-1 text-xs font-semibold"
+                        style={{ color: overdue ? '#EF4444' : 'var(--text-secondary)' }}
+                      >
+                        <Clock size={11} />
+                        {formatMinutes(mins)}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
         </div>
+      </div>
+
+      {/* ── Bottom: Alertas + Sugerencias + Chart en grid auto-fit ────────── */}
+      <div
+        className="grid gap-4 items-start"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}
+      >
+        <AlertsWidget />
+        <SuggestionsWidget />
+        <DashboardChart />
       </div>
 
       {/* Check-in wizard */}
