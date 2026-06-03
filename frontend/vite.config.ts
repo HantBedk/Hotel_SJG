@@ -42,6 +42,10 @@ export default defineConfig({
         target: 'http://localhost',
         changeOrigin: true,
       },
+      '/sanctum': {
+        target: 'http://localhost',
+        changeOrigin: true,
+      },
     },
   },
 })

@@ -26,6 +26,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command(SendAdminAlertSummary::class)->hourly();
     })
     ->withMiddleware(function (Middleware $middleware) {
+        // Sanctum SPA mode: enables session-based auth on /api/* requests
+        // when the origin matches SANCTUM_STATEFUL_DOMAINS. Bearer tokens
+        // still work for non-stateful requests (cron, external clients).
+        $middleware->statefulApi();
+
         $middleware->alias([
             'auth.sanctum'       => \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'role'               => \Spatie\Permission\Middleware\RoleMiddleware::class,

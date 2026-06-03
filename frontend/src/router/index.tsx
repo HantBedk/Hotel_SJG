@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
+import { useAuthBootstrap } from '@/hooks/useAuth'
 import AppLayout from '@/components/layout/AppLayout'
 import LoginPage from '@/pages/auth/LoginPage'
 
@@ -26,6 +27,13 @@ function PageLoader() {
 
 function Lazy({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<PageLoader />}>{children}</Suspense>
+}
+
+// ── Bootstrap gate ────────────────────────────────────────────────────────────
+function BootstrapGate() {
+  const { isBootstrapping } = useAuthBootstrap()
+  if (isBootstrapping) return <PageLoader />
+  return <Outlet />
 }
 
 // ── Route guards ──────────────────────────────────────────────────────────────
@@ -55,101 +63,106 @@ function RequirePermission({
 
 export const router = createBrowserRouter([
   {
-    path: '/login',
-    element: (
-      <RequireGuest>
-        <LoginPage />
-      </RequireGuest>
-    ),
-  },
-  {
-    path: '/',
-    element: (
-      <RequireAuth>
-        <AppLayout />
-      </RequireAuth>
-    ),
+    element: <BootstrapGate />,
     children: [
       {
-        index: true,
-        element: <Lazy><DashboardPage /></Lazy>,
-      },
-      {
-        path: 'rooms',
+        path: '/login',
         element: (
-          <RequirePermission permission="view_rooms">
-            <Lazy><RoomsPage /></Lazy>
-          </RequirePermission>
+          <RequireGuest>
+            <LoginPage />
+          </RequireGuest>
         ),
       },
       {
-        path: 'guests',
+        path: '/',
         element: (
-          <RequirePermission permission="check_in">
-            <Lazy><GuestsPage /></Lazy>
-          </RequirePermission>
+          <RequireAuth>
+            <AppLayout />
+          </RequireAuth>
         ),
+        children: [
+          {
+            index: true,
+            element: <Lazy><DashboardPage /></Lazy>,
+          },
+          {
+            path: 'rooms',
+            element: (
+              <RequirePermission permission="view_rooms">
+                <Lazy><RoomsPage /></Lazy>
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'guests',
+            element: (
+              <RequirePermission permission="check_in">
+                <Lazy><GuestsPage /></Lazy>
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'companies',
+            element: (
+              <RequirePermission permission="check_in">
+                <Lazy><CompaniesPage /></Lazy>
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'stays',
+            element: (
+              <RequirePermission permission="check_in">
+                <Lazy><StaysPage /></Lazy>
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'reservations',
+            element: (
+              <RequirePermission permission="view_reservations">
+                <Lazy><ReservationsPage /></Lazy>
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'calendar',
+            element: (
+              <RequirePermission permission="view_reservations">
+                <Lazy><CalendarPage /></Lazy>
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'inventory',
+            element: (
+              <RequirePermission permission="view_inventory">
+                <Lazy><InventoryPage /></Lazy>
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'activity',
+            element: (
+              <RequirePermission permission="view_activity_log">
+                <Lazy><ActivityPage /></Lazy>
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'settings',
+            element: (
+              <RequirePermission permission="view_settings">
+                <Lazy><SettingsPage /></Lazy>
+              </RequirePermission>
+            ),
+          },
+        ],
       },
       {
-        path: 'companies',
-        element: (
-          <RequirePermission permission="check_in">
-            <Lazy><CompaniesPage /></Lazy>
-          </RequirePermission>
-        ),
-      },
-      {
-        path: 'stays',
-        element: (
-          <RequirePermission permission="check_in">
-            <Lazy><StaysPage /></Lazy>
-          </RequirePermission>
-        ),
-      },
-      {
-        path: 'reservations',
-        element: (
-          <RequirePermission permission="view_reservations">
-            <Lazy><ReservationsPage /></Lazy>
-          </RequirePermission>
-        ),
-      },
-      {
-        path: 'calendar',
-        element: (
-          <RequirePermission permission="view_reservations">
-            <Lazy><CalendarPage /></Lazy>
-          </RequirePermission>
-        ),
-      },
-      {
-        path: 'inventory',
-        element: (
-          <RequirePermission permission="view_inventory">
-            <Lazy><InventoryPage /></Lazy>
-          </RequirePermission>
-        ),
-      },
-      {
-        path: 'activity',
-        element: (
-          <RequirePermission permission="view_activity_log">
-            <Lazy><ActivityPage /></Lazy>
-          </RequirePermission>
-        ),
-      },
-      {
-        path: 'settings',
-        element: (
-          <RequirePermission permission="view_settings">
-            <Lazy><SettingsPage /></Lazy>
-          </RequirePermission>
-        ),
+        path: '*',
+        element: <Navigate to="/" replace />,
       },
     ],
-  },
-  {
-    path: '*',
-    element: <Navigate to="/" replace />,
   },
 ])

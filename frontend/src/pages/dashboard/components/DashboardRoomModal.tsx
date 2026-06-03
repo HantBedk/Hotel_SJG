@@ -2,12 +2,21 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   X, BedDouble, Sparkles, Wrench, XCircle, Check, Calendar, User,
-  CheckCircle2, LogOut, RefreshCw, AlertTriangle, Lock,
+  CheckCircle2, LogOut, RefreshCw, AlertTriangle, Lock, CreditCard,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import type { Room, RoomStatus, Stay } from '@/types'
 
 interface Housekeeper { id: string; name: string }
+
+interface AddPaymentPayload {
+  stayId: string
+  amount: number
+  payment_method: string
+  payment_type: string
+  paid_by: string
+  notes?: string
+}
 
 interface Props {
   room: Room | null
@@ -17,7 +26,24 @@ interface Props {
   onChangeStatus: (id: string, status: RoomStatus, notes?: string) => void
   onStartCheckIn: (room: Room) => void
   onStartCheckOut?: (stay: Stay) => void
+  onAddPayment?: (payload: AddPaymentPayload) => void
   onClose: () => void
+}
+
+interface PaymentForm {
+  amount: string
+  payment_method: string
+  payment_type: string
+  paid_by: string
+  notes: string
+}
+
+const EMPTY_PAYMENT: PaymentForm = {
+  amount: '',
+  payment_method: 'cash',
+  payment_type: 'partial',
+  paid_by: 'guest',
+  notes: '',
 }
 
 const STATUS_META: Record<RoomStatus, { label: string; color: string; bg: string; Icon: React.ElementType }> = {
@@ -35,11 +61,13 @@ function formatDateShort(iso: string): string {
 
 export function DashboardRoomModal({
   room, stay, housekeepers, isChangingStatus,
-  onChangeStatus, onStartCheckIn, onStartCheckOut, onClose,
+  onChangeStatus, onStartCheckIn, onStartCheckOut, onAddPayment, onClose,
 }: Props) {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
   const [housekeeperId, setHousekeeperId] = useState('')
+  const [showPayForm, setShowPayForm] = useState(false)
+  const [payForm, setPayForm] = useState<PaymentForm>(EMPTY_PAYMENT)
 
   if (!room) return null
 
@@ -47,12 +75,29 @@ export function DashboardRoomModal({
   const canCheckIn  = hasPermission('check_in')
   const canManage   = hasPermission('manage_rooms')
   const canCheckOut = hasPermission('check_out')
+  const canPay      = hasPermission('check_in')
 
   const go = (path: string) => { onClose(); navigate(path) }
 
   const totalAmount = stay ? Number(stay.total_amount ?? 0) : 0
   const paidAmount  = stay ? Number(stay.paid_amount ?? 0) : 0
   const balance     = totalAmount - paidAmount
+
+  const handleSubmitPayment = () => {
+    if (!stay || !onAddPayment) return
+    const amount = parseFloat(payForm.amount)
+    if (!amount || amount <= 0) return
+    onAddPayment({
+      stayId: stay.id,
+      amount,
+      payment_method: payForm.payment_method,
+      payment_type: payForm.payment_type,
+      paid_by: payForm.paid_by,
+      notes: payForm.notes || undefined,
+    })
+    setShowPayForm(false)
+    setPayForm(EMPTY_PAYMENT)
+  }
 
   return (
     <div
@@ -224,6 +269,23 @@ export function DashboardRoomModal({
                       icon={<User size={15} />}
                       label="Ver detalle de estadía"
                       primary
+                    />
+                  )}
+                  {stay && onAddPayment && (
+                    <ActionButton
+                      onClick={() => setShowPayForm((v) => !v)}
+                      disabled={!canPay}
+                      icon={<CreditCard size={15} />}
+                      label={showPayForm ? 'Cancelar abono' : 'Registrar abono'}
+                    />
+                  )}
+                  {stay && onAddPayment && showPayForm && (
+                    <PaymentInlineForm
+                      form={payForm}
+                      balance={balance}
+                      onChange={setPayForm}
+                      onSubmit={handleSubmitPayment}
+                      onCancel={() => { setShowPayForm(false); setPayForm(EMPTY_PAYMENT) }}
                     />
                   )}
                   {stay && (
@@ -402,5 +464,119 @@ function ActionButton({ onClick, disabled, icon, label, primary }: ActionButtonP
       {icon}
       <span className="flex-1">{label}</span>
     </button>
+  )
+}
+
+interface PaymentInlineFormProps {
+  form: PaymentForm
+  balance: number
+  onChange: (form: PaymentForm) => void
+  onSubmit: () => void
+  onCancel: () => void
+}
+
+function PaymentInlineForm({ form, balance, onChange, onSubmit, onCancel }: PaymentInlineFormProps) {
+  const amount = parseFloat(form.amount)
+  const isValid = !!amount && amount > 0
+  const exceedsBalance = isValid && balance > 0 && amount > balance
+
+  return (
+    <div
+      className="rounded-xl p-3 space-y-3 border"
+      style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+          Nuevo abono
+        </p>
+        <p className="text-[11px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
+          Saldo: <span className="font-semibold" style={{ color: balance > 0 ? '#EF4444' : '#22C55E' }}>
+            ${balance.toLocaleString('es-CO')}
+          </span>
+        </p>
+      </div>
+
+      <div>
+        <input
+          type="number"
+          min="0"
+          step="any"
+          placeholder="Monto"
+          value={form.amount}
+          onChange={(e) => onChange({ ...form, amount: e.target.value })}
+          className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+          style={{
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-default)',
+            color: 'var(--text-primary)',
+          }}
+        />
+        {exceedsBalance && (
+          <p className="text-[11px] mt-1" style={{ color: '#F59E0B' }}>
+            El monto supera el saldo pendiente.
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <select
+          value={form.payment_method}
+          onChange={(e) => onChange({ ...form, payment_method: e.target.value })}
+          className="px-2 py-2 rounded-lg text-xs border outline-none"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+        >
+          <option value="cash">Efectivo</option>
+          <option value="transfer">Transferencia</option>
+          <option value="card">Tarjeta</option>
+        </select>
+        <select
+          value={form.payment_type}
+          onChange={(e) => onChange({ ...form, payment_type: e.target.value })}
+          className="px-2 py-2 rounded-lg text-xs border outline-none"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+        >
+          <option value="deposit">Depósito</option>
+          <option value="partial">Parcial</option>
+          <option value="final">Final</option>
+        </select>
+        <select
+          value={form.paid_by}
+          onChange={(e) => onChange({ ...form, paid_by: e.target.value })}
+          className="px-2 py-2 rounded-lg text-xs border outline-none"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+        >
+          <option value="guest">Huésped</option>
+          <option value="company">Empresa</option>
+          <option value="mixed">Mixto</option>
+        </select>
+      </div>
+
+      <input
+        type="text"
+        placeholder="Observaciones (opcional)"
+        value={form.notes}
+        onChange={(e) => onChange({ ...form, notes: e.target.value })}
+        className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+      />
+
+      <div className="flex gap-2">
+        <button
+          onClick={onSubmit}
+          disabled={!isValid}
+          className="flex-1 py-2 rounded-lg text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-80"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+        >
+          Guardar abono
+        </button>
+        <button
+          onClick={onCancel}
+          className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
+          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
   )
 }

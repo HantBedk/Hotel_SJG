@@ -1,49 +1,42 @@
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
 import type { AuthUser } from '@/types'
 
 interface AuthState {
-  token: string | null
   user: AuthUser | null
   isAuthenticated: boolean
-  setAuth: (token: string, user: AuthUser) => void
+  isBootstrapping: boolean
+  setUser: (user: AuthUser) => void
   clearAuth: () => void
+  setBootstrapping: (value: boolean) => void
   hasPermission: (permission: string) => boolean
   hasRole: (role: string) => boolean
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      token: null,
-      user: null,
-      isAuthenticated: false,
+// Sanctum SPA mode: the auth session lives in an httpOnly cookie set by the
+// backend. This store only keeps the hydrated user identity in memory — no
+// token, no localStorage. On full reload, AuthBootstrap re-fetches /me using
+// the cookie to repopulate the store.
+export const useAuthStore = create<AuthState>((set, get) => ({
+  user: null,
+  isAuthenticated: false,
+  isBootstrapping: true,
 
-      setAuth: (token, user) => set({ token, user, isAuthenticated: true }),
+  setUser: (user) => set({ user, isAuthenticated: true }),
 
-      clearAuth: () => set({ token: null, user: null, isAuthenticated: false }),
+  clearAuth: () => set({ user: null, isAuthenticated: false }),
 
-      hasPermission: (permission) => {
-        const { user } = get()
-        if (!user) return false
-        if (user.roles.includes('superadmin')) return true
-        return user.permissions.includes(permission)
-      },
+  setBootstrapping: (value) => set({ isBootstrapping: value }),
 
-      hasRole: (role) => {
-        const { user } = get()
-        if (!user) return false
-        return user.roles.includes(role)
-      },
-    }),
-    {
-      name: 'hotel-sjg-auth',
-      storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({
-        token: state.token,
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-      }),
-    },
-  ),
-)
+  hasPermission: (permission) => {
+    const { user } = get()
+    if (!user) return false
+    if (user.roles.includes('superadmin')) return true
+    return user.permissions.includes(permission)
+  },
+
+  hasRole: (role) => {
+    const { user } = get()
+    if (!user) return false
+    return user.roles.includes(role)
+  },
+}))

@@ -31,11 +31,11 @@ export function DashboardChart() {
 
   return (
     <div
-      className="rounded-xl p-4 shrink-0"
-      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', height: '190px', display: 'flex', flexDirection: 'column' }}
+      className="rounded-xl p-3 flex flex-col flex-1 min-h-0"
+      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', minHeight: '140px' }}
     >
       <div className="flex items-center justify-between mb-2 shrink-0">
-        <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+        <h3 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
           Ocupación {period === 'semanal' ? 'Semanal' : 'Mensual'}
         </h3>
         <div

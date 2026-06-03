@@ -9,7 +9,7 @@ use App\Models\User;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
@@ -17,9 +17,9 @@ class AuthController extends Controller
 
     public function login(LoginRequest $request): JsonResponse
     {
-        $user = User::where('email', $request->email)->first();
+        $credentials = $request->only('email', 'password');
 
-        if (! $user || ! Hash::check($request->password, $user->password)) {
+        if (! Auth::guard('web')->attempt($credentials)) {
             ActivityLog::record('login_failed', null, [
                 'email' => $request->email,
                 'ip'    => $request->ip(),
@@ -28,22 +28,20 @@ class AuthController extends Controller
             return $this->error('Credenciales incorrectas.', [], 401);
         }
 
+        /** @var User $user */
+        $user = Auth::guard('web')->user();
+
         if (! $user->is_active) {
+            Auth::guard('web')->logout();
             return $this->error('Usuario inactivo. Contacta al administrador.', [], 403);
         }
 
-        // Revoke previous tokens for this user (single-session policy)
-        $user->tokens()->delete();
-
-        $token = $user->createToken('hotel-session', ['*'], now()->addMinutes(
-            (int) config('sanctum.expiration', 480)
-        ))->plainTextToken;
+        $request->session()->regenerate();
 
         ActivityLog::record('login', $user->id, ['ip' => $request->ip()]);
 
         return $this->success([
-            'token' => $token,
-            'user'  => [
+            'user' => [
                 'id'          => $user->id,
                 'name'        => $user->name,
                 'email'       => $user->email,
@@ -55,10 +53,15 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
-        $userId = $request->user()->id;
-        $request->user()->currentAccessToken()->delete();
+        $userId = $request->user()?->id;
 
-        ActivityLog::record('logout', $userId, ['ip' => $request->ip()]);
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        if ($userId) {
+            ActivityLog::record('logout', $userId, ['ip' => $request->ip()]);
+        }
 
         return $this->success(null, 'Sesión cerrada.');
     }

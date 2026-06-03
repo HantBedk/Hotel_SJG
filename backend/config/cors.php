@@ -1,12 +1,14 @@
 <?php
 
 return [
-    'paths'                    => ['api/*'],
+    'paths'                    => ['api/*', 'sanctum/csrf-cookie', 'broadcasting/auth'],
     'allowed_methods'          => ['*'],
-    'allowed_origins'          => ['*'],
+    'allowed_origins'          => array_filter(
+        explode(',', env('FRONTEND_ORIGINS', 'http://localhost:3007,http://localhost,http://127.0.0.1'))
+    ),
     'allowed_origins_patterns' => [],
     'allowed_headers'          => ['*'],
     'exposed_headers'          => [],
     'max_age'                  => 0,
-    'supports_credentials'     => false,
+    'supports_credentials'     => true,
 ];

@@ -31,50 +31,58 @@ function AlertsWidget() {
     .filter((n) => /inventory|stock|expir|maintenance|asset|repair/i.test(n.type))
     .slice(0, 5)
 
-  if (recent.length === 0) return null
-
   return (
     <div
-      className="rounded-xl p-4"
+      className="rounded-xl p-3 flex flex-col flex-1 min-h-0"
       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
     >
-      <div className="flex items-center gap-2 mb-3">
-        <AlertTriangle size={14} style={{ color: '#F59E0B' }} />
-        <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+      <div className="flex items-center gap-2 mb-2 shrink-0">
+        <AlertTriangle size={13} style={{ color: '#F59E0B' }} />
+        <h3 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
           Alertas activas
         </h3>
-        <span
-          className="ml-auto text-xs px-1.5 py-0.5 rounded-full font-medium"
-          style={{ background: '#FEE2E2', color: '#991B1B' }}
-        >
-          {unreadCount}
-        </span>
-      </div>
-      <div className="space-y-2">
-        {recent.map((n) => (
-          <div
-            key={n.id}
-            className="flex items-start gap-3 p-3 rounded-lg"
-            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
+        {recent.length > 0 && (
+          <span
+            className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+            style={{ background: '#FEE2E2', color: '#991B1B' }}
           >
-            <div className="flex-shrink-0 mt-0.5">
-              <Bell size={13} style={{ color: '#F59E0B' }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{n.title}</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{n.message}</p>
-            </div>
-            <button
-              onClick={() => markRead(n.id)}
-              title="Marcar leída"
-              className="flex-shrink-0 p-1 rounded hover:opacity-70"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              <X size={13} />
-            </button>
-          </div>
-        ))}
+            {unreadCount}
+          </span>
+        )}
       </div>
+      {recent.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Sin alertas activas
+          </p>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
+          {recent.map((n) => (
+            <div
+              key={n.id}
+              className="flex items-start gap-2 p-2 rounded-lg"
+              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
+            >
+              <div className="flex-shrink-0 mt-0.5">
+                <Bell size={11} style={{ color: '#F59E0B' }} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{n.title}</p>
+                <p className="text-[10px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{n.message}</p>
+              </div>
+              <button
+                onClick={() => markRead(n.id)}
+                title="Marcar leída"
+                className="flex-shrink-0 p-0.5 rounded hover:opacity-70"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <X size={11} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -85,56 +93,65 @@ function SuggestionsWidget() {
   const { mutate: dismiss, isPending }   = useDismissSuggestion()
 
   if (!hasPermission('manage_settings') && !hasPermission('view_dashboard')) return null
-  if (suggestions.length === 0) return null
 
   return (
     <div
-      className="rounded-xl p-4"
+      className="rounded-xl p-3 flex flex-col flex-1 min-h-0"
       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
     >
-      <div className="flex items-center gap-2 mb-3">
-        <Sparkles size={14} style={{ color: '#F59E0B' }} />
-        <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+      <div className="flex items-center gap-2 mb-2 shrink-0">
+        <Sparkles size={13} style={{ color: '#F59E0B' }} />
+        <h3 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
           Sugerencias del día
         </h3>
-        <span
-          className="ml-auto text-xs px-1.5 py-0.5 rounded-full font-medium"
-          style={{ background: '#FEF3C7', color: '#92400E' }}
-        >
-          {suggestions.length}
-        </span>
+        {suggestions.length > 0 && (
+          <span
+            className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+            style={{ background: '#FEF3C7', color: '#92400E' }}
+          >
+            {suggestions.length}
+          </span>
+        )}
       </div>
-      <div className="space-y-2">
-        {suggestions.map((s: Suggestion) => {
-          const Icon = SUGGESTION_ICONS[s.type] ?? Sparkles
-          const score = Math.round(parseFloat(s.confidence_score) * 100)
-          return (
-            <div
-              key={s.id}
-              className="flex items-start gap-3 p-3 rounded-lg"
-              style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-default)' }}
-            >
-              <div className="flex-shrink-0 mt-0.5">
-                <Icon size={14} style={{ color: '#F59E0B' }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{s.title}</p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{s.description}</p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Confianza: {score}%</p>
-              </div>
-              <button
-                onClick={() => dismiss(s.id)}
-                disabled={isPending}
-                title="Descartar sugerencia"
-                className="flex-shrink-0 p-1 rounded hover:bg-red-50"
-                style={{ color: 'var(--text-muted)' }}
+      {suggestions.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Sin sugerencias activas
+          </p>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
+          {suggestions.map((s: Suggestion) => {
+            const Icon = SUGGESTION_ICONS[s.type] ?? Sparkles
+            const score = Math.round(parseFloat(s.confidence_score) * 100)
+            return (
+              <div
+                key={s.id}
+                className="flex items-start gap-2 p-2 rounded-lg"
+                style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-default)' }}
               >
-                <X size={13} />
-              </button>
-            </div>
-          )
-        })}
-      </div>
+                <div className="flex-shrink-0 mt-0.5">
+                  <Icon size={12} style={{ color: '#F59E0B' }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{s.title}</p>
+                  <p className="text-[10px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{s.description}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Confianza: {score}%</p>
+                </div>
+                <button
+                  onClick={() => dismiss(s.id)}
+                  disabled={isPending}
+                  title="Descartar sugerencia"
+                  className="flex-shrink-0 p-0.5 rounded hover:bg-red-50"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -187,7 +204,7 @@ export default function DashboardPage() {
   const [showBalance, setShowBalance] = useState(false)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
 
-  const { stays: activeStays } = useStays({ status: 'active' })
+  const { stays: activeStays, addPayment } = useStays({ status: 'active' })
 
   const stayForSelectedRoom = selectedRoom
     ? (activeStays as Stay[]).find((s) =>
@@ -281,34 +298,34 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 animate-in fade-in duration-300">
+    <div className="flex flex-col h-full min-h-0 gap-3 animate-in fade-in duration-300">
 
-      {/* ── KPI cards ──────────────────────────────────────────────────────── */}
-      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${kpis.length === 6 ? 'xl:grid-cols-6' : 'xl:grid-cols-5'} gap-4`}>
+      {/* ── KPI cards (fila fija arriba) ──────────────────────────────────── */}
+      <div className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 ${kpis.length === 6 ? 'xl:grid-cols-6' : 'xl:grid-cols-5'} gap-3 shrink-0`}>
         {isLoading
           ? Array.from({ length: kpis.length }).map((_, i) => <SkeletonCard key={i} />)
           : kpis.map(({ label, value, sub, icon: Icon, color, colorBg, circular, pct, onClick }) => (
             <div
               key={label}
-              className={`rounded-xl p-4 flex flex-col justify-between${onClick ? ' cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
+              className={`rounded-xl p-3 flex flex-col justify-between${onClick ? ' cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
               style={{
                 background:  'var(--bg-surface)',
                 border:      '1px solid var(--border-default)',
                 boxShadow:   'var(--shadow-sm)',
-                minHeight:   '96px',
+                minHeight:   '84px',
               }}
               onClick={onClick}
             >
-              <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{label}</p>
-              <div className="flex items-end justify-between mt-2">
+              <p className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>{label}</p>
+              <div className="flex items-end justify-between mt-1.5">
                 <div>
-                  <p className="text-3xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                  <p className="text-2xl font-bold tracking-tight leading-tight" style={{ color: 'var(--text-primary)' }}>
                     {value}
                   </p>
-                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{sub}</p>
                 </div>
                 {circular ? (
-                  <div className="relative w-11 h-11 shrink-0">
+                  <div className="relative w-10 h-10 shrink-0">
                     <svg viewBox="0 0 36 36" className="w-full h-full">
                       <path
                         strokeWidth="4" stroke="var(--border-default)" fill="none"
@@ -320,14 +337,14 @@ export default function DashboardPage() {
                         d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                       />
                     </svg>
-                    <Icon size={14} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ color }} />
+                    <Icon size={13} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ color }} />
                   </div>
                 ) : (
                   <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                    className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
                     style={{ background: colorBg }}
                   >
-                    <Icon size={20} style={{ color }} />
+                    <Icon size={18} style={{ color }} />
                   </div>
                 )}
               </div>
@@ -336,63 +353,65 @@ export default function DashboardPage() {
         }
       </div>
 
-      {/* ── Main grid: room grid (izq) + actividad/limpieza apiladas (der) ── */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+      {/* ── Main grid: 3 columnas a altura completa, sin scroll de página ── */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3">
 
-        {/* ── Left: room grid (más ancho para mejor visualización) ─────────── */}
+        {/* ── Col A (col-span-6): Habitaciones, scroll interno ─────────────── */}
         <div
-          className="xl:col-span-7 rounded-xl shadow-sm p-4 flex flex-col"
+          className="lg:col-span-6 rounded-xl shadow-sm p-3 flex flex-col min-h-0"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
         >
-          <h3 className="text-[15px] font-bold mb-4" style={{ color: 'var(--text-primary)' }}>
+          <h3 className="text-sm font-bold mb-2 shrink-0" style={{ color: 'var(--text-primary)' }}>
             Estado de Habitaciones
           </h3>
 
-          {loadingRooms ? (
-            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-8 gap-2.5">
-              {Array.from({ length: 16 }).map((_, i) => (
-                <div key={i} className="aspect-[4/3] rounded-lg animate-pulse" style={{ background: 'var(--bg-input)' }} />
-              ))}
-            </div>
-          ) : rooms.length === 0 ? (
-            <div className="flex items-center justify-center py-10">
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin habitaciones configuradas</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-8 gap-2.5">
-              {rooms.map((room) => {
-                const bg = ROOM_COLOR[room.status] ?? '#94A3B8'
-                const StatusIcon =
-                  room.status === 'cleaning'    ? Sparkles  :
-                  room.status === 'maintenance' ? Wrench    :
-                  room.status === 'blocked'     ? XCircle   :
-                  room.status === 'reserved'    ? Calendar  :
-                  room.status === 'occupied'    ? Check     :
-                  null
+          <div className="flex-1 overflow-y-auto min-h-0 pr-1">
+            {loadingRooms ? (
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
+                {Array.from({ length: 16 }).map((_, i) => (
+                  <div key={i} className="aspect-[4/3] rounded-lg animate-pulse" style={{ background: 'var(--bg-input)' }} />
+                ))}
+              </div>
+            ) : rooms.length === 0 ? (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin habitaciones configuradas</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
+                {rooms.map((room) => {
+                  const bg = ROOM_COLOR[room.status] ?? '#94A3B8'
+                  const StatusIcon =
+                    room.status === 'cleaning'    ? Sparkles  :
+                    room.status === 'maintenance' ? Wrench    :
+                    room.status === 'blocked'     ? XCircle   :
+                    room.status === 'reserved'    ? Calendar  :
+                    room.status === 'occupied'    ? Check     :
+                    null
 
-                return (
-                  <div
-                    key={room.id}
-                    onClick={() => setSelectedRoom(room)}
-                    className="text-white rounded-lg p-1.5 aspect-[4/3] flex flex-col items-center justify-between shadow-sm transition-transform hover:scale-105 cursor-pointer"
-                    style={{ background: bg }}
-                    title={`Hab. ${room.number} — ${ROOM_LABEL[room.status]} (click para ver detalle)`}
-                  >
-                    <span className="self-end">
-                      {StatusIcon && <StatusIcon className="w-3.5 h-3.5 opacity-90" />}
-                    </span>
-                    <span className="font-bold text-sm leading-none">{room.number}</span>
-                    <span />
-                  </div>
-                )
-              })}
-            </div>
-          )}
+                  return (
+                    <div
+                      key={room.id}
+                      onClick={() => setSelectedRoom(room)}
+                      className="text-white rounded-lg p-1.5 aspect-[4/3] flex flex-col items-center justify-between shadow-sm transition-transform hover:scale-105 cursor-pointer"
+                      style={{ background: bg }}
+                      title={`Hab. ${room.number} — ${ROOM_LABEL[room.status]} (click para ver detalle)`}
+                    >
+                      <span className="self-end">
+                        {StatusIcon && <StatusIcon className="w-3.5 h-3.5 opacity-90" />}
+                      </span>
+                      <span className="font-bold text-sm leading-none">{room.number}</span>
+                      <span />
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Leyenda */}
           <div
-            className="flex flex-wrap items-center justify-between gap-2 mt-auto pt-3 text-[10px] font-bold uppercase tracking-wider"
-            style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-muted)', marginTop: '1rem' }}
+            className="flex flex-wrap items-center justify-between gap-2 mt-2 pt-2 shrink-0 text-[10px] font-bold uppercase tracking-wider"
+            style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
           >
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.available }}></div> Disponible</div>
             <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.occupied }}></div> Ocupada</div>
@@ -402,42 +421,42 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ── Right column: Actividad + En limpieza apiladas verticalmente ─── */}
-        <div className="xl:col-span-5 flex flex-col gap-4">
+        {/* ── Col B (col-span-3): Actividad + En limpieza ──────────────────── */}
+        <div className="lg:col-span-3 flex flex-col gap-3 min-h-0">
 
           {/* Actividad reciente */}
           <div
-            className="rounded-xl p-4 flex flex-col flex-1"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', minHeight: '240px' }}
+            className="rounded-xl p-3 flex flex-col flex-1 min-h-0"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
           >
-            <div className="flex items-center gap-2 mb-3">
-              <Activity size={14} style={{ color: 'var(--text-muted)' }} />
-              <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+            <div className="flex items-center gap-2 mb-2 shrink-0">
+              <Activity size={13} style={{ color: 'var(--text-muted)' }} />
+              <h3 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
                 Actividad reciente
               </h3>
             </div>
-            <div className="flex-1 overflow-y-auto space-y-1.5">
-              {(activityData?.data ?? []).slice(0, 8).map(log => (
+            <div className="flex-1 overflow-y-auto space-y-1 min-h-0 pr-1">
+              {(activityData?.data ?? []).slice(0, 12).map(log => (
                 <div
                   key={log.id}
-                  className="flex items-center justify-between py-1.5 border-b"
+                  className="flex items-center justify-between py-1 border-b"
                   style={{ borderColor: 'var(--border-default)' }}
                 >
                   <div className="min-w-0">
-                    <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+                    <p className="text-[11px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>
                       {ACTION_LABELS[log.action] ?? log.action_label}
                     </p>
-                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
                       {log.user_name}
                     </p>
                   </div>
-                  <p className="text-[10px] ml-2 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
+                  <p className="text-[9px] ml-2 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
                     {new Date(log.created_at).toLocaleString('es-CO', { timeStyle: 'short', dateStyle: 'short' })}
                   </p>
                 </div>
               ))}
               {(activityData?.data ?? []).length === 0 && (
-                <p className="text-xs text-center py-4" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-[11px] text-center py-4" style={{ color: 'var(--text-muted)' }}>
                   Sin actividad reciente
                 </p>
               )}
@@ -446,43 +465,43 @@ export default function DashboardPage() {
 
           {/* En limpieza */}
           <div
-            className="rounded-xl p-4 flex flex-col flex-1"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', minHeight: '240px' }}
+            className="rounded-xl p-3 flex flex-col flex-1 min-h-0"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
           >
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles size={14} style={{ color: '#8B5CF6' }} />
-              <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+            <div className="flex items-center gap-2 mb-2 shrink-0">
+              <Sparkles size={13} style={{ color: '#8B5CF6' }} />
+              <h3 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
                 En limpieza
               </h3>
             </div>
 
             {cleaningRooms.length === 0 ? (
               <div className="flex-1 flex items-center justify-center">
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
                   Sin habitaciones en limpieza
                 </p>
               </div>
             ) : (
-              <div className="flex-1 overflow-y-auto space-y-2">
+              <div className="flex-1 overflow-y-auto space-y-1 min-h-0 pr-1">
                 {cleaningRooms.map((room) => {
                   const mins    = minutesSince(room.updated_at)
                   const overdue = mins > 60
                   return (
                     <div
                       key={room.id}
-                      className="flex items-center justify-between py-2 border-b"
+                      className="flex items-center justify-between py-1.5 border-b"
                       style={{ borderColor: 'var(--border-default)' }}
                     >
                       <div>
-                        <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                        <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
                           Hab. {room.number}
                         </p>
-                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
                           {room.room_type.name}
                         </p>
                       </div>
                       <div
-                        className="flex items-center gap-1 text-xs font-semibold"
+                        className="flex items-center gap-1 text-[11px] font-semibold"
                         style={{ color: overdue ? '#EF4444' : 'var(--text-secondary)' }}
                       >
                         <Clock size={11} />
@@ -496,16 +515,14 @@ export default function DashboardPage() {
           </div>
 
         </div>
-      </div>
 
-      {/* ── Bottom: Alertas + Sugerencias + Chart en grid auto-fit ────────── */}
-      <div
-        className="grid gap-4 items-start"
-        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}
-      >
-        <AlertsWidget />
-        <SuggestionsWidget />
-        <DashboardChart />
+        {/* ── Col C (col-span-3): Alertas + Sugerencias + Gráfico ──────────── */}
+        <div className="lg:col-span-3 flex flex-col gap-3 min-h-0">
+          <AlertsWidget />
+          <SuggestionsWidget />
+          <DashboardChart />
+        </div>
+
       </div>
 
       {/* Check-in wizard */}
@@ -725,6 +742,7 @@ export default function DashboardPage() {
         onChangeStatus={handleRoomStatusChange}
         onStartCheckIn={(room) => setCheckingIn([room])}
         onStartCheckOut={(stay) => setCheckoutStay(stay)}
+        onAddPayment={addPayment}
         onClose={() => setSelectedRoom(null)}
       />
 

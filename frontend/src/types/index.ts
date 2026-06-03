@@ -23,7 +23,6 @@ export interface LoginPayload {
 }
 
 export interface LoginResponse {
-  token: string
   user: AuthUser
 }
 
