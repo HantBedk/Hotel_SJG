@@ -6,7 +6,14 @@
   --bg-base:       #F8FAFC;
   --bg-surface:    #FFFFFF;
   --bg-elevated:   #F1F5F9;
+  --bg-input:      #F1F5F9;
+  --bg-muted:      #F1F5F9;
   --bg-overlay:    rgba(15, 23, 42, 0.5);
+
+  /* Soft status tints (background tints) */
+  --status-available-soft: #ECFDF5;
+  --status-occupied-soft:  #FEF2F2;
+  --status-warning-soft:   #FFFBEB;
 
   /* Primario — Azul marino */
   --color-primary:         #1E40AF;
@@ -76,7 +83,14 @@
   --bg-base:       #0B1120;
   --bg-surface:    #0F172A;
   --bg-elevated:   #1E293B;
+  --bg-input:      #1E293B;
+  --bg-muted:      #1E293B;
   --bg-overlay:    rgba(0, 0, 0, 0.7);
+
+  /* Soft status tints — translucent so text-primary (light) stays legible */
+  --status-available-soft: rgba(16, 185, 129, 0.16);
+  --status-occupied-soft:  rgba(248, 113, 113, 0.16);
+  --status-warning-soft:   rgba(251, 191, 36, 0.16);
 
   --color-primary:        #3B82F6;
   --color-primary-hover:  #2563EB;

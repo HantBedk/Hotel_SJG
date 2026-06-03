@@ -13,36 +13,36 @@ export interface ReservationFilters {
 }
 
 export const getReservationsApi = async (filters: ReservationFilters = {}): Promise<{ data: Reservation[]; meta: unknown }> => {
-  const res = await api.get('/v1/reservations', { params: filters })
+  const res = await api.get('/reservations', { params: filters })
   return res.data.data
 }
 
 export const getReservationApi = async (id: string): Promise<Reservation> => {
-  const res = await api.get(`/v1/reservations/${id}`)
+  const res = await api.get(`/reservations/${id}`)
   return res.data.data
 }
 
 export const createReservationApi = async (payload: ReservationPayload): Promise<Reservation> => {
-  const res = await api.post('/v1/reservations', payload)
+  const res = await api.post('/reservations', payload)
   return res.data.data
 }
 
 export const updateReservationApi = async (id: string, payload: Partial<ReservationPayload> & { status?: string }): Promise<Reservation> => {
-  const res = await api.put(`/v1/reservations/${id}`, payload)
+  const res = await api.put(`/reservations/${id}`, payload)
   return res.data.data
 }
 
 export const deleteReservationApi = async (id: string): Promise<void> => {
-  await api.delete(`/v1/reservations/${id}`)
+  await api.delete(`/reservations/${id}`)
 }
 
 export const cancelReservationApi = async (id: string, notes?: string): Promise<Reservation> => {
-  const res = await api.patch(`/v1/reservations/${id}/cancel`, { notes })
+  const res = await api.patch(`/reservations/${id}/cancel`, { notes })
   return res.data.data
 }
 
 export const extendReservationApi = async (id: string, payload: { end_date: string; agreed_price?: number }): Promise<Reservation> => {
-  const res = await api.patch(`/v1/reservations/${id}/extend`, payload)
+  const res = await api.patch(`/reservations/${id}/extend`, payload)
   return res.data.data
 }
 
@@ -56,7 +56,7 @@ export const checkInFromReservationApi = async (
     notes?: string
   }
 ): Promise<Stay> => {
-  const res = await api.post(`/v1/reservations/${id}/check-in`, payload)
+  const res = await api.post(`/reservations/${id}/check-in`, payload)
   return res.data.data
 }
 
@@ -64,6 +64,6 @@ export const addReservationPaymentApi = async (
   id: string,
   payload: { amount: number; payment_method: string; payment_type: string; payment_date?: string; notes?: string }
 ): Promise<ReservationPayment> => {
-  const res = await api.post(`/v1/reservations/${id}/payments`, payload)
+  const res = await api.post(`/reservations/${id}/payments`, payload)
   return res.data.data
 }

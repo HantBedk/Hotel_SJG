@@ -60,6 +60,8 @@ Route::prefix('v1')->group(function () {
         // Habitaciones
         Route::get('/room-types', [RoomController::class, 'types'])
              ->middleware('permission:view_rooms');
+        Route::get('/housekeepers', [RoomController::class, 'housekeepers'])
+             ->middleware('permission:view_rooms');
         Route::get('/rooms', [RoomController::class, 'index'])
              ->middleware('permission:view_rooms');
         Route::post('/rooms', [RoomController::class, 'store'])
@@ -117,6 +119,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/stays/{stay}/account',     [StayController::class, 'account'])
              ->middleware('permission:check_out|check_in|manage_reservations');
         Route::get('/stays/{stay}/receipt',     [StayController::class, 'receipt'])
+             ->middleware('permission:check_out|check_in|manage_reservations');
+        Route::get('/stays/{stay}/checkin-receipt', [StayController::class, 'checkInReceipt'])
              ->middleware('permission:check_out|check_in|manage_reservations');
         Route::post('/stays/{stay}/extend',     [StayController::class, 'extend'])
              ->middleware('permission:check_out|check_in');

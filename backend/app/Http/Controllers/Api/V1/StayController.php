@@ -466,6 +466,26 @@ class StayController extends Controller
         return $pdf->stream("comprobante-{$compNumber}.pdf");
     }
 
+    public function checkInReceipt(Stay $stay): mixed
+    {
+        $stay->load([
+            'guest', 'company',
+            'stayRooms.room.roomType',
+            'stayGuests.guest',
+        ]);
+
+        $hotel      = Hotel::first();
+        $hotelName  = $hotel?->name  ?? Setting::get('hotel_name', 'Hotel');
+        $hotelPhone = $hotel?->phone ?? Setting::get('hotel_phone', '');
+        $hotelAddr  = $hotel?->address ?? Setting::get('hotel_address', '');
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.checkin', compact(
+            'stay', 'hotelName', 'hotelPhone', 'hotelAddr'
+        ));
+
+        return $pdf->stream("checkin-{$stay->id}.pdf");
+    }
+
     public function transfer(Request $request, Stay $stay): JsonResponse
     {
         abort_if($stay->status !== 'active', 409, 'Solo se puede transferir una estadía activa.');

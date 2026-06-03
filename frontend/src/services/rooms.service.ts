@@ -49,3 +49,10 @@ export async function getRoomTypesApi(): Promise<RoomType[]> {
   const { data } = await api.get<ApiResponse<RoomType[]>>('/room-types')
   return data.data
 }
+
+export interface Housekeeper { id: string; name: string }
+
+export async function getHousekeepersApi(): Promise<Housekeeper[]> {
+  const { data } = await api.get<ApiResponse<Housekeeper[]>>('/housekeepers')
+  return data.data
+}

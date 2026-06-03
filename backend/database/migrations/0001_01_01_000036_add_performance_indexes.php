@@ -10,8 +10,8 @@ return new class extends Migration
     public function up(): void
     {
         // stays: búsquedas por estado + fechas (check-in list, dashboard)
-        DB::statement('CREATE INDEX IF NOT EXISTS idx_stays_status_checkin ON stays (status, check_in_date DESC)');
-        DB::statement('CREATE INDEX IF NOT EXISTS idx_stays_checkout_date ON stays (check_out_date) WHERE deleted_at IS NULL');
+        DB::statement('CREATE INDEX IF NOT EXISTS idx_stays_status_checkin ON stays (status, check_in_datetime DESC)');
+        DB::statement('CREATE INDEX IF NOT EXISTS idx_stays_checkout_date ON stays (check_out_datetime)');
 
         // payments: historial de pagos por fecha
         DB::statement('CREATE INDEX IF NOT EXISTS idx_payments_created ON payments (created_at DESC)');
@@ -26,7 +26,7 @@ return new class extends Migration
         DB::statement('CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON activity_logs (user_id, created_at DESC)');
 
         // rooms: filtro por status (grid de habitaciones)
-        DB::statement('CREATE INDEX IF NOT EXISTS idx_rooms_status ON rooms (status) WHERE deleted_at IS NULL');
+        DB::statement('CREATE INDEX IF NOT EXISTS idx_rooms_status ON rooms (status)');
 
         // inventory_items: stock bajo + vencimiento
         DB::statement('CREATE INDEX IF NOT EXISTS idx_inventory_low_stock ON inventory_items (current_stock, min_stock_threshold)');

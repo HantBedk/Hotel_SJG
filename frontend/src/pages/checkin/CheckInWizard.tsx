@@ -6,10 +6,11 @@ import {
 import { useGuestSearch } from '@/hooks/useGuests'
 import { useCompanySearch } from '@/hooks/useCompanies'
 import { useStays } from '@/hooks/useStays'
-import { createGuestApi, updateGuestApi, findGuestByDocumentApi } from '@/services/guests.service'
+import { createGuestApi, updateGuestApi, findGuestByDocumentApi, addCompanionApi } from '@/services/guests.service'
 import { createCompanyApi } from '@/services/companies.service'
 import type { Room, Guest, Company, GuestCompanion } from '@/types'
 import { cn } from '@/lib/cn'
+import { extractApiError } from '@/lib/apiError'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -119,9 +120,16 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
   })
 
   const guestInputRef = useRef<HTMLInputElement>(null)
+  const docSearchTimeouts = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   const { data: guestResults = [] } = useGuestSearch(state.guestSearch)
   const { data: companyResults = [] } = useCompanySearch(state.companySearch)
   const { checkIn, isCheckingIn } = useStays()
+  const [isSaving, setIsSaving] = useState(false)
+
+  // ── Error helper ───────────────────────────────────────────────────────────
+  const showApiError = (err: unknown, fallback: string) => {
+    toast.error(extractApiError(err, fallback))
+  }
 
   const steps     = buildSteps(state)
   const currentIdx = steps.indexOf(currentStep)
@@ -149,15 +157,94 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
-  const navigateNext = () => {
-    if (currentStep === 'occupancy') syncAdditionalForms(state.adults, state.children)
-    const next = steps[currentIdx + 1]
-    if (next) setCurrentStep(next)
+  const navigateNext = async () => {
+    if (isSaving) return
+
+    setIsSaving(true)
+    try {
+      // Persist data when leaving boundary steps
+      if (currentStep === 'occupancy') {
+        syncAdditionalForms(state.adults, state.children)
+      }
+
+      if (currentStep === 'main-guest') {
+        const companionsToSave = state.companions.filter((c) => c.name?.trim())
+
+        if (state.isNewGuest) {
+          const created = await createGuestApi({
+            ...state.newGuest,
+            companions: companionsToSave,
+          })
+          setState((s) => ({ ...s, guest: created, isNewGuest: false, companions: [] }))
+          toast.success('Huésped guardado.')
+        } else if (state.guest && companionsToSave.length > 0) {
+          for (const c of companionsToSave) {
+            await addCompanionApi(state.guest.id, c)
+          }
+          setState((s) => ({ ...s, companions: [] }))
+          toast.success('Acompañantes guardados.')
+        }
+      }
+
+      if (
+        currentStep === 'company'
+        && state.withCompany
+        && state.isNewCompany
+        && state.newCompany.name.trim()
+      ) {
+        const created = await createCompanyApi(state.newCompany as Parameters<typeof createCompanyApi>[0])
+        setState((s) => ({ ...s, company: created, isNewCompany: false }))
+        toast.success('Empresa guardada.')
+      }
+
+      const next = steps[currentIdx + 1]
+      if (next) setCurrentStep(next)
+    } catch (err) {
+      showApiError(err, 'Error al guardar.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const navigatePrev = () => {
     const prev = steps[currentIdx - 1]
     if (prev) setCurrentStep(prev)
+  }
+
+  // Persist a new additional guest (called from "Guardar huésped" button)
+  const persistExtraGuest = async (idx: number) => {
+    const ag = state.additionalGuests[idx]
+    if (!ag) return
+    if (!ag.newGuest.full_name.trim() || !ag.newGuest.document_number.trim()) return
+
+    setIsSaving(true)
+    try {
+      const created = await createGuestApi(ag.newGuest)
+      setExtra(idx, { found: created, notFound: false, registered: true })
+      toast.success('Huésped guardado.')
+    } catch (err) {
+      showApiError(err, 'Error al guardar huésped.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // Confirm an existing additional guest (persist edits if any)
+  const confirmExtraGuest = async (idx: number) => {
+    const ag = state.additionalGuests[idx]
+    if (!ag?.found) return
+    setIsSaving(true)
+    try {
+      if (ag.isEditing) {
+        await updateGuestApi(ag.found.id, ag.editData)
+        toast.success('Datos actualizados.')
+      }
+      setExtra(idx, { registered: true, isEditing: false })
+    } catch (err) {
+      showApiError(err, 'Error al actualizar huésped.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // ── Validators ─────────────────────────────────────────────────────────────
@@ -220,23 +307,38 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
     }
   }
 
+  const handleDocInputChange = (idx: number, value: string) => {
+    setExtra(idx, { documentInput: value, found: null, notFound: false })
+    const prev = docSearchTimeouts.current[idx]
+    if (prev) clearTimeout(prev)
+    const trimmed = value.trim()
+    if (trimmed.length < 3) return
+    docSearchTimeouts.current[idx] = setTimeout(() => {
+      searchByDoc(idx, trimmed)
+    }, 400)
+  }
+
   // ── Submit ─────────────────────────────────────────────────────────────────
 
   const handleConfirm = async () => {
     try {
+      // Safety net: if any persistence was skipped (e.g. user clicked Confirm
+      // without going through Next), create now.
       let guestId = state.guest?.id
+      const companionsToSave = state.companions.filter((c) => c.name?.trim())
+
       if (state.isNewGuest) {
-        const created = await createGuestApi({
-          ...state.newGuest,
-          companions: state.companions.filter((c) => c.name?.trim()),
-        })
+        const created = await createGuestApi({ ...state.newGuest, companions: companionsToSave })
         guestId = created.id
+      } else if (guestId && companionsToSave.length > 0) {
+        for (const c of companionsToSave) {
+          await addCompanionApi(guestId, c)
+        }
       }
 
       const additionalGuestIds: string[] = []
       for (const ag of state.additionalGuests) {
         if (ag.found) {
-          if (ag.isEditing) await updateGuestApi(ag.found.id, ag.editData)
           additionalGuestIds.push(ag.found.id)
         } else if (ag.notFound) {
           const created = await createGuestApi(ag.newGuest)
@@ -261,9 +363,8 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
         additional_guest_ids: additionalGuestIds.length > 0 ? additionalGuestIds : undefined,
       })
       onClose()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al procesar el check-in'
-      toast.error(msg)
+    } catch (err) {
+      showApiError(err, 'Error al procesar el check-in')
     }
   }
 
@@ -375,7 +476,7 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
           )}
 
           {state.guest && (
-            <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: '#ECFDF5', border: '1px solid var(--status-available)' }}>
+            <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'var(--status-available-soft)', border: '1px solid var(--status-available)' }}>
               <User size={20} style={{ color: 'var(--status-available)' }} />
               <div>
                 <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{state.guest.full_name}</p>
@@ -526,7 +627,7 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
         {ag.registered ? (
           /* ── Registered state ── */
           <div className="space-y-3">
-            <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: '#ECFDF5', border: '1px solid var(--status-available)' }}>
+            <div className="flex items-center gap-3 p-3 rounded-lg" style={{ background: 'var(--status-available-soft)', border: '1px solid var(--status-available)' }}>
               <CheckCircle size={18} style={{ color: 'var(--status-available)' }} />
               <div>
                 {ag.found ? (
@@ -563,33 +664,50 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
             {!ag.found && !ag.notFound && (
               <div className="space-y-3">
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Ingresa el número de documento para verificar si ya existe en el sistema.
+                  Ingresa el número de documento. La búsqueda es automática a partir de 3 caracteres.
                 </p>
-                <div className="flex gap-2">
+                <div className="relative">
                   <input
                     type="text"
                     placeholder="Número de documento"
                     value={ag.documentInput}
-                    onChange={(e) => setExtra(idx, { documentInput: e.target.value })}
-                    onKeyDown={(e) => { if (e.key === 'Enter') searchByDoc(idx, ag.documentInput) }}
-                    className={cn('flex-1', inputCls)} style={inputStyle}
+                    onChange={(e) => handleDocInputChange(idx, e.target.value)}
+                    className={cn('w-full pr-20', inputCls)} style={inputStyle}
+                    autoFocus
                   />
-                  <button
-                    onClick={() => searchByDoc(idx, ag.documentInput)}
-                    disabled={ag.isSearching || !ag.documentInput.trim()}
-                    className="px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40"
-                    style={{ background: 'var(--color-primary)', color: '#fff' }}
-                  >
-                    {ag.isSearching ? '…' : 'Buscar'}
-                  </button>
+                  {ag.isSearching && (
+                    <span
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      Buscando…
+                    </span>
+                  )}
                 </div>
+
+                <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <span className="flex-1 border-t" style={{ borderColor: 'var(--border-default)' }} />
+                  <span>o</span>
+                  <span className="flex-1 border-t" style={{ borderColor: 'var(--border-default)' }} />
+                </div>
+
+                <button
+                  onClick={() => setExtra(idx, {
+                    notFound: true,
+                    newGuest: { ...makeExtraForm().newGuest, document_number: ag.documentInput.trim() },
+                  })}
+                  className="w-full flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg border"
+                  style={{ color: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
+                >
+                  <Plus size={14} /> Crear huésped nuevo
+                </button>
               </div>
             )}
 
             {/* ── Found existing guest ── */}
             {ag.found && (
               <div className="space-y-3">
-                <div className="p-3 rounded-lg space-y-2" style={{ background: '#ECFDF5', border: '1px solid var(--status-available)' }}>
+                <div className="p-3 rounded-lg space-y-2" style={{ background: 'var(--status-available-soft)', border: '1px solid var(--status-available)' }}>
                   <div className="flex items-center gap-2">
                     <User size={16} style={{ color: 'var(--status-available)' }} />
                     <span className="text-xs font-medium" style={{ color: 'var(--status-available)' }}>Huésped encontrado</span>
@@ -633,15 +751,17 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setExtra(idx, { registered: true })}
-                    className="flex-1 py-2 rounded-lg text-sm font-medium"
+                    onClick={() => confirmExtraGuest(idx)}
+                    disabled={isSaving}
+                    className={cn('flex-1 py-2 rounded-lg text-sm font-medium transition-opacity', isSaving && 'opacity-40 cursor-not-allowed')}
                     style={{ background: 'var(--color-primary)', color: '#fff' }}
                   >
-                    Confirmar
+                    {isSaving ? 'Guardando…' : ag.isEditing ? 'Guardar cambios' : 'Confirmar'}
                   </button>
                   <button
                     onClick={() => setExtra(idx, { isEditing: !ag.isEditing })}
-                    className="px-4 py-2 rounded-lg text-sm border"
+                    disabled={isSaving}
+                    className="px-4 py-2 rounded-lg text-sm border disabled:opacity-40"
                     style={{ color: 'var(--text-secondary)', borderColor: 'var(--border-default)' }}
                   >
                     {ag.isEditing ? 'Cancelar' : 'Editar'}
@@ -707,12 +827,12 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
                   />
                 </div>
                 <button
-                  onClick={() => { if (newFormOk) setExtra(idx, { registered: true }) }}
-                  disabled={!newFormOk}
-                  className={cn('w-full py-2 rounded-lg text-sm font-medium transition-opacity', !newFormOk && 'opacity-40 cursor-not-allowed')}
+                  onClick={() => { if (newFormOk) persistExtraGuest(idx) }}
+                  disabled={!newFormOk || isSaving}
+                  className={cn('w-full py-2 rounded-lg text-sm font-medium transition-opacity', (!newFormOk || isSaving) && 'opacity-40 cursor-not-allowed')}
                   style={{ background: 'var(--color-primary)', color: '#fff' }}
                 >
-                  Registrar huésped
+                  {isSaving ? 'Guardando…' : 'Guardar huésped'}
                 </button>
               </div>
             )}
@@ -1047,15 +1167,15 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
 
           {!isLast ? (
             <button
-              disabled={!canGoNext}
+              disabled={!canGoNext || isSaving}
               onClick={navigateNext}
               className={cn(
                 'flex items-center gap-1 text-sm px-5 py-2 rounded-lg font-medium transition-opacity',
-                !canGoNext && 'opacity-40 cursor-not-allowed',
+                (!canGoNext || isSaving) && 'opacity-40 cursor-not-allowed',
               )}
               style={{ background: 'var(--color-primary)', color: '#fff' }}
             >
-              Siguiente <ChevronRight size={16} />
+              {isSaving ? 'Guardando…' : <>Siguiente <ChevronRight size={16} /></>}
             </button>
           ) : (
             <button

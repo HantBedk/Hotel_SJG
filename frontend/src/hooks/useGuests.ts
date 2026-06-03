@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import {
   getGuestsApi, createGuestApi, updateGuestApi, deleteGuestApi, searchGuestsApi,
 } from '@/services/guests.service'
+import { extractApiError } from '@/lib/apiError'
 import type { Guest } from '@/types'
 
 export function useGuests(search?: string) {
@@ -19,10 +20,7 @@ export function useGuests(search?: string) {
       toast.success('Huésped creado.')
       queryClient.invalidateQueries({ queryKey: ['guests'] })
     },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Error al crear huésped.')
-    },
+    onError: (err: unknown) => toast.error(extractApiError(err, 'Error al crear huésped.')),
   })
 
   const updateMutation = useMutation({
@@ -32,10 +30,7 @@ export function useGuests(search?: string) {
       toast.success('Huésped actualizado.')
       queryClient.invalidateQueries({ queryKey: ['guests'] })
     },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg ?? 'Error al actualizar huésped.')
-    },
+    onError: (err: unknown) => toast.error(extractApiError(err, 'Error al actualizar huésped.')),
   })
 
   const deleteMutation = useMutation({
@@ -44,7 +39,7 @@ export function useGuests(search?: string) {
       toast.success('Huésped eliminado.')
       queryClient.invalidateQueries({ queryKey: ['guests'] })
     },
-    onError: () => toast.error('Error al eliminar huésped.'),
+    onError: (err: unknown) => toast.error(extractApiError(err, 'Error al eliminar huésped.')),
   })
 
   return {

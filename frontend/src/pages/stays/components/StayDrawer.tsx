@@ -4,7 +4,7 @@ import type { Stay, MinibarItem, MinibarConsumptionType } from '@/types'
 import { useStay, useExtraServices } from '@/hooks/useStays'
 import { useRooms } from '@/hooks/useRooms'
 import { useMinibarProducts } from '@/hooks/useInventory'
-import { downloadStayReceiptApi } from '@/services/stays.service'
+import { downloadStayReceiptApi, downloadCheckInReceiptApi } from '@/services/stays.service'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -219,6 +219,24 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
       }
     } catch {
       toast.error('Error al obtener comprobante.')
+    }
+  }
+
+  const handleCheckInReceipt = async (mode: 'view' | 'download') => {
+    try {
+      const blob = await downloadCheckInReceiptApi(stay.id)
+      const url  = window.URL.createObjectURL(blob)
+      if (mode === 'view') {
+        window.open(url, '_blank')
+      } else {
+        const link    = document.createElement('a')
+        link.href     = url
+        link.download = `checkin-${stay.id}.pdf`
+        link.click()
+        window.URL.revokeObjectURL(url)
+      }
+    } catch {
+      toast.error('Error al obtener comprobante de check-in.')
     }
   }
 

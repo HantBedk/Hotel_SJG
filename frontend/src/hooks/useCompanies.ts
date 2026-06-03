@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import {
   getCompaniesApi, createCompanyApi, updateCompanyApi, deleteCompanyApi, searchCompaniesApi,
 } from '@/services/companies.service'
+import { extractApiError } from '@/lib/apiError'
 import type { Company } from '@/types'
 
 export function useCompanies(search?: string) {
@@ -19,7 +20,7 @@ export function useCompanies(search?: string) {
       toast.success('Empresa creada.')
       queryClient.invalidateQueries({ queryKey: ['companies'] })
     },
-    onError: () => toast.error('Error al crear empresa.'),
+    onError: (err: unknown) => toast.error(extractApiError(err, 'Error al crear empresa.')),
   })
 
   const updateMutation = useMutation({
@@ -29,7 +30,7 @@ export function useCompanies(search?: string) {
       toast.success('Empresa actualizada.')
       queryClient.invalidateQueries({ queryKey: ['companies'] })
     },
-    onError: () => toast.error('Error al actualizar empresa.'),
+    onError: (err: unknown) => toast.error(extractApiError(err, 'Error al actualizar empresa.')),
   })
 
   const deleteMutation = useMutation({
@@ -38,7 +39,7 @@ export function useCompanies(search?: string) {
       toast.success('Empresa eliminada.')
       queryClient.invalidateQueries({ queryKey: ['companies'] })
     },
-    onError: () => toast.error('Error al eliminar empresa.'),
+    onError: (err: unknown) => toast.error(extractApiError(err, 'Error al eliminar empresa.')),
   })
 
   return {

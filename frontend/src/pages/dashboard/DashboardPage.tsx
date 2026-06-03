@@ -2,21 +2,80 @@ import { useState } from 'react'
 import {
   Building2, BedDouble, Users, CalendarCheck, DollarSign,
   Sparkles, Clock, Activity, X, TrendingUp, Package, Briefcase,
+  Home, Wrench, XCircle, Check, Calendar, Bell, AlertTriangle,
 } from 'lucide-react'
 import { useDashboard } from '@/hooks/useDashboard'
-import { useRooms } from '@/hooks/useRooms'
+import { useRooms, useHousekeepers } from '@/hooks/useRooms'
+import { useStays } from '@/hooks/useStays'
 import { useActivityLogs } from '@/hooks/useActivity'
 import { useSuggestions, useDismissSuggestion } from '@/hooks/useActivity'
+import { useNotifications } from '@/hooks/useNotifications'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import CheckInWizard from '@/pages/checkin/CheckInWizard'
 import { DashboardChart } from './components/DashboardChart'
-import type { Room, RoomStatus, Suggestion } from '@/types'
+import { DashboardRoomModal } from './components/DashboardRoomModal'
+import type { Room, RoomStatus, Suggestion, Stay } from '@/types'
 
 const SUGGESTION_ICONS: Record<string, React.ElementType> = {
   minibar_restock:  Package,
   price_adjustment: TrendingUp,
   corporate_rate:   Briefcase,
+}
+
+function AlertsWidget() {
+  const { notifications, unreadCount, markRead } = useNotifications()
+  const recent = notifications
+    .filter((n) => !n.is_read)
+    .filter((n) => /inventory|stock|expir|maintenance|asset|repair/i.test(n.type))
+    .slice(0, 5)
+
+  if (recent.length === 0) return null
+
+  return (
+    <div
+      className="rounded-xl p-4"
+      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <AlertTriangle size={14} style={{ color: '#F59E0B' }} />
+        <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+          Alertas activas
+        </h3>
+        <span
+          className="ml-auto text-xs px-1.5 py-0.5 rounded-full font-medium"
+          style={{ background: '#FEE2E2', color: '#991B1B' }}
+        >
+          {unreadCount}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {recent.map((n) => (
+          <div
+            key={n.id}
+            className="flex items-start gap-3 p-3 rounded-lg"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
+          >
+            <div className="flex-shrink-0 mt-0.5">
+              <Bell size={13} style={{ color: '#F59E0B' }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>{n.title}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{n.message}</p>
+            </div>
+            <button
+              onClick={() => markRead(n.id)}
+              title="Marcar leída"
+              className="flex-shrink-0 p-1 rounded hover:opacity-70"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              <X size={13} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function SuggestionsWidget() {
@@ -116,11 +175,39 @@ const ACTION_LABELS: Record<string, string> = {
 
 export default function DashboardPage() {
   const { stats, isLoading } = useDashboard()
-  const { rooms, isLoading: loadingRooms } = useRooms()
+  const { rooms, isLoading: loadingRooms, changeStatus, isChanging } = useRooms()
   const { rooms: cleaningRooms } = useRooms('cleaning')
   const { data: activityData } = useActivityLogs({ page: 1 })
+  const { data: housekeepers = [] } = useHousekeepers()
 
   const [checkingIn, setCheckingIn] = useState<Room[]>([])
+  const [showOccupancy, setShowOccupancy] = useState(false)
+  const [showBalance, setShowBalance] = useState(false)
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
+
+  const { stays: activeStays } = useStays({ status: 'active' })
+
+  const stayForSelectedRoom = selectedRoom
+    ? (activeStays as Stay[]).find((s) =>
+        (s.stay_rooms ?? []).some((sr) => sr.room?.id === selectedRoom.id && sr.is_active !== false)
+      ) ?? null
+    : null
+
+  const handleRoomStatusChange = (id: string, status: RoomStatus, notes?: string) => {
+    changeStatus(
+      { id, status, notes },
+      { onSuccess: () => setSelectedRoom(null) },
+    )
+  }
+  const staysWithBalance = (activeStays as Stay[])
+    .map((s) => {
+      const total   = Number(s.total_amount ?? 0)
+      const paid    = Number(s.paid_amount ?? 0)
+      const balance = total - paid
+      return { stay: s, total, paid, balance }
+    })
+    .filter((s) => s.balance > 0)
+    .sort((a, b) => b.balance - a.balance)
 
   const occupancyPct = stats && stats.total_rooms > 0
     ? Math.round((stats.occupied / stats.total_rooms) * 100)
@@ -136,6 +223,7 @@ export default function DashboardPage() {
       colorBg: 'var(--color-primary-light)',
       circular: true,
       pct:      occupancyPct,
+      onClick:  () => setShowOccupancy(true),
     },
     {
       label:   'Disponibles',
@@ -170,6 +258,7 @@ export default function DashboardPage() {
       icon:    DollarSign,
       color:   '#EF4444',
       colorBg: '#FFF1F2',
+      onClick: () => setShowBalance(true),
     },
   ]
 
@@ -180,16 +269,17 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 shrink-0">
         {isLoading
           ? Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
-          : kpis.map(({ label, value, sub, icon: Icon, color, colorBg, circular, pct }) => (
+          : kpis.map(({ label, value, sub, icon: Icon, color, colorBg, circular, pct, onClick }) => (
             <div
               key={label}
-              className="rounded-xl p-4 flex flex-col justify-between"
+              className={`rounded-xl p-4 flex flex-col justify-between${onClick ? ' cursor-pointer hover:opacity-90 transition-opacity' : ''}`}
               style={{
                 background:  'var(--bg-surface)',
                 border:      '1px solid var(--border-default)',
                 boxShadow:   'var(--shadow-sm)',
                 minHeight:   '96px',
               }}
+              onClick={onClick}
             >
               <p className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{label}</p>
               <div className="flex items-end justify-between mt-2">
@@ -233,16 +323,16 @@ export default function DashboardPage() {
 
         {/* ── Left: room grid ──────────────────────────────────────────────── */}
         <div
-          className="xl:col-span-5 rounded-xl p-4 flex flex-col min-h-0"
+          className="xl:col-span-5 rounded-xl shadow-sm p-4 flex flex-col min-h-0"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
         >
-          <h3 className="text-sm font-bold mb-4 shrink-0" style={{ color: 'var(--text-primary)' }}>
-            Estado de habitaciones
+          <h3 className="text-[15px] font-bold mb-4 shrink-0" style={{ color: 'var(--text-primary)' }}>
+            Estado de Habitaciones
           </h3>
 
-          <div className="flex-1 overflow-y-auto pr-1">
+          <div className="flex-1 overflow-y-auto pr-2">
             {loadingRooms ? (
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 xl:grid-cols-5 gap-2.5">
                 {Array.from({ length: 15 }).map((_, i) => (
                   <div key={i} className="aspect-[4/3] rounded-lg animate-pulse" style={{ background: 'var(--bg-input)' }} />
                 ))}
@@ -252,30 +342,30 @@ export default function DashboardPage() {
                 <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin habitaciones configuradas</p>
               </div>
             ) : (
-              <div className="grid grid-cols-4 sm:grid-cols-5 xl:grid-cols-5 gap-2">
+              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 xl:grid-cols-5 gap-2.5">
                 {rooms.map((room) => {
-                  const bg      = ROOM_COLOR[room.status] ?? '#94A3B8'
-                  const isAvail = room.status === 'available'
+                  const bg = ROOM_COLOR[room.status] ?? '#94A3B8'
+                  const StatusIcon =
+                    room.status === 'cleaning'    ? Sparkles  :
+                    room.status === 'maintenance' ? Wrench    :
+                    room.status === 'blocked'     ? XCircle   :
+                    room.status === 'reserved'    ? Calendar  :
+                    room.status === 'occupied'    ? Check     :
+                    null
+
                   return (
                     <div
                       key={room.id}
-                      onClick={() => isAvail && setCheckingIn([room])}
-                      className="aspect-[4/3] rounded-lg flex flex-col items-center justify-center shadow-sm transition-transform"
-                      style={{
-                        background: bg,
-                        cursor:     isAvail ? 'pointer' : 'default',
-                        transform:  'scale(1)',
-                      }}
-                      onMouseEnter={(e) => isAvail && ((e.currentTarget as HTMLElement).style.transform = 'scale(1.05)')}
-                      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.transform = 'scale(1)')}
-                      title={`Hab. ${room.number} — ${ROOM_LABEL[room.status]}${isAvail ? ' (click para check-in)' : ''}`}
+                      onClick={() => setSelectedRoom(room)}
+                      className="text-white rounded-lg p-1.5 aspect-[4/3] flex flex-col items-center justify-between shadow-sm transition-transform hover:scale-105 cursor-pointer"
+                      style={{ background: bg }}
+                      title={`Hab. ${room.number} — ${ROOM_LABEL[room.status]} (click para ver detalle)`}
                     >
-                      <span className="font-bold text-sm text-white leading-none drop-shadow-sm">
-                        {room.number}
+                      <span className="self-end">
+                        {StatusIcon && <StatusIcon className="w-3.5 h-3.5 opacity-90" />}
                       </span>
-                      {room.floor != null && (
-                        <span className="text-[9px] text-white/70 mt-0.5">P{room.floor}</span>
-                      )}
+                      <span className="font-bold text-sm leading-none">{room.number}</span>
+                      <span />
                     </div>
                   )
                 })}
@@ -283,19 +373,16 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Legend */}
+          {/* Leyenda */}
           <div
-            className="flex flex-wrap gap-x-3 gap-y-1 mt-3 pt-3 shrink-0"
-            style={{ borderTop: '1px solid var(--border-default)' }}
+            className="flex items-center justify-between mt-4 pt-3 shrink-0 text-[10px] font-bold uppercase tracking-wider"
+            style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
           >
-            {(Object.entries(ROOM_LABEL) as [RoomStatus, string][]).map(([status, label]) => (
-              <div key={status} className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-sm" style={{ background: ROOM_COLOR[status] }} />
-                <span className="text-[10px] font-semibold" style={{ color: 'var(--text-muted)' }}>
-                  {label}
-                </span>
-              </div>
-            ))}
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.available }}></div> Disponible</div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.occupied }}></div> Ocupada</div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.reserved }}></div> Reservada</div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.cleaning }}></div> Limpieza</div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.maintenance }}></div> Mant.</div>
           </div>
         </div>
 
@@ -396,7 +483,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Bottom: suggestions + occupancy chart */}
+          {/* Bottom: alertas + suggestions + occupancy chart */}
+          <AlertsWidget />
           <SuggestionsWidget />
           <DashboardChart />
 
@@ -410,6 +498,217 @@ export default function DashboardPage() {
           onClose={() => setCheckingIn([])}
         />
       )}
+
+      {/* Modal ocupación */}
+      {showOccupancy && stats && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setShowOccupancy(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            style={{ background: 'var(--bg-surface)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-5 py-4 border-b"
+              style={{ borderColor: 'var(--border-default)' }}
+            >
+              <div className="flex items-center gap-2">
+                <Home size={16} style={{ color: 'var(--color-primary)' }} />
+                <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Ocupación actual
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowOccupancy(false)}
+                className="rounded-lg p-1 transition-colors hover:opacity-70"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4 space-y-3">
+              {(Object.keys(ROOM_LABEL) as RoomStatus[]).map((status) => {
+                const by = (stats as any).rooms_by_status ?? {}
+                const count: number =
+                  status === 'available' ? stats.available :
+                  status === 'occupied'  ? stats.occupied  :
+                  status === 'cleaning'  ? (stats.cleaning ?? 0) :
+                  (by[status] ?? 0)
+                const color = ROOM_COLOR[status]
+                return (
+                  <div key={status} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ background: color }}
+                      />
+                      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                        {ROOM_LABEL[status]}
+                      </span>
+                    </div>
+                    <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--text-primary)' }}>
+                      {count}
+                    </span>
+                  </div>
+                )
+              })}
+
+              {/* Divisor + total */}
+              <div className="border-t pt-3" style={{ borderColor: 'var(--border-default)' }}>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    Total
+                  </span>
+                  <span className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                    {stats.total_rooms} hab.
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal saldo pendiente */}
+      {showBalance && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setShowBalance(false)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col"
+            style={{ background: 'var(--bg-surface)', maxHeight: '80vh' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              className="flex items-center justify-between px-5 py-4 border-b shrink-0"
+              style={{ borderColor: 'var(--border-default)' }}
+            >
+              <div className="flex items-center gap-2">
+                <DollarSign size={16} style={{ color: '#EF4444' }} />
+                <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+                  Saldo pendiente por habitación
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowBalance(false)}
+                className="rounded-lg p-1 transition-colors hover:opacity-70"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="px-5 py-4 overflow-y-auto">
+              {staysWithBalance.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                    No hay estadías con saldo pendiente.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {staysWithBalance.map(({ stay, total, paid, balance }) => {
+                    const rooms = (stay.stay_rooms ?? [])
+                      .filter((sr) => sr.is_active !== false)
+                      .map((sr) => sr.room?.number)
+                      .filter(Boolean)
+                      .join(', ')
+                    return (
+                      <div
+                        key={stay.id}
+                        className="rounded-lg p-3 border"
+                        style={{
+                          background: 'var(--bg-input)',
+                          borderColor: 'var(--border-default)',
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span
+                                className="text-xs font-bold px-2 py-0.5 rounded"
+                                style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}
+                              >
+                                Hab. {rooms || '—'}
+                              </span>
+                              {stay.company && (
+                                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                                  · {stay.company.name}
+                                </span>
+                              )}
+                            </div>
+                            <p
+                              className="text-sm font-semibold truncate"
+                              style={{ color: 'var(--text-primary)' }}
+                            >
+                              {stay.guest?.full_name ?? '—'}
+                            </p>
+                            <div
+                              className="flex items-center gap-3 mt-1 text-[11px]"
+                              style={{ color: 'var(--text-muted)' }}
+                            >
+                              <span>Total: ${total.toLocaleString('es-CO')}</span>
+                              <span>Pagado: ${paid.toLocaleString('es-CO')}</span>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>
+                              Saldo
+                            </p>
+                            <p className="text-base font-bold tabular-nums" style={{ color: '#EF4444' }}>
+                              ${balance.toLocaleString('es-CO')}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer total */}
+            {staysWithBalance.length > 0 && (
+              <div
+                className="px-5 py-3 border-t flex items-center justify-between shrink-0"
+                style={{ borderColor: 'var(--border-default)', background: 'var(--bg-input)' }}
+              >
+                <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Total por cobrar ({staysWithBalance.length})
+                </span>
+                <span className="text-base font-bold tabular-nums" style={{ color: '#EF4444' }}>
+                  ${staysWithBalance.reduce((acc, s) => acc + s.balance, 0).toLocaleString('es-CO')}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal detalle de habitación */}
+      <DashboardRoomModal
+        room={selectedRoom}
+        stay={stayForSelectedRoom}
+        housekeepers={housekeepers}
+        isChangingStatus={isChanging}
+        onChangeStatus={handleRoomStatusChange}
+        onStartCheckIn={(room) => setCheckingIn([room])}
+        onClose={() => setSelectedRoom(null)}
+      />
     </div>
   )
 }

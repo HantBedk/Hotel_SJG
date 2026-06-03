@@ -8,6 +8,7 @@ use App\Models\ActivityLog;
 use App\Models\Hotel;
 use App\Models\Room;
 use App\Models\RoomType;
+use App\Models\User;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -114,5 +115,16 @@ class RoomController extends Controller
     public function types(): JsonResponse
     {
         return $this->success(RoomType::orderBy('base_price')->get());
+    }
+
+    public function housekeepers(): JsonResponse
+    {
+        $users = User::role(['housekeeping', 'admin', 'superadmin'])
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn($u) => ['id' => $u->id, 'name' => $u->name]);
+
+        return $this->success($users);
     }
 }

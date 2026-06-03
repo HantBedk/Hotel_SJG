@@ -29,12 +29,13 @@ function StockBadge({ item }: { item: InventoryItem }) {
 interface ItemFormProps {
   item?: InventoryItem | null
   categories: InventoryCategory[]
+  existingItems: InventoryItem[]
   onSave: (data: Partial<InventoryItem>) => void
   onClose: () => void
   saving: boolean
 }
 
-function ItemForm({ item, categories, onSave, onClose, saving }: ItemFormProps) {
+function ItemForm({ item, categories, existingItems, onSave, onClose, saving }: ItemFormProps) {
   const [form, setForm] = useState({
     category_id:         item?.category_id ?? '',
     name:                item?.name ?? '',
@@ -51,6 +52,14 @@ function ItemForm({ item, categories, onSave, onClose, saving }: ItemFormProps) 
   })
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
+
+  // Sugerencia de duplicado solo en modo creación
+  const duplicateMatch = !item && form.brand.trim() && form.presentation.trim()
+    ? existingItems.find((it) =>
+        it.brand?.trim().toLowerCase() === form.brand.trim().toLowerCase() &&
+        it.presentation?.trim().toLowerCase() === form.presentation.trim().toLowerCase()
+      )
+    : undefined
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -112,6 +121,17 @@ function ItemForm({ item, categories, onSave, onClose, saving }: ItemFormProps) 
               />
             </div>
           ))}
+          {duplicateMatch && (
+            <div
+              className="col-span-2 rounded-lg p-3 text-xs flex items-start gap-2"
+              style={{ background: '#FFFBEB', border: '1px solid #FCD34D', color: '#92400E' }}
+            >
+              <span className="font-semibold">⚠ Posible duplicado:</span>
+              <span>
+                ya existe <strong>{duplicateMatch.name}</strong> ({duplicateMatch.code}) con la misma marca y presentación. Stock actual: {duplicateMatch.current_stock} {duplicateMatch.unit}. ¿Quieres recargar stock en su lugar?
+              </span>
+            </div>
+          )}
           <div className="col-span-2 flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose}
               className="px-4 py-2 rounded-lg text-sm border"
@@ -470,6 +490,7 @@ export default function ConsumiblesTab() {
         <ItemForm
           item={modalItem}
           categories={categories}
+          existingItems={items}
           onSave={handleSave}
           onClose={() => setModalItem(undefined)}
           saving={createMutation.isPending || updateMutation.isPending}
