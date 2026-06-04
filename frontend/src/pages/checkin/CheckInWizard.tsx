@@ -73,6 +73,18 @@ const DOCUMENT_TYPES_MINOR = [
   { value: 'passport', label: 'Pasaporte' },
 ]
 
+// Parentescos sugeridos para menores acompañantes. Editables en el input.
+const RELATIONSHIPS = [
+  'Hijo',
+  'Hijastro',
+  'Nieto',
+  'Sobrino',
+  'Hermano',
+  'Primo',
+  'Ahijado',
+  'Tutor legal',
+]
+
 // El titular es siempre el primer adulto. Por lo tanto, de los slots extra:
 //   - los primeros (adults - 1) son adultos,
 //   - los restantes son menores.
@@ -809,6 +821,7 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
                       />
                       {isMinor ? (
                         <input
+                          list="relationship-suggestions"
                           placeholder="Parentesco con el titular *"
                           value={ag.editData.relationship}
                           onChange={(e) => setExtra(idx, { editData: { ...ag.editData, relationship: e.target.value } })}
@@ -915,6 +928,7 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
                   />
                   {isMinor ? (
                     <input
+                      list="relationship-suggestions"
                       placeholder="Parentesco con el titular *"
                       value={ag.newGuest.relationship}
                       onChange={(e) => setExtra(idx, { newGuest: { ...ag.newGuest, relationship: e.target.value } })}
@@ -1210,6 +1224,9 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
       style={{ background: 'rgba(0,0,0,0.5)' }}
       onClick={(e) => { if (e.target === e.currentTarget && isFirst) onClose() }}
     >
+      <datalist id="relationship-suggestions">
+        {RELATIONSHIPS.map((r) => <option key={r} value={r} />)}
+      </datalist>
       <div
         ref={dialogRef}
         role="dialog"

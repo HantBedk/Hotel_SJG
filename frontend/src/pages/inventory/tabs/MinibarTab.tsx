@@ -8,12 +8,13 @@ import {
   useRoomMinibars,
   useMinibars,
   useMinibarMutations,
+  useInventoryItems,
 } from '@/hooks/useInventory'
 import { restockRoomMinibarApi } from '@/services/inventory.service'
 import { useRooms } from '@/hooks/useRooms'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonTable } from '@/components/ui/Skeleton'
-import type { Minibar, MinibarProduct, Room } from '@/types'
+import type { InventoryItem, Minibar, MinibarProduct, Room } from '@/types'
 
 function formatCurrency(v: string | number | null) {
   if (v == null) return '—'
@@ -30,6 +31,7 @@ interface ProductFormData {
   code: string
   name: string
   presentation: string
+  inventory_item_id: string
   sale_price: string
   cost_price: string
   stock_quantity: string
@@ -47,16 +49,20 @@ interface ProductFormProps {
 
 function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
   const isEdit = !!product
+  const { data: inventoryData } = useInventoryItems({ per_page: 200 })
+  const inventoryItems: InventoryItem[] = (inventoryData?.data ?? []) as InventoryItem[]
+
   const [form, setForm] = useState<ProductFormData>({
-    code:             product?.code ?? '',
-    name:             product?.name ?? '',
-    presentation:     product?.presentation ?? '',
-    sale_price:       product?.sale_price != null ? String(product.sale_price) : '',
-    cost_price:       product?.cost_price != null ? String(product.cost_price) : '',
-    stock_quantity:   product?.stock_quantity != null ? String(product.stock_quantity) : '0',
-    expiration_date:  product?.expiration_date ?? '',
-    has_expiration:   !!product?.expiration_date,
-    description:      product?.description ?? '',
+    code:              product?.code ?? '',
+    name:              product?.name ?? '',
+    presentation:      product?.presentation ?? '',
+    inventory_item_id: product?.inventory_item_id ?? '',
+    sale_price:        product?.sale_price != null ? String(product.sale_price) : '',
+    cost_price:        product?.cost_price != null ? String(product.cost_price) : '',
+    stock_quantity:    product?.stock_quantity != null ? String(product.stock_quantity) : '0',
+    expiration_date:   product?.expiration_date ?? '',
+    has_expiration:    !!product?.expiration_date,
+    description:       product?.description ?? '',
   })
   const set = <K extends keyof ProductFormData>(k: K, v: ProductFormData[K]) =>
     setForm((f) => ({ ...f, [k]: v }))
@@ -64,19 +70,21 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
   const costNum = parseFloat(form.cost_price) || 0
   const saleNum = parseFloat(form.sale_price) || 0
   const priceInvalid = form.sale_price !== '' && saleNum <= costNum
+  const linkMissing  = !form.inventory_item_id
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (priceInvalid) return
     const payload: Partial<MinibarProduct> = {
-      code:            form.code.trim() || null,
-      name:            form.name.trim(),
-      presentation:    form.presentation.trim() || null,
-      sale_price:      form.sale_price,
-      cost_price:      form.cost_price || '0',
-      stock_quantity:  Number(form.stock_quantity) || 0,
-      expiration_date: form.has_expiration && form.expiration_date ? form.expiration_date : null,
-      description:     form.description.trim() || null,
+      code:              form.code.trim() || null,
+      name:              form.name.trim(),
+      presentation:      form.presentation.trim() || null,
+      inventory_item_id: form.inventory_item_id || null,
+      sale_price:        form.sale_price,
+      cost_price:        form.cost_price || '0',
+      stock_quantity:    Number(form.stock_quantity) || 0,
+      expiration_date:   form.has_expiration && form.expiration_date ? form.expiration_date : null,
+      description:       form.description.trim() || null,
     }
     onSave(payload)
   }
@@ -126,6 +134,43 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
               className="w-full px-3 py-2 rounded-lg border text-sm"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+              Producto del catálogo (inventario) *
+            </label>
+            <select
+              value={form.inventory_item_id}
+              onChange={(e) => set('inventory_item_id', e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm"
+              style={{
+                background: 'var(--bg-input)',
+                borderColor: linkMissing ? '#F59E0B' : 'var(--border-default)',
+                color: 'var(--text-primary)',
+              }}
+            >
+              <option value="">— Selecciona un ítem del catálogo —</option>
+              {inventoryItems.map((it) => (
+                <option key={it.id} value={it.id}>
+                  {it.name} {it.presentation ? `(${it.presentation})` : ''} · Stock: {it.current_stock}
+                </option>
+              ))}
+            </select>
+            {linkMissing ? (
+              <p className="text-[11px] mt-1" style={{ color: '#B45309' }}>
+                Sin vínculo no se podrá reponer este producto en los minibares (no se podría descontar del catálogo).
+              </p>
+            ) : (
+              <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                Al reponer se descontará del stock de este ítem del catálogo.
+              </p>
+            )}
+            {inventoryItems.length === 0 && (
+              <p className="text-[11px] mt-1" style={{ color: '#B45309' }}>
+                Aún no hay ítems en el catálogo de inventario. Créalos desde la pestaña "Consumibles" antes de vincular.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

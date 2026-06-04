@@ -56,10 +56,11 @@ export function useGuests(search?: string) {
 }
 
 export function useGuestSearch(term: string, enabled = true) {
+  const trimmed = term.trim()
   return useQuery({
-    queryKey: ['guests', 'search', term],
-    queryFn:  () => searchGuestsApi(term),
-    enabled:  enabled && term.length >= 2,
+    queryKey: ['guests', 'search', trimmed],
+    queryFn:  () => searchGuestsApi(trimmed),
+    enabled:  enabled && trimmed.length >= 1,
     staleTime: 10_000,
   })
 }

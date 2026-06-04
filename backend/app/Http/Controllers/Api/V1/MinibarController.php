@@ -175,16 +175,36 @@ class MinibarController extends Controller
 
         $product = MinibarProduct::findOrFail($data['minibar_product_id']);
 
+        abort_if(
+            !$product->inventory_item_id,
+            409,
+            'El producto "' . $product->name . '" no está vinculado a un ítem del catálogo de inventario. Edítalo desde el catálogo del minibar y vincúlalo antes de reponer.'
+        );
+
         DB::transaction(function () use ($data, $product, $request) {
-            // Update or create room_minibar record
-            $rm = RoomMinibar::updateOrCreate(
-                ['room_id' => $data['room_id'], 'minibar_product_id' => $data['minibar_product_id']],
-                [
-                    'quantity'          => DB::raw("quantity + {$data['quantity']}"),
+            // Buscamos primero (con lock) para decidir si crear o incrementar.
+            // No usamos updateOrCreate con DB::raw porque en el INSERT la
+            // expresión "quantity + N" referencia una columna que aún no existe
+            // en esa fila y PostgreSQL la rechaza.
+            $rm = RoomMinibar::where('room_id', $data['room_id'])
+                ->where('minibar_product_id', $data['minibar_product_id'])
+                ->lockForUpdate()
+                ->first();
+
+            if ($rm) {
+                $rm->increment('quantity', $data['quantity'], [
                     'last_restocked_at' => now(),
                     'restocked_by'      => $request->user()->id,
-                ]
-            );
+                ]);
+            } else {
+                RoomMinibar::create([
+                    'room_id'            => $data['room_id'],
+                    'minibar_product_id' => $data['minibar_product_id'],
+                    'quantity'           => $data['quantity'],
+                    'last_restocked_at'  => now(),
+                    'restocked_by'       => $request->user()->id,
+                ]);
+            }
 
             // Deduct from inventory item if linked
             if ($product->inventory_item_id) {
