@@ -5,7 +5,8 @@ import {
   CheckCircle2, LogOut, RefreshCw, AlertTriangle, Lock, CreditCard,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import type { Room, RoomStatus, Stay } from '@/types'
+import { useReservations } from '@/hooks/useReservations'
+import type { Reservation, Room, RoomStatus, Stay } from '@/types'
 
 interface Housekeeper { id: string; name: string }
 
@@ -27,6 +28,7 @@ interface Props {
   onStartCheckIn: (room: Room) => void
   onStartCheckOut?: (stay: Stay) => void
   onAddPayment?: (payload: AddPaymentPayload) => void
+  onSelectReservation?: (reservation: Reservation) => void
   onClose: () => void
 }
 
@@ -61,13 +63,17 @@ function formatDateShort(iso: string): string {
 
 export function DashboardRoomModal({
   room, stay, housekeepers, isChangingStatus,
-  onChangeStatus, onStartCheckIn, onStartCheckOut, onAddPayment, onClose,
+  onChangeStatus, onStartCheckIn, onStartCheckOut, onAddPayment,
+  onSelectReservation, onClose,
 }: Props) {
   const navigate = useNavigate()
   const { hasPermission } = useAuth()
   const [housekeeperId, setHousekeeperId] = useState('')
   const [showPayForm, setShowPayForm] = useState(false)
   const [payForm, setPayForm] = useState<PaymentForm>(EMPTY_PAYMENT)
+  const [showReservationPicker, setShowReservationPicker] = useState(false)
+  const [showMaintenanceForm, setShowMaintenanceForm] = useState(false)
+  const [maintenanceReason, setMaintenanceReason] = useState('')
 
   if (!room) return null
 
@@ -239,11 +245,21 @@ export function DashboardRoomModal({
                     primary
                   />
                   <ActionButton
-                    onClick={() => go('/reservations')}
+                    onClick={() => setShowReservationPicker((v) => !v)}
                     disabled={!canCheckIn}
                     icon={<Calendar size={15} />}
-                    label="Asignar reserva existente"
+                    label={showReservationPicker ? 'Cancelar selección' : 'Asignar reserva existente'}
                   />
+                  {showReservationPicker && (
+                    <ReservationPickerInline
+                      roomId={room.id}
+                      onSelect={(reservation) => {
+                        if (!onSelectReservation) return
+                        onClose()
+                        onSelectReservation(reservation)
+                      }}
+                    />
+                  )}
                   <ActionButton
                     onClick={() => onChangeStatus(room.id, 'maintenance')}
                     disabled={!canManage || isChangingStatus}
@@ -437,6 +453,96 @@ export function DashboardRoomModal({
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+interface ReservationPickerInlineProps {
+  roomId: string
+  onSelect: (reservation: Reservation) => void
+}
+
+const RES_STATUS_META: Record<'pending' | 'confirmed', { label: string; color: string; bg: string }> = {
+  pending:   { label: 'Pendiente',  color: '#92400E', bg: '#FEF3C7' },
+  confirmed: { label: 'Confirmada', color: '#075985', bg: '#E0F2FE' },
+}
+
+function ReservationPickerInline({ roomId, onSelect }: ReservationPickerInlineProps) {
+  const { reservations, isLoading } = useReservations({ per_page: 50 })
+
+  const list = (reservations as Reservation[])
+    .filter((r) => r.status === 'pending' || r.status === 'confirmed')
+    .sort((a, b) => {
+      const aMatch = a.room_id === roomId ? 0 : 1
+      const bMatch = b.room_id === roomId ? 0 : 1
+      if (aMatch !== bMatch) return aMatch - bMatch
+      return new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
+    })
+
+  return (
+    <div
+      className="rounded-lg p-2 space-y-2"
+      style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
+    >
+      <div className="flex items-center justify-between px-1">
+        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+          Reservas disponibles
+        </p>
+        {!isLoading && list.length > 0 && (
+          <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            {list.length}
+          </span>
+        )}
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-4">
+          <RefreshCw size={14} className="animate-spin" style={{ color: 'var(--text-muted)' }} />
+        </div>
+      ) : list.length === 0 ? (
+        <div className="py-4 text-center">
+          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            No hay reservas pendientes para asignar.
+          </p>
+        </div>
+      ) : (
+        <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+          {list.map((r) => {
+            const meta = RES_STATUS_META[r.status as 'pending' | 'confirmed']
+            const isPreferred = r.room_id === roomId
+            return (
+              <button
+                key={r.id}
+                onClick={() => onSelect(r)}
+                className="w-full text-left rounded-lg p-2.5 transition-opacity hover:opacity-80"
+                style={{
+                  background: 'var(--bg-surface)',
+                  border: isPreferred ? '1px solid var(--color-primary)' : '1px solid var(--border-default)',
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                      {r.guest?.full_name ?? r.company?.name ?? '—'}
+                    </p>
+                    <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      {formatDateShort(r.start_date)} → {formatDateShort(r.end_date)}
+                      {r.nights ? ` · ${r.nights}n` : ''}
+                      {r.room?.number && ` · Hab. ${r.room.number}`}
+                    </p>
+                  </div>
+                  <span
+                    className="px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0"
+                    style={{ background: meta.bg, color: meta.color }}
+                  >
+                    {meta.label}
+                  </span>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

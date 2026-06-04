@@ -14,9 +14,10 @@ import { useAuth } from '@/hooks/useAuth'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import CheckInWizard from '@/pages/checkin/CheckInWizard'
 import { CheckoutWizard } from '@/pages/stays/components/CheckoutWizard'
+import CheckInFromReservationModal from '@/pages/reservations/components/CheckInFromReservationModal'
 import { DashboardChart } from './components/DashboardChart'
 import { DashboardRoomModal } from './components/DashboardRoomModal'
-import type { Room, RoomStatus, Suggestion, Stay } from '@/types'
+import type { Reservation, Room, RoomStatus, Suggestion, Stay } from '@/types'
 
 const SUGGESTION_ICONS: Record<string, React.ElementType> = {
   minibar_restock:  Package,
@@ -203,6 +204,7 @@ export default function DashboardPage() {
   const [showOccupancy, setShowOccupancy] = useState(false)
   const [showBalance, setShowBalance] = useState(false)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
+  const [checkInReservation, setCheckInReservation] = useState<Reservation | null>(null)
 
   const { stays: activeStays, addPayment } = useStays({ status: 'active' })
 
@@ -743,6 +745,7 @@ export default function DashboardPage() {
         onStartCheckIn={(room) => setCheckingIn([room])}
         onStartCheckOut={(stay) => setCheckoutStay(stay)}
         onAddPayment={addPayment}
+        onSelectReservation={(reservation) => setCheckInReservation(reservation)}
         onClose={() => setSelectedRoom(null)}
       />
 
@@ -752,6 +755,16 @@ export default function DashboardPage() {
           stay={checkoutStay}
           onClose={() => setCheckoutStay(null)}
           onSuccess={() => setCheckoutStay(null)}
+        />
+      )}
+
+      {/* Check-in desde reserva existente (asignada desde modal de habitación) */}
+      {checkInReservation && (
+        <CheckInFromReservationModal
+          reservation={checkInReservation}
+          rooms={rooms}
+          onClose={() => setCheckInReservation(null)}
+          onSuccess={() => setCheckInReservation(null)}
         />
       )}
     </div>

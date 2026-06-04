@@ -8,8 +8,14 @@ const api = axios.create({
     Accept: 'application/json',
   },
   timeout: 30_000,
-  withCredentials: true,
-  withXSRFToken: true,
+})
+
+api.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().token
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
 })
 
 api.interceptors.response.use(
@@ -18,7 +24,6 @@ api.interceptors.response.use(
     const status = error.response?.status
     const url    = (error.config?.url ?? '') as string
 
-    // 401 only redirects when it's not the bootstrap /me probe (handled by caller).
     if (status === 401 && !url.endsWith('/me')) {
       useAuthStore.getState().clearAuth()
       if (window.location.pathname !== '/login') {

@@ -5,12 +5,12 @@ import { disconnectEcho } from '@/hooks/useReverb'
 import type { LoginPayload } from '@/types'
 
 export function useAuth() {
-  const { setUser, clearAuth, isAuthenticated, user, hasPermission, hasRole } = useAuthStore()
+  const { setAuth, clearAuth, isAuthenticated, user, hasPermission, hasRole } = useAuthStore()
 
   const login = async (payload: LoginPayload) => {
     const res = await loginApi(payload)
     if (res.success && res.data) {
-      setUser(res.data.user)
+      setAuth(res.data.user, res.data.token)
     }
     return res
   }
@@ -27,17 +27,24 @@ export function useAuth() {
   return { login, logout, isAuthenticated, user, hasPermission, hasRole }
 }
 
-// Runs once on app mount: probes /me with the session cookie. If the user
-// already has a valid session, the store is rehydrated; otherwise we land
-// unauthenticated and the router shows /login.
+// On app mount: if a token exists in the store, validate it via /me.
+// If no token or /me returns 401, clear auth so the router shows /login.
 export function useAuthBootstrap() {
-  const isBootstrapping = useAuthStore((s) => s.isBootstrapping)
-  const setUser         = useAuthStore((s) => s.setUser)
-  const clearAuth       = useAuthStore((s) => s.clearAuth)
-  const setBootstrapping = useAuthStore((s) => s.setBootstrapping)
+  const isBootstrapping   = useAuthStore((s) => s.isBootstrapping)
+  const token             = useAuthStore((s) => s.token)
+  const setUser           = useAuthStore((s) => s.setUser)
+  const clearAuth         = useAuthStore((s) => s.clearAuth)
+  const setBootstrapping  = useAuthStore((s) => s.setBootstrapping)
 
   useEffect(() => {
     let cancelled = false
+
+    if (!token) {
+      clearAuth()
+      setBootstrapping(false)
+      return
+    }
+
     ;(async () => {
       try {
         const res = await getMeApi()
@@ -50,6 +57,7 @@ export function useAuthBootstrap() {
         if (!cancelled) setBootstrapping(false)
       }
     })()
+
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

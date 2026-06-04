@@ -25,7 +25,7 @@ function getEcho(): Echo<'reverb'> | null {
       // so it inherits withCredentials + XSRF token (Sanctum SPA session).
       authorizer: (channel: { name: string }) => ({
         authorize: (socketId: string, callback: (err: Error | null, data: unknown) => void) => {
-          api.post('/broadcasting/auth', {
+          api.post(`${window.location.origin}/api/broadcasting/auth`, {
             socket_id:    socketId,
             channel_name: channel.name,
           })

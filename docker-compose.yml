@@ -8,6 +8,10 @@ services:
     ports:
       - "0.0.0.0:80:80"
     volumes:
+      - ./backend/app:/var/www/html/app
+      - ./backend/routes:/var/www/html/routes
+      - ./backend/config:/var/www/html/config
+      - ./backend/database:/var/www/html/database
       - ./backend/storage:/var/www/html/storage
       - ./backend/bootstrap/cache:/var/www/html/bootstrap/cache
       - ./backup:/var/www/html/backup
@@ -25,6 +29,11 @@ services:
       - REVERB_APP_SECRET=${REVERB_APP_SECRET:-changeme_reverb_secret}
       - REVERB_HOST=reverb
       - REVERB_PORT=8080
+      # Sanctum SPA cookies — incluir puerto del dev server para que coincida con Origin
+      - SANCTUM_STATEFUL_DOMAINS=${SANCTUM_STATEFUL_DOMAINS:-localhost,127.0.0.1,localhost:3007,127.0.0.1:3007}
+      - FRONTEND_ORIGINS=${FRONTEND_ORIGINS:-http://localhost,http://localhost:3007,http://127.0.0.1,http://127.0.0.1:3007}
+      - SESSION_SAME_SITE=${SESSION_SAME_SITE:-lax}
+      - SESSION_SECURE_COOKIE=${SESSION_SECURE_COOKIE:-false}
     depends_on:
       db:
         condition: service_healthy

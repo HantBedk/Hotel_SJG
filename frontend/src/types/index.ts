@@ -24,6 +24,7 @@ export interface LoginPayload {
 
 export interface LoginResponse {
   user: AuthUser
+  token: string
 }
 
 // ── Roles / Permisos ─────────────────────────────────────────────────────────

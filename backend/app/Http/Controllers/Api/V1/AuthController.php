@@ -10,6 +10,7 @@ use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
@@ -36,12 +37,16 @@ class AuthController extends Controller
             return $this->error('Usuario inactivo. Contacta al administrador.', [], 403);
         }
 
-        $request->session()->regenerate();
+        // Revoke any existing tokens to avoid accumulation
+        $user->tokens()->delete();
+
+        $token = $user->createToken('frontend')->plainTextToken;
 
         ActivityLog::record('login', $user->id, ['ip' => $request->ip()]);
 
         return $this->success([
-            'user' => [
+            'token' => $token,
+            'user'  => [
                 'id'          => $user->id,
                 'name'        => $user->name,
                 'email'       => $user->email,
@@ -55,9 +60,10 @@ class AuthController extends Controller
     {
         $userId = $request->user()?->id;
 
-        Auth::guard('web')->logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        $token = $request->user()?->currentAccessToken();
+        if ($token instanceof PersonalAccessToken) {
+            $token->delete();
+        }
 
         if ($userId) {
             ActivityLog::record('logout', $userId, ['ip' => $request->ip()]);
