@@ -12,16 +12,21 @@ class MinibarProduct extends Model
     use HasUuids;
 
     protected $fillable = [
-        'name', 'inventory_item_id', 'sale_price', 'cost_price', 'damage_price', 'description', 'active',
+        'code', 'name', 'presentation', 'inventory_item_id',
+        'sale_price', 'cost_price', 'damage_price',
+        'stock_quantity', 'expiration_date',
+        'description', 'active',
     ];
 
     protected function casts(): array
     {
         return [
-            'sale_price'   => 'decimal:2',
-            'cost_price'   => 'decimal:2',
-            'damage_price' => 'decimal:2',
-            'active'       => 'boolean',
+            'sale_price'      => 'decimal:2',
+            'cost_price'      => 'decimal:2',
+            'damage_price'    => 'decimal:2',
+            'stock_quantity'  => 'integer',
+            'expiration_date' => 'date',
+            'active'          => 'boolean',
         ];
     }
 

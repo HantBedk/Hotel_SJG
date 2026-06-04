@@ -494,11 +494,15 @@ export interface InventoryItem {
 
 export interface MinibarProduct {
   id: string
+  code: string | null
   name: string
+  presentation: string | null
   inventory_item_id: string | null
   sale_price: string
   cost_price: string
   damage_price: string | null
+  stock_quantity: number
+  expiration_date: string | null
   description: string | null
   active: boolean
   inventory_item?: InventoryItem | null
@@ -515,6 +519,18 @@ export interface RoomMinibar {
   restocked_by: string | null
   product?: MinibarProduct
   restocked_by_user?: { id: string; name: string } | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Minibar {
+  id: string
+  room_id: string
+  name: string | null
+  notes: string | null
+  active: boolean
+  room?: { id: string; number: string }
+  items?: RoomMinibar[]
   created_at: string
   updated_at: string
 }

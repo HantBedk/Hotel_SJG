@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
+use App\Models\Minibar;
 use App\Models\MinibarProduct;
 use App\Models\Room;
 use App\Models\RoomMinibar;
@@ -26,11 +27,15 @@ class MinibarController extends Controller
     public function productsStore(Request $request): JsonResponse
     {
         $data = $request->validate([
+            'code'              => 'nullable|string|max:50|unique:minibar_products,code',
             'name'              => 'required|string|max:150',
+            'presentation'      => 'nullable|string|max:100',
             'inventory_item_id' => 'nullable|uuid|exists:inventory_items,id',
             'sale_price'        => 'required|numeric|min:0',
             'cost_price'        => 'nullable|numeric|min:0',
             'damage_price'      => 'nullable|numeric|min:0',
+            'stock_quantity'    => 'nullable|integer|min:0',
+            'expiration_date'   => 'nullable|date',
             'description'       => 'nullable|string|max:255',
         ]);
 
@@ -41,11 +46,15 @@ class MinibarController extends Controller
     public function productsUpdate(Request $request, MinibarProduct $minibarProduct): JsonResponse
     {
         $data = $request->validate([
+            'code'              => 'nullable|string|max:50|unique:minibar_products,code,' . $minibarProduct->id,
             'name'              => 'sometimes|string|max:150',
+            'presentation'      => 'nullable|string|max:100',
             'inventory_item_id' => 'nullable|uuid|exists:inventory_items,id',
             'sale_price'        => 'sometimes|numeric|min:0',
             'cost_price'        => 'nullable|numeric|min:0',
             'damage_price'      => 'nullable|numeric|min:0',
+            'stock_quantity'    => 'nullable|integer|min:0',
+            'expiration_date'   => 'nullable|date',
             'description'       => 'nullable|string|max:255',
             'active'            => 'sometimes|boolean',
         ]);
@@ -189,5 +198,53 @@ class MinibarController extends Controller
         });
 
         return response()->json(['success' => true, 'message' => 'Minibar repuesto.']);
+    }
+
+    // ── Minibars (1 por habitación) ────────────────────────────────────────────
+
+    public function minibarsIndex(): JsonResponse
+    {
+        $minibars = Minibar::with(['room', 'items.product'])->orderBy('created_at')->get();
+        return response()->json(['success' => true, 'data' => $minibars]);
+    }
+
+    public function minibarsStore(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'room_id' => 'required|uuid|exists:rooms,id|unique:minibars,room_id',
+            'name'    => 'nullable|string|max:100',
+            'notes'   => 'nullable|string|max:500',
+        ], [
+            'room_id.unique' => 'Esta habitación ya tiene un minibar asignado.',
+        ]);
+
+        $minibar = Minibar::create($data);
+        return response()->json([
+            'success' => true,
+            'data'    => $minibar->load(['room', 'items.product']),
+            'message' => 'Minibar creado.',
+        ], 201);
+    }
+
+    public function minibarsUpdate(Request $request, Minibar $minibar): JsonResponse
+    {
+        $data = $request->validate([
+            'name'   => 'nullable|string|max:100',
+            'notes'  => 'nullable|string|max:500',
+            'active' => 'sometimes|boolean',
+        ]);
+
+        $minibar->update($data);
+        return response()->json([
+            'success' => true,
+            'data'    => $minibar->load(['room', 'items.product']),
+            'message' => 'Minibar actualizado.',
+        ]);
+    }
+
+    public function minibarsDestroy(Minibar $minibar): JsonResponse
+    {
+        $minibar->delete();
+        return response()->json(['success' => true, 'message' => 'Minibar eliminado.']);
     }
 }

@@ -5,6 +5,7 @@ import type {
   InventoryCategory,
   InventoryItem,
   InventoryTransaction,
+  Minibar,
   MinibarProduct,
   RepairOrder,
   RoomMinibar,
@@ -123,6 +124,34 @@ export const restockRoomMinibarApi = async (data: {
   quantity: number
 }): Promise<void> => {
   await api.post('/inventory/minibar/restock-room', data)
+}
+
+// ── Minibars (1 por habitación) ──────────────────────────────────────────────
+
+export const getMinibarsApi = async (): Promise<Minibar[]> => {
+  const res = await api.get('/inventory/minibar/minibars')
+  return res.data.data
+}
+
+export const createMinibarApi = async (data: {
+  room_id: string
+  name?: string | null
+  notes?: string | null
+}): Promise<Minibar> => {
+  const res = await api.post('/inventory/minibar/minibars', data)
+  return res.data.data
+}
+
+export const updateMinibarApi = async (
+  id: string,
+  data: Partial<Pick<Minibar, 'name' | 'notes' | 'active'>>,
+): Promise<Minibar> => {
+  const res = await api.put(`/inventory/minibar/minibars/${id}`, data)
+  return res.data.data
+}
+
+export const deleteMinibarApi = async (id: string): Promise<void> => {
+  await api.delete(`/inventory/minibar/minibars/${id}`)
 }
 
 // ── Assets ────────────────────────────────────────────────────────────────────

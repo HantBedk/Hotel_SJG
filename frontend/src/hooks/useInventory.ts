@@ -16,6 +16,10 @@ import {
   deleteMinibarProductApi,
   getRoomMinibarsApi,
   restockRoomMinibarApi,
+  getMinibarsApi,
+  createMinibarApi,
+  updateMinibarApi,
+  deleteMinibarApi,
   getAssetsApi,
   createAssetApi,
   updateAssetApi,
@@ -174,6 +178,41 @@ export function useMinibarProductMutations() {
   })
 
   return { createMutation, updateMutation, deleteMutation, restockRoomMutation }
+}
+
+// ── Minibars (1 por habitación) ──────────────────────────────────────────────
+
+export function useMinibars() {
+  return useQuery({
+    queryKey: ['minibars'],
+    queryFn: getMinibarsApi,
+  })
+}
+
+export function useMinibarMutations() {
+  const qc = useQueryClient()
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['minibars'] })
+
+  const createMutation = useMutation({
+    mutationFn: createMinibarApi,
+    onSuccess: () => { toast.success('Minibar creado.'); invalidate() },
+    onError: (e: ApiError) => toast.error(errMsg(e, 'Error al crear minibar.')),
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateMinibarApi>[1] }) =>
+      updateMinibarApi(id, data),
+    onSuccess: () => { toast.success('Minibar actualizado.'); invalidate() },
+    onError: (e: ApiError) => toast.error(errMsg(e, 'Error al actualizar.')),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteMinibarApi,
+    onSuccess: () => { toast.success('Minibar eliminado.'); invalidate() },
+    onError: (e: ApiError) => toast.error(errMsg(e, 'Error al eliminar.')),
+  })
+
+  return { createMutation, updateMutation, deleteMutation }
 }
 
 // ── Assets ────────────────────────────────────────────────────────────────────
