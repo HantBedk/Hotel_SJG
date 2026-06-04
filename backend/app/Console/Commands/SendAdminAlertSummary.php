@@ -69,19 +69,20 @@ class SendAdminAlertSummary extends Command
             if ($alreadySent) continue;
 
             Notification::create([
-                'type'     => 'admin_summary',
-                'title'    => $title,
-                'message'  => $message,
-                'severity' => 'warning',
-                'is_modal' => true,
-                'payload'  => [
+                'type'       => 'admin_summary',
+                'title'      => $title,
+                'message'    => $message,
+                'severity'   => 'warning',
+                'is_modal'   => true,
+                'payload'    => [
                     'low_stock'           => $lowStock,
                     'expiring'            => $expiring,
                     'maintenances'        => $maintenances,
                     'expired_reservations'=> $expiredReservations,
                     'pending_balance'     => $pendingBalance,
                 ],
-                'user_id'  => $userId,
+                'action_url' => '/',
+                'user_id'    => $userId,
             ]);
         }
 

@@ -43,11 +43,12 @@ class CheckInventoryAlerts extends Command
                     if ($exists) continue;
 
                     Notification::create([
-                        'type'    => 'low_stock',
-                        'title'   => "Stock bajo: {$item->name}",
-                        'message' => "Quedan {$item->current_stock} {$item->unit}(s). Mínimo: {$item->min_stock_threshold}.",
-                        'payload' => ['item_id' => $item->id, 'code' => $item->code],
-                        'user_id' => $userId,
+                        'type'       => 'low_stock',
+                        'title'      => "Stock bajo: {$item->name}",
+                        'message'    => "Quedan {$item->current_stock} {$item->unit}(s). Mínimo: {$item->min_stock_threshold}.",
+                        'payload'    => ['item_id' => $item->id, 'code' => $item->code],
+                        'action_url' => '/inventory?tab=consumibles',
+                        'user_id'    => $userId,
                     ]);
                     $alerted++;
                 }
@@ -73,11 +74,12 @@ class CheckInventoryAlerts extends Command
                     if ($exists) continue;
 
                     Notification::create([
-                        'type'    => 'expiring_product',
-                        'title'   => "Próximo a vencer: {$item->name}",
-                        'message' => "Vence en {$days} día(s). Fecha: {$item->expiry_date->format('d/m/Y')}.",
-                        'payload' => ['item_id' => $item->id, 'expiry_date' => $item->expiry_date->toDateString()],
-                        'user_id' => $userId,
+                        'type'       => 'expiring_product',
+                        'title'      => "Próximo a vencer: {$item->name}",
+                        'message'    => "Vence en {$days} día(s). Fecha: {$item->expiry_date->format('d/m/Y')}.",
+                        'payload'    => ['item_id' => $item->id, 'expiry_date' => $item->expiry_date->toDateString()],
+                        'action_url' => '/inventory?tab=consumibles',
+                        'user_id'    => $userId,
                     ]);
                     $alerted++;
                 }
@@ -104,11 +106,12 @@ class CheckInventoryAlerts extends Command
                     if ($exists) continue;
 
                     Notification::create([
-                        'type'    => 'maintenance_due',
-                        'title'   => "Mantenimiento {$label}: {$maint->asset?->name}",
-                        'message' => "Programado para {$maint->scheduled_date->format('d/m/Y')}. {$maint->description}",
-                        'payload' => ['maintenance_id' => $maint->id, 'asset_id' => $maint->asset_id],
-                        'user_id' => $userId,
+                        'type'       => 'maintenance_due',
+                        'title'      => "Mantenimiento {$label}: {$maint->asset?->name}",
+                        'message'    => "Programado para {$maint->scheduled_date->format('d/m/Y')}. {$maint->description}",
+                        'payload'    => ['maintenance_id' => $maint->id, 'asset_id' => $maint->asset_id],
+                        'action_url' => '/inventory?tab=mantenimientos',
+                        'user_id'    => $userId,
                     ]);
                     $alerted++;
                 }

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Package, Wrench, ShoppingCart, AlertTriangle, ClipboardList } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -18,6 +19,7 @@ const TABS = [
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
+const VALID_TABS = new Set<string>(TABS.map(t => t.key))
 
 const INVENTORY_ALERT_TYPES = new Set(['low_stock', 'expiring_product', 'maintenance_due'])
 
@@ -29,8 +31,27 @@ interface NotificationEvent {
 }
 
 export default function InventoryPage() {
-  const [tab, setTab] = useState<TabKey>('consumibles')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = (searchParams.get('tab') ?? '').toLowerCase()
+  const [tab, setTab] = useState<TabKey>(
+    VALID_TABS.has(initialTab) ? (initialTab as TabKey) : 'consumibles',
+  )
   const queryClient = useQueryClient()
+
+  // Reaccionar a cambios de ?tab (back/forward del navegador)
+  useEffect(() => {
+    const next = (searchParams.get('tab') ?? '').toLowerCase()
+    if (VALID_TABS.has(next) && next !== tab) setTab(next as TabKey)
+  }, [searchParams, tab])
+
+  const changeTab = (key: TabKey) => {
+    setTab(key)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('tab', key)
+      return next
+    }, { replace: true })
+  }
 
   useReverb<NotificationEvent>({
     channel: 'hotel.notifications',
@@ -53,7 +74,7 @@ export default function InventoryPage() {
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
-            onClick={() => setTab(key)}
+            onClick={() => changeTab(key)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
             style={
               tab === key

@@ -1,10 +1,12 @@
-import { useState } from 'react'
-import { Search, Plus, CalendarDays, XCircle, CreditCard, Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { Search, Plus, CalendarDays, XCircle, CreditCard, Users, Pencil } from 'lucide-react'
 import { useReservations } from '@/hooks/useReservations'
 import { useRooms } from '@/hooks/useRooms'
 import NewReservationWizard from './components/NewReservationWizard'
 import BulkReservationWizard from './components/BulkReservationWizard'
 import CheckInFromReservationModal from './components/CheckInFromReservationModal'
+import EditReservationModal from './components/EditReservationModal'
 import { Skeleton } from '@/components/ui/Skeleton'
 import type { Reservation, ReservationStatus } from '@/types'
 
@@ -27,14 +29,19 @@ const STATUS_COLORS: Record<ReservationStatus, string> = {
 const STATUSES: (ReservationStatus | '')[] = ['', 'pending', 'confirmed', 'checked_in', 'cancelled', 'no_show']
 
 export default function ReservationsPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const deepLinkId     = searchParams.get('id')
+  const deepLinkAction = searchParams.get('action')
+
   const [search, setSearch]               = useState('')
   const [status, setStatus]               = useState<ReservationStatus | ''>('')
   const [showWizard, setShowWizard]       = useState(false)
+  const [editing, setEditing]             = useState<Reservation | null>(null)
   const [showBulk, setShowBulk]           = useState(false)
   const [checkingIn, setCheckingIn]       = useState<Reservation | null>(null)
   const [selected, setSelected]           = useState<Reservation | null>(null)
 
-  const { reservations, isLoading, cancel, addPayment } = useReservations({
+  const { reservations, isLoading, cancel, addPayment, update } = useReservations({
     status:  status || undefined,
     search:  search || undefined,
   })
@@ -46,6 +53,29 @@ export default function ReservationsPage() {
     cancel({ id: res.id })
     setSelected(null)
   }
+
+  // Deep-link: aplicar ?id y ?action al cargar la lista
+  useEffect(() => {
+    if (!deepLinkId) return
+    const res = (reservations as Reservation[]).find(r => r.id === deepLinkId)
+    if (!res) return
+    if (deepLinkAction === 'checkin' && ['pending', 'confirmed'].includes(res.status)) {
+      setCheckingIn(res)
+    } else if (deepLinkAction === 'cancel' && ['pending', 'confirmed'].includes(res.status)) {
+      handleCancel(res)
+    } else if (deepLinkAction === 'edit') {
+      setEditing(res)
+    } else {
+      setSelected(res)
+    }
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('id')
+      next.delete('action')
+      return next
+    }, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkId, deepLinkAction, reservations])
 
   return (
     <div className="flex flex-col gap-4 h-full">
@@ -127,7 +157,20 @@ export default function ReservationsPage() {
           onClose={() => setSelected(null)}
           onCheckIn={() => { setCheckingIn(selected); setSelected(null) }}
           onCancel={() => handleCancel(selected)}
+          onEdit={() => { setEditing(selected); setSelected(null) }}
           onAddPayment={(payload) => addPayment({ id: selected.id, ...payload })}
+        />
+      )}
+
+      {/* Edit modal */}
+      {editing && (
+        <EditReservationModal
+          reservation={editing}
+          onSave={(payload) => {
+            update(payload)
+            setEditing(null)
+          }}
+          onClose={() => setEditing(null)}
         />
       )}
 
@@ -244,16 +287,19 @@ function ReservationDetailPanel({
   onClose,
   onCheckIn,
   onCancel,
+  onEdit,
   onAddPayment,
 }: {
   reservation: Reservation
   onClose: () => void
   onCheckIn: () => void
   onCancel: () => void
+  onEdit: () => void
   onAddPayment: (payload: { amount: number; payment_method: string; payment_type: string }) => void
 }) {
   const canCheckIn  = ['pending', 'confirmed'].includes(res.status)
   const canCancel   = ['pending', 'confirmed'].includes(res.status)
+  const canEdit     = ['pending', 'confirmed'].includes(res.status)
   const canPayment  = ['pending', 'confirmed'].includes(res.status) && res.payment_status !== 'paid'
 
   const [showPayForm, setShowPayForm] = useState(false)
@@ -352,6 +398,15 @@ function ReservationDetailPanel({
         </div>
 
         <div className="flex flex-wrap gap-2 px-5 pb-5">
+          {canEdit && (
+            <button
+              onClick={onEdit}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium border hover:opacity-80"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+            >
+              <Pencil size={14} /> Editar
+            </button>
+          )}
           {canPayment && !showPayForm && (
             <button
               onClick={() => setShowPayForm(true)}

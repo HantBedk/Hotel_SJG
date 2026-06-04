@@ -33,10 +33,11 @@ interface ItemFormProps {
   existingItems: InventoryItem[]
   onSave: (data: Partial<InventoryItem>) => void
   onClose: () => void
+  onRestockExisting?: (item: InventoryItem) => void
   saving: boolean
 }
 
-function ItemForm({ item, categories, existingItems, onSave, onClose, saving }: ItemFormProps) {
+function ItemForm({ item, categories, existingItems, onSave, onClose, onRestockExisting, saving }: ItemFormProps) {
   const [form, setForm] = useState({
     category_id:         item?.category_id ?? '',
     name:                item?.name ?? '',
@@ -127,10 +128,20 @@ function ItemForm({ item, categories, existingItems, onSave, onClose, saving }: 
               className="col-span-2 rounded-lg p-3 text-xs flex items-start gap-2"
               style={{ background: '#FFFBEB', border: '1px solid #FCD34D', color: '#92400E' }}
             >
-              <span className="font-semibold">⚠ Posible duplicado:</span>
-              <span>
-                ya existe <strong>{duplicateMatch.name}</strong> ({duplicateMatch.code}) con la misma marca y presentación. Stock actual: {duplicateMatch.current_stock} {duplicateMatch.unit}. ¿Quieres recargar stock en su lugar?
+              <span className="font-semibold whitespace-nowrap">⚠ Posible duplicado:</span>
+              <span className="flex-1">
+                ya existe <strong>{duplicateMatch.name}</strong> ({duplicateMatch.code}) con la misma marca y presentación. Stock actual: {duplicateMatch.current_stock} {duplicateMatch.unit}.
               </span>
+              {onRestockExisting && (
+                <button
+                  type="button"
+                  onClick={() => onRestockExisting(duplicateMatch)}
+                  className="ml-auto px-2 py-1 rounded-md text-xs font-medium whitespace-nowrap"
+                  style={{ background: '#D97706', color: '#fff' }}
+                >
+                  Recargar existente
+                </button>
+              )}
             </div>
           )}
           <div className="col-span-2 flex justify-end gap-3 pt-2">
@@ -546,6 +557,7 @@ export default function ConsumiblesTab() {
           existingItems={items}
           onSave={handleSave}
           onClose={() => setModalItem(undefined)}
+          onRestockExisting={(existing) => { setModalItem(undefined); setRestockItem(existing) }}
           saving={createMutation.isPending || updateMutation.isPending}
         />
       )}

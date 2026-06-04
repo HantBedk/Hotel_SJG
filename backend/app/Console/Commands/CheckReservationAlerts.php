@@ -91,16 +91,17 @@ class CheckReservationAlerts extends Command
                     if ($alreadyNotified) continue;
 
                     Notification::create([
-                        'type'     => 'reservation_alert',
-                        'title'    => $title,
-                        'message'  => $message,
-                        'severity' => 'info',
-                        'payload'  => [
+                        'type'       => 'reservation_alert',
+                        'title'      => $title,
+                        'message'    => $message,
+                        'severity'   => 'info',
+                        'payload'    => [
                             'reservation_id' => $reservation->id,
                             'start_date'     => $reservation->start_date->toDateString(),
                             'auto_assigned'  => $autoAssigned,
                         ],
-                        'user_id'  => $userId,
+                        'action_url' => "/reservations?id={$reservation->id}",
+                        'user_id'    => $userId,
                     ]);
                     $alerted++;
                 }
@@ -121,15 +122,16 @@ class CheckReservationAlerts extends Command
                     if ($alreadyNotified) continue;
 
                     Notification::create([
-                        'type'     => 'reservation_expired',
-                        'title'    => "Reserva vencida: {$guest}",
-                        'message'  => "{$room} · Inicio {$reservation->start_date->toDateString()} sin check-in. Revisa con el cliente.",
-                        'severity' => 'warning',
-                        'payload'  => [
+                        'type'       => 'reservation_expired',
+                        'title'      => "Reserva vencida: {$guest}",
+                        'message'    => "{$room} · Inicio {$reservation->start_date->toDateString()} sin check-in. Revisa con el cliente.",
+                        'severity'   => 'warning',
+                        'payload'    => [
                             'reservation_id' => $reservation->id,
                             'start_date'     => $reservation->start_date->toDateString(),
                         ],
-                        'user_id'  => $userId,
+                        'action_url' => "/reservations?id={$reservation->id}",
+                        'user_id'    => $userId,
                     ]);
                     $alerted++;
                 }

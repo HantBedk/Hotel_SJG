@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { addDays, addMonths, addWeeks, addYears, format, startOfWeek, startOfYear, endOfMonth, subMonths, subWeeks, subYears, parseISO, isWithinInterval, eachDayOfInterval } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCw, ExternalLink, LogIn, XCircle as XCircleIcon } from 'lucide-react'
 import { useCalendar } from '@/hooks/useCalendar'
 import CalendarGrid from './components/CalendarGrid'
 import NewReservationWizard from '@/pages/reservations/components/NewReservationWizard'
@@ -379,7 +380,10 @@ export default function CalendarPage() {
 
       {/* Entry detail panel */}
       {selectedEntry && (
-        <EntryDetailPanel entry={selectedEntry} onClose={() => setSelectedEntry(null)} />
+        <EntryDetailPanel
+          entry={selectedEntry}
+          onClose={() => setSelectedEntry(null)}
+        />
       )}
 
       {/* New reservation wizard */}
@@ -408,6 +412,10 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 
 function EntryDetailPanel({ entry, onClose }: { entry: CalendarEntry; onClose: () => void }) {
   const isReservation = entry.type === 'reservation'
+  const navigate = useNavigate()
+  const canCheckIn = isReservation && ['pending', 'confirmed'].includes(entry.status)
+
+  const go = (path: string) => { onClose(); navigate(path) }
 
   return (
     <div
@@ -439,6 +447,47 @@ function EntryDetailPanel({ entry, onClose }: { entry: CalendarEntry; onClose: (
             Precio: ${Number(entry.agreed_price).toLocaleString('es-CO')}
           </p>
         )}
+
+        {/* Acciones */}
+        <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t" style={{ borderColor: 'var(--border-default)' }}>
+          {isReservation ? (
+            <>
+              <button
+                onClick={() => go(`/reservations?id=${entry.id}`)}
+                className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white"
+                style={{ background: 'var(--color-primary)' }}
+              >
+                <ExternalLink size={13} /> Ver reserva
+              </button>
+              {canCheckIn && (
+                <button
+                  onClick={() => go(`/reservations?id=${entry.id}&action=checkin`)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border"
+                  style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                >
+                  <LogIn size={13} /> Check-in
+                </button>
+              )}
+              {canCheckIn && (
+                <button
+                  onClick={() => go(`/reservations?id=${entry.id}&action=cancel`)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border"
+                  style={{ borderColor: 'var(--border-default)', color: '#DC2626' }}
+                >
+                  <XCircleIcon size={13} /> Cancelar
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              onClick={() => go(`/stays?id=${entry.id}`)}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white"
+              style={{ background: 'var(--color-primary)' }}
+            >
+              <ExternalLink size={13} /> Ver estadía
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

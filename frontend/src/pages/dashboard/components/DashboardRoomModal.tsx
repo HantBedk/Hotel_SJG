@@ -304,7 +304,7 @@ export function DashboardRoomModal({
                     />
                   )}
                   <ActionButton
-                    onClick={() => go('/inventory?tab=repair-orders')}
+                    onClick={() => go('/inventory?tab=reparaciones')}
                     disabled={!canManage}
                     icon={<AlertTriangle size={15} />}
                     label="Reportar incidente / mantenimiento"
@@ -386,7 +386,7 @@ export function DashboardRoomModal({
                     primary
                   />
                   <ActionButton
-                    onClick={() => go('/inventory?tab=repair-orders')}
+                    onClick={() => go('/inventory?tab=reparaciones')}
                     icon={<Wrench size={15} />}
                     label="Ver órdenes de reparación"
                   />

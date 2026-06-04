@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Search } from 'lucide-react'
-import { useStays } from '@/hooks/useStays'
+import { useStays, useStay } from '@/hooks/useStays'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { StayDrawer } from './components/StayDrawer'
@@ -31,12 +32,19 @@ export default function StaysPage() {
   const { hasPermission } = useAuth()
   const canCheckOut = hasPermission('check_out')
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const deepLinkId     = searchParams.get('id')
+  const deepLinkAction = searchParams.get('action')
+
   const [statusFilter, setStatusFilter] = useState<string>('active')
   const [guestSearch, setGuestSearch]   = useState('')
   const [selected, setSelected] = useState<Stay | null>(null)
   const [checkoutStay, setCheckoutStay] = useState<Stay | null>(null)
 
   const { stays: rawStays, isLoading, transfer, addPayment, addService, addMinibar, extend } = useStays({ status: statusFilter })
+
+  // Deep-link: cargar la estadía pedida en la URL aunque no esté en el filtro actual
+  const { data: deepLinkStay } = useStay(deepLinkId ?? '')
 
   // Client-side filter by guest/company name
   const stays = guestSearch.trim()
@@ -53,6 +61,22 @@ export default function StaysPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawStays])
+
+  // Aplicar deep-link cuando la estadía esté disponible
+  useEffect(() => {
+    if (!deepLinkId || !deepLinkStay) return
+    setSelected(deepLinkStay)
+    if (deepLinkAction === 'checkout' && deepLinkStay.status === 'active') {
+      setCheckoutStay(deepLinkStay)
+    }
+    // Limpiar query-params para evitar reapertura al refrescar
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('id')
+      next.delete('action')
+      return next
+    }, { replace: true })
+  }, [deepLinkId, deepLinkStay, deepLinkAction, setSearchParams])
 
   const handleCheckoutSuccess = () => {
     setCheckoutStay(null)

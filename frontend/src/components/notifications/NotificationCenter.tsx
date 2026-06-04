@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { X, Bell, CheckCheck, AlertTriangle, Package, Wrench } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { X, Bell, CheckCheck, AlertTriangle, Package, Wrench, ChevronRight } from 'lucide-react'
 import { useNotifications } from '@/hooks/useNotifications'
 import type { AppNotification } from '@/types'
 
@@ -10,12 +11,15 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   reservation_alert: <Bell size={16} className="text-purple-500" />,
 }
 
-function NotifRow({ n, onRead }: { n: AppNotification; onRead: (id: string) => void }) {
+function NotifRow({ n, onRead, onNavigate }: { n: AppNotification; onRead: (id: string) => void; onNavigate: (url: string) => void }) {
   const icon = TYPE_ICONS[n.type] ?? <Bell size={16} className="text-slate-400" />
 
   return (
     <button
-      onClick={() => { if (!n.is_read) onRead(n.id) }}
+      onClick={() => {
+        if (!n.is_read) onRead(n.id)
+        if (n.action_url) onNavigate(n.action_url)
+      }}
       className="w-full text-left px-4 py-3 flex gap-3 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
       style={{ opacity: n.is_read ? 0.6 : 1 }}
     >
@@ -33,9 +37,14 @@ function NotifRow({ n, onRead }: { n: AppNotification; onRead: (id: string) => v
           })}
         </p>
       </div>
-      {!n.is_read && (
-        <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />
-      )}
+      <div className="flex flex-col items-center gap-1 flex-shrink-0">
+        {!n.is_read && (
+          <div className="w-2 h-2 rounded-full bg-blue-500" />
+        )}
+        {n.action_url && (
+          <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
+        )}
+      </div>
     </button>
   )
 }
@@ -47,7 +56,13 @@ interface NotificationCenterProps {
 
 export default function NotificationCenter({ open, onClose }: NotificationCenterProps) {
   const { notifications, isLoading, unreadCount, markRead, markAllRead } = useNotifications()
+  const navigate = useNavigate()
   const ref = useRef<HTMLDivElement>(null)
+
+  const handleNavigate = (url: string) => {
+    onClose()
+    navigate(url)
+  }
 
   useEffect(() => {
     if (!open) return
@@ -121,7 +136,7 @@ export default function NotificationCenter({ open, onClose }: NotificationCenter
         ) : (
           <div className="divide-y" style={{ borderColor: 'var(--border-default)' }}>
             {notifications.map((n) => (
-              <NotifRow key={n.id} n={n} onRead={markRead} />
+              <NotifRow key={n.id} n={n} onRead={markRead} onNavigate={handleNavigate} />
             ))}
           </div>
         )}

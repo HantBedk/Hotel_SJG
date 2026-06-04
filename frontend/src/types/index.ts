@@ -587,6 +587,7 @@ export interface AppNotification {
   severity?: 'info' | 'warning' | 'critical'
   is_modal?: boolean
   payload: Record<string, unknown> | null
+  action_url?: string | null
   is_read: boolean
   read_at: string | null
   created_at: string

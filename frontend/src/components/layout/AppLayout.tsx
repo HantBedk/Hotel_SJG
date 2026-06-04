@@ -12,7 +12,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/companies':    'Empresas',
   '/reservations': 'Reservaciones',
   '/calendar':     'Calendario',
-  '/reports':      'Reportes',
   '/inventory':    'Inventario',
   '/activity':     'Historial',
   '/settings':     'Configuración',
