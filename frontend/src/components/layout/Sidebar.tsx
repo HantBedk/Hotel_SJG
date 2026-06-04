@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { useAuth } from '@/hooks/useAuth'
+import { useHotelInfo } from '@/hooks/useAdmin'
 
 const NAV_ITEMS = [
   { to: '/',             label: 'Dashboard',     icon: LayoutDashboard, permission: 'view_dashboard' },
@@ -36,6 +37,7 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed = false, onClose }: SidebarProps) {
   const { logout, hasPermission } = useAuth()
+  const { data: hotel }           = useHotelInfo()
 
   return (
     <aside
@@ -49,14 +51,20 @@ export default function Sidebar({ collapsed = false, onClose }: SidebarProps) {
       {/* Logo + mobile close button */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-white/10">
         <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden"
           style={{ background: 'var(--color-primary)' }}
           aria-hidden="true"
         >
-          <BedDouble size={16} className="text-white" />
+          {hotel?.logo_url ? (
+            <img src={hotel.logo_url} alt="" className="w-full h-full object-contain" />
+          ) : (
+            <BedDouble size={16} className="text-white" />
+          )}
         </div>
         {!collapsed && (
-          <span className="font-semibold text-sm text-white truncate flex-1">Hotel Manager</span>
+          <span className="font-semibold text-sm text-white truncate flex-1">
+            {hotel?.name || 'Hotel Manager'}
+          </span>
         )}
         {onClose && (
           <button

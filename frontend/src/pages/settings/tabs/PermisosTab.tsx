@@ -3,7 +3,7 @@ import { Save } from 'lucide-react'
 import { useAdminRoles, useAdminPermissions, useRolePermissionMutations } from '@/hooks/useAdmin'
 import { SkeletonText } from '@/components/ui/Skeleton'
 
-type RolePerms = Record<number, Set<string>>
+type RolePerms = Record<string, Set<string>>
 
 export default function PermisosTab() {
   const { data: roles = [], isLoading: loadingRoles }   = useAdminRoles()
@@ -11,7 +11,7 @@ export default function PermisosTab() {
   const { update }                                       = useRolePermissionMutations()
 
   const [localPerms, setLocalPerms] = useState<RolePerms>({})
-  const [saving, setSaving]         = useState<number | null>(null)
+  const [saving, setSaving]         = useState<string | null>(null)
 
   useEffect(() => {
     if (roles.length) {
@@ -21,7 +21,7 @@ export default function PermisosTab() {
     }
   }, [roles])
 
-  const toggle = (roleId: number, perm: string, isSuperadmin: boolean) => {
+  const toggle = (roleId: string, perm: string, isSuperadmin: boolean) => {
     if (isSuperadmin) return
     setLocalPerms(prev => {
       const next = { ...prev, [roleId]: new Set(prev[roleId]) }
@@ -31,7 +31,7 @@ export default function PermisosTab() {
     })
   }
 
-  const save = async (roleId: number) => {
+  const save = async (roleId: string) => {
     setSaving(roleId)
     await update.mutateAsync({ roleId, permissions: Array.from(localPerms[roleId] ?? []) })
     setSaving(null)

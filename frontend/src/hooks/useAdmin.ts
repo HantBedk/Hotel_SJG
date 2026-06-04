@@ -199,7 +199,7 @@ export function useRolePermissionMutations() {
   const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'roles'] })
 
   const update = useMutation({
-    mutationFn: ({ roleId, permissions }: { roleId: number; permissions: string[] }) =>
+    mutationFn: ({ roleId, permissions }: { roleId: string; permissions: string[] }) =>
       updateRolePermissionsApi(roleId, permissions),
     onSuccess: inv,
   })

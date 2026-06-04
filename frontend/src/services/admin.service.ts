@@ -121,12 +121,12 @@ export const deleteAdminUserApi = (id: string) =>
 // ── Roles & permissions ───────────────────────────────────────────────────────
 
 export const getAdminRolesApi = () =>
-  api.get('/admin/roles').then(r => r.data.data as { id: number; name: string; permissions: string[] }[])
+  api.get('/admin/roles').then(r => r.data.data as { id: string; name: string; permissions: string[] }[])
 
 export const getAdminPermissionsApi = () =>
   api.get('/admin/permissions').then(r => r.data.data as string[])
 
-export const updateRolePermissionsApi = (roleId: number, permissions: string[]) =>
+export const updateRolePermissionsApi = (roleId: string, permissions: string[]) =>
   api.put(`/admin/roles/${roleId}/permissions`, { permissions }).then(r => r.data.data)
 
 // ── Backups ───────────────────────────────────────────────────────────────────

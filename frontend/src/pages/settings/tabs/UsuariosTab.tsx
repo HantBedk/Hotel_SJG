@@ -5,8 +5,43 @@ import type { AdminUser } from '@/types'
 import { SkeletonText } from '@/components/ui/Skeleton'
 import { useAuth } from '@/hooks/useAuth'
 
-type UserForm = { name: string; email: string; password: string; role: string; is_active: boolean }
-const EMPTY: UserForm = { name: '', email: '', password: '', role: 'receptionist', is_active: true }
+type UserForm = {
+  name: string
+  document_number: string
+  phone: string
+  email: string
+  password: string
+  role: string
+  is_active: boolean
+}
+const EMPTY: UserForm = {
+  name: '',
+  document_number: '',
+  phone: '',
+  email: '',
+  password: '',
+  role: 'receptionist',
+  is_active: true,
+}
+
+// Solo admin y superadmin acceden al sistema (requieren email + contraseña).
+// El resto (recepción, housekeeping, mantenimiento, etc.) son personal solo para tracking.
+const LOGIN_ROLES = new Set(['admin', 'superadmin'])
+const roleNeedsLogin = (role: string) => LOGIN_ROLES.has(role)
+
+const slugify = (s: string) =>
+  s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'user'
+
+// Email/contraseña ficticios para personal sin login. Único por timestamp+random.
+function generatePlaceholderEmail(name: string, role: string) {
+  const stamp = Date.now().toString(36)
+  const rnd   = Math.random().toString(36).slice(2, 6)
+  return `${slugify(role)}-${slugify(name)}-${stamp}${rnd}@personal.local`
+}
+function generatePlaceholderPassword() {
+  // crypto.randomUUID retorna 36 chars (UUID con guiones), más que suficiente para el min:6 del backend.
+  return globalThis.crypto?.randomUUID?.() ?? (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2))
+}
 
 export default function UsuariosTab() {
   const { data: users = [], isLoading } = useAdminUsers()
@@ -23,19 +58,46 @@ export default function UsuariosTab() {
   const openCreate = () => { setEditing(null); setForm(EMPTY); setOpen(true) }
   const openEdit   = (u: AdminUser) => {
     setEditing(u)
-    setForm({ name: u.name, email: u.email, password: '', role: u.role ?? 'receptionist', is_active: u.is_active })
+    setForm({
+      name:            u.name,
+      document_number: u.document_number ?? '',
+      phone:           u.phone ?? '',
+      email:           u.email,
+      password:        '',
+      role:            u.role ?? 'receptionist',
+      is_active:       u.is_active,
+    })
     setOpen(true)
   }
   const close = () => setOpen(false)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const needsLogin = roleNeedsLogin(form.role)
+
     if (editing) {
-      const payload: Partial<UserForm> = { name: form.name, email: form.email, role: form.role, is_active: form.is_active }
-      if (form.password) payload.password = form.password
+      const payload: Partial<UserForm> = {
+        name:            form.name,
+        document_number: form.document_number,
+        phone:           form.phone,
+        role:            form.role,
+        is_active:       form.is_active,
+      }
+      if (needsLogin) {
+        payload.email = form.email
+        if (form.password) payload.password = form.password
+      }
+      // Si pasa de "login" a "personal", no tocamos email (placeholder lo asignaría el create).
       await update.mutateAsync({ id: editing.id, data: payload })
     } else {
-      await create.mutateAsync(form)
+      const payload: UserForm = needsLogin
+        ? form
+        : {
+            ...form,
+            email:    generatePlaceholderEmail(form.name, form.role),
+            password: generatePlaceholderPassword(),
+          }
+      await create.mutateAsync(payload)
     }
     close()
   }
@@ -80,7 +142,11 @@ export default function UsuariosTab() {
                     <span className="ml-1 text-xs" style={{ color: 'var(--color-primary)' }}>(yo)</span>
                   )}
                 </td>
-                <td className="py-2" style={{ color: 'var(--text-secondary)' }}>{u.email}</td>
+                <td className="py-2" style={{ color: 'var(--text-secondary)' }}>
+                  {u.email?.endsWith('@personal.local')
+                    ? <span style={{ color: 'var(--text-muted)' }}>—</span>
+                    : u.email}
+                </td>
                 <td className="py-2">
                   <span
                     className="px-1.5 py-0.5 rounded text-xs font-medium capitalize"
@@ -117,41 +183,18 @@ export default function UsuariosTab() {
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
           <form
             onSubmit={submit}
+            autoComplete="off"
             className="rounded-xl p-6 space-y-4 w-full max-w-md"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
           >
             <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
               {editing ? `Editar: ${editing.name}` : 'Nuevo usuario'}
             </h3>
-            {(['name', 'email'] as const).map(k => (
-              <div key={k}>
-                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-                  {k === 'name' ? 'Nombre' : 'Email'}
-                </label>
-                <input
-                  type={k === 'email' ? 'email' : 'text'}
-                  value={form[k]}
-                  required
-                  onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
-                  style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
-                />
-              </div>
-            ))}
-            <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-                {editing ? 'Contraseña (dejar vacío para no cambiar)' : 'Contraseña *'}
-              </label>
-              <input
-                type="password"
-                value={form.password}
-                required={!editing}
-                minLength={6}
-                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
-                style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
-              />
-            </div>
+
+            {/* Trampa invisible para evitar que el navegador autocomplete email/contraseña en los campos reales */}
+            <input type="text"     name="prevent-autofill" autoComplete="username"      className="hidden" tabIndex={-1} aria-hidden="true" />
+            <input type="password" name="prevent-autofill" autoComplete="new-password" className="hidden" tabIndex={-1} aria-hidden="true" />
+
             <div>
               <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Rol</label>
               <select
@@ -162,7 +205,85 @@ export default function UsuariosTab() {
               >
                 {roleNames.map(r => <option key={r} value={r} className="capitalize">{r}</option>)}
               </select>
+              {!roleNeedsLogin(form.role) && (
+                <p className="mt-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  Este rol es solo personal (sin acceso al sistema). No requiere email ni contraseña.
+                </p>
+              )}
             </div>
+
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Nombre</label>
+              <input
+                type="text"
+                value={form.name}
+                required
+                autoComplete="off"
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
+                style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Cédula</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={form.document_number}
+                  autoComplete="off"
+                  onChange={e => setForm(f => ({ ...f, document_number: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
+                  style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Celular</label>
+                <input
+                  type="tel"
+                  value={form.phone}
+                  autoComplete="off"
+                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
+                  style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+                />
+              </div>
+            </div>
+
+            {roleNeedsLogin(form.role) && (
+              <>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Email</label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    required
+                    autoComplete="off"
+                    name="user-email-field"
+                    onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
+                    style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+                    {editing ? 'Contraseña (dejar vacío para no cambiar)' : 'Contraseña *'}
+                  </label>
+                  <input
+                    type="password"
+                    value={form.password}
+                    required={!editing}
+                    minLength={6}
+                    autoComplete="new-password"
+                    name="user-password-field"
+                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
+                    style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+                  />
+                </div>
+              </>
+            )}
             {editing && (
               <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-primary)' }}>
                 <input

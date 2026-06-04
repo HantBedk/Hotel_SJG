@@ -644,6 +644,8 @@ export interface PaymentHistoryEntry {
 export interface AdminUser {
   id: string
   name: string
+  document_number: string | null
+  phone: string | null
   email: string
   is_active: boolean
   role: string | null
@@ -652,6 +654,8 @@ export interface AdminUser {
 
 export interface AdminUserPayload {
   name: string
+  document_number?: string | null
+  phone?: string | null
   email: string
   password?: string
   role: string

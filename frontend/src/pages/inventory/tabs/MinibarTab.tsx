@@ -4,7 +4,7 @@ import { useMinibarProducts, useMinibarProductMutations, useRoomMinibars } from 
 import { useRooms } from '@/hooks/useRooms'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonTable } from '@/components/ui/Skeleton'
-import type { MinibarProduct } from '@/types'
+import type { MinibarProduct, Room } from '@/types'
 
 function formatCurrency(v: string | number | null) {
   if (v == null) return '—'
@@ -17,29 +17,47 @@ function formatDateTime(iso: string | null) {
 }
 
 // ── Product form ──────────────────────────────────────────────────────────────
+interface ProductFormData {
+  name: string
+  sale_price: string | number
+  cost_price: string | number
+  damage_price: string | number
+  description: string
+  room_id: string
+  initial_quantity: string
+}
+
 interface ProductFormProps {
   product?: MinibarProduct | null
-  onSave: (data: Partial<MinibarProduct>) => void
+  rooms: Room[]
+  onSave: (data: ProductFormData) => void
   onClose: () => void
   saving: boolean
 }
 
-function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
-  const [form, setForm] = useState({
-    name:         product?.name ?? '',
-    sale_price:   product?.sale_price ?? '',
-    cost_price:   product?.cost_price ?? '',
-    damage_price: product?.damage_price ?? '',
-    description:  product?.description ?? '',
+function ProductForm({ product, rooms, onSave, onClose, saving }: ProductFormProps) {
+  const isEdit = !!product
+  const [form, setForm] = useState<ProductFormData>({
+    name:             product?.name ?? '',
+    sale_price:       product?.sale_price ?? '',
+    cost_price:       product?.cost_price ?? '',
+    damage_price:     product?.damage_price ?? '',
+    description:      product?.description ?? '',
+    room_id:          '',
+    initial_quantity: '1',
   })
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
+  const set = (k: keyof ProductFormData, v: string) => setForm((f) => ({ ...f, [k]: v }))
+
+  const sortedRooms = [...rooms].sort((a, b) =>
+    a.number.localeCompare(b.number, undefined, { numeric: true }),
+  )
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }}>
       <div className="w-full max-w-md rounded-xl shadow-2xl" style={{ background: 'var(--bg-surface)' }}>
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
           <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {product ? 'Editar producto' : 'Nuevo producto de minibar'}
+            {isEdit ? 'Editar producto' : 'Nuevo producto de minibar'}
           </h2>
           <button onClick={onClose}><X size={18} style={{ color: 'var(--text-secondary)' }} /></button>
         </div>
@@ -61,13 +79,51 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
                 required={required}
                 step={type === 'number' ? 'any' : undefined}
                 min={type === 'number' ? '0' : undefined}
-                value={(form as Record<string, string>)[key]}
-                onChange={(e) => set(key, e.target.value)}
+                value={String((form as unknown as Record<string, string>)[key] ?? '')}
+                onChange={(e) => set(key as keyof ProductFormData, e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border text-sm"
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
               />
             </div>
           ))}
+
+          {!isEdit && (
+            <>
+              <div className="pt-2 border-t" style={{ borderColor: 'var(--border-default)' }}>
+                <p className="text-[11px] font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                  Asignar a habitación
+                </p>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Habitación *</label>
+                <select
+                  required
+                  value={form.room_id}
+                  onChange={(e) => set('room_id', e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                >
+                  <option value="">Seleccionar habitación…</option>
+                  {sortedRooms.map((r) => (
+                    <option key={r.id} value={r.id}>Hab. {r.number}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Cantidad inicial *</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  value={form.initial_quantity}
+                  onChange={(e) => set('initial_quantity', e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                />
+              </div>
+            </>
+          )}
+
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm border"
               style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
@@ -163,13 +219,40 @@ function CatalogueSection() {
   const [modalProduct, setModalProduct] = useState<MinibarProduct | null | undefined>(undefined)
 
   const { data: products = [], isLoading } = useMinibarProducts()
-  const { createMutation, updateMutation, deleteMutation } = useMinibarProductMutations()
+  const { rooms } = useRooms()
+  const { createMutation, updateMutation, deleteMutation, restockRoomMutation } = useMinibarProductMutations()
 
-  const handleSave = (formData: Partial<MinibarProduct>) => {
+  const handleSave = async (formData: {
+    name: string
+    sale_price: string | number
+    cost_price: string | number
+    damage_price: string | number
+    description: string
+    room_id: string
+    initial_quantity: string
+  }) => {
+    const { room_id, initial_quantity, ...productFields } = formData
     if (modalProduct?.id) {
-      updateMutation.mutate({ id: modalProduct.id, data: formData }, { onSuccess: () => setModalProduct(undefined) })
-    } else {
-      createMutation.mutate(formData, { onSuccess: () => setModalProduct(undefined) })
+      updateMutation.mutate(
+        { id: modalProduct.id, data: productFields },
+        { onSuccess: () => setModalProduct(undefined) },
+      )
+      return
+    }
+
+    try {
+      const created = await createMutation.mutateAsync(productFields)
+      const qty = Number(initial_quantity)
+      if (room_id && qty > 0) {
+        await restockRoomMutation.mutateAsync({
+          room_id,
+          minibar_product_id: created.id,
+          quantity: qty,
+        })
+      }
+      setModalProduct(undefined)
+    } catch {
+      // toasts ya emitidos por las mutations
     }
   }
 
@@ -248,9 +331,10 @@ function CatalogueSection() {
       {modalProduct !== undefined && (
         <ProductForm
           product={modalProduct}
+          rooms={rooms}
           onSave={handleSave}
           onClose={() => setModalProduct(undefined)}
-          saving={createMutation.isPending || updateMutation.isPending}
+          saving={createMutation.isPending || updateMutation.isPending || restockRoomMutation.isPending}
         />
       )}
     </div>
