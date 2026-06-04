@@ -110,7 +110,7 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
         amount:         parseFloat(payAmount),
         payment_method: payMethod,
         payment_type:   'final',
-        paid_by:        payBy,
+        paid_by:        stay.company ? payBy : 'guest',
       })
     }
     checkoutMutation.mutate()
@@ -456,21 +456,23 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
                     className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
                     style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                   />
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={stay.company ? 'grid grid-cols-2 gap-2' : ''}>
                     <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)}
-                      className="px-2 py-2 rounded-lg text-xs border outline-none"
+                      className="w-full px-2 py-2 rounded-lg text-xs border outline-none"
                       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
                       <option value="cash">Efectivo</option>
                       <option value="transfer">Transferencia</option>
                       <option value="card">Tarjeta</option>
                     </select>
-                    <select value={payBy} onChange={(e) => setPayBy(e.target.value)}
-                      className="px-2 py-2 rounded-lg text-xs border outline-none"
-                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
-                      <option value="guest">Huésped</option>
-                      <option value="company">Empresa</option>
-                      <option value="mixed">Mixto</option>
-                    </select>
+                    {stay.company && (
+                      <select value={payBy} onChange={(e) => setPayBy(e.target.value)}
+                        className="px-2 py-2 rounded-lg text-xs border outline-none"
+                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                        <option value="guest">Huésped</option>
+                        <option value="company">Empresa</option>
+                        <option value="mixed">Mixto</option>
+                      </select>
+                    )}
                   </div>
                 </div>
               ) : (

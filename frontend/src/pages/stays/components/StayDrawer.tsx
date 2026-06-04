@@ -185,7 +185,7 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
       amount,
       payment_method: payForm.payment_method,
       payment_type: payForm.payment_type,
-      paid_by: payForm.paid_by,
+      paid_by: stay.company ? payForm.paid_by : 'guest',
       notes: payForm.notes || undefined,
     })
     setShowPayForm(false)
@@ -716,8 +716,11 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                   className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
                   style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                 />
-                <div className="grid grid-cols-3 gap-2">
-                  {['payment_method', 'payment_type', 'paid_by'].map((field) => (
+                <div className={stay.company ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
+                  {(stay.company
+                    ? ['payment_method', 'payment_type', 'paid_by']
+                    : ['payment_method', 'payment_type']
+                  ).map((field) => (
                     <select key={field} value={payForm[field as keyof PaymentForm]}
                       onChange={(e) => setPayForm((s) => ({ ...s, [field]: e.target.value }))}
                       className="px-2 py-2 rounded-lg text-xs border outline-none"

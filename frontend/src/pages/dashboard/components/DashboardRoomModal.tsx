@@ -98,7 +98,7 @@ export function DashboardRoomModal({
       amount,
       payment_method: payForm.payment_method,
       payment_type: payForm.payment_type,
-      paid_by: payForm.paid_by,
+      paid_by: stay.company ? payForm.paid_by : 'guest',
       notes: payForm.notes || undefined,
     })
     setShowPayForm(false)
@@ -316,6 +316,7 @@ export function DashboardRoomModal({
                     <PaymentInlineForm
                       form={payForm}
                       balance={balance}
+                      hasCompany={!!stay.company}
                       onChange={setPayForm}
                       onSubmit={handleSubmitPayment}
                       onCancel={() => { setShowPayForm(false); setPayForm(EMPTY_PAYMENT) }}
@@ -611,12 +612,13 @@ function ActionButton({ onClick, disabled, icon, label, primary }: ActionButtonP
 interface PaymentInlineFormProps {
   form: PaymentForm
   balance: number
+  hasCompany: boolean
   onChange: (form: PaymentForm) => void
   onSubmit: () => void
   onCancel: () => void
 }
 
-function PaymentInlineForm({ form, balance, onChange, onSubmit, onCancel }: PaymentInlineFormProps) {
+function PaymentInlineForm({ form, balance, hasCompany, onChange, onSubmit, onCancel }: PaymentInlineFormProps) {
   const amount = parseFloat(form.amount)
   const isValid = !!amount && amount > 0
   const exceedsBalance = isValid && balance > 0 && amount > balance
@@ -659,7 +661,7 @@ function PaymentInlineForm({ form, balance, onChange, onSubmit, onCancel }: Paym
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className={hasCompany ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
         <select
           value={form.payment_method}
           onChange={(e) => onChange({ ...form, payment_method: e.target.value })}
@@ -680,16 +682,18 @@ function PaymentInlineForm({ form, balance, onChange, onSubmit, onCancel }: Paym
           <option value="partial">Parcial</option>
           <option value="final">Final</option>
         </select>
-        <select
-          value={form.paid_by}
-          onChange={(e) => onChange({ ...form, paid_by: e.target.value })}
-          className="px-2 py-2 rounded-lg text-xs border outline-none"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-        >
-          <option value="guest">Huésped</option>
-          <option value="company">Empresa</option>
-          <option value="mixed">Mixto</option>
-        </select>
+        {hasCompany && (
+          <select
+            value={form.paid_by}
+            onChange={(e) => onChange({ ...form, paid_by: e.target.value })}
+            className="px-2 py-2 rounded-lg text-xs border outline-none"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+          >
+            <option value="guest">Huésped</option>
+            <option value="company">Empresa</option>
+            <option value="mixed">Mixto</option>
+          </select>
+        )}
       </div>
 
       <input
