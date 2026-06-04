@@ -105,6 +105,14 @@ export function DashboardRoomModal({
     setPayForm(EMPTY_PAYMENT)
   }
 
+  const handleSubmitMaintenance = () => {
+    const reason = maintenanceReason.trim()
+    if (!reason) return
+    onChangeStatus(room.id, 'maintenance', reason)
+    setShowMaintenanceForm(false)
+    setMaintenanceReason('')
+  }
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center p-4"
@@ -261,11 +269,20 @@ export function DashboardRoomModal({
                     />
                   )}
                   <ActionButton
-                    onClick={() => onChangeStatus(room.id, 'maintenance')}
+                    onClick={() => setShowMaintenanceForm((v) => !v)}
                     disabled={!canManage || isChangingStatus}
                     icon={<Wrench size={15} />}
-                    label="Marcar en mantenimiento"
+                    label={showMaintenanceForm ? 'Cancelar mantenimiento' : 'Marcar en mantenimiento'}
                   />
+                  {showMaintenanceForm && (
+                    <MaintenanceInlineForm
+                      reason={maintenanceReason}
+                      isSubmitting={isChangingStatus}
+                      onChange={setMaintenanceReason}
+                      onSubmit={handleSubmitMaintenance}
+                      onCancel={() => { setShowMaintenanceForm(false); setMaintenanceReason('') }}
+                    />
+                  )}
                   <ActionButton
                     onClick={() => onChangeStatus(room.id, 'blocked')}
                     disabled={!canManage || isChangingStatus}
@@ -383,11 +400,20 @@ export function DashboardRoomModal({
                     </button>
                   </div>
                   <ActionButton
-                    onClick={() => onChangeStatus(room.id, 'maintenance')}
+                    onClick={() => setShowMaintenanceForm((v) => !v)}
                     disabled={!canManage || isChangingStatus}
                     icon={<Wrench size={15} />}
-                    label="Reportar daño / mantenimiento"
+                    label={showMaintenanceForm ? 'Cancelar mantenimiento' : 'Reportar daño / mantenimiento'}
                   />
+                  {showMaintenanceForm && (
+                    <MaintenanceInlineForm
+                      reason={maintenanceReason}
+                      isSubmitting={isChangingStatus}
+                      onChange={setMaintenanceReason}
+                      onSubmit={handleSubmitMaintenance}
+                      onCancel={() => { setShowMaintenanceForm(false); setMaintenanceReason('') }}
+                    />
+                  )}
                 </>
               )}
 
@@ -420,11 +446,20 @@ export function DashboardRoomModal({
                     primary
                   />
                   <ActionButton
-                    onClick={() => onChangeStatus(room.id, 'maintenance')}
+                    onClick={() => setShowMaintenanceForm((v) => !v)}
                     disabled={!canManage || isChangingStatus}
                     icon={<Wrench size={15} />}
-                    label="Pasar a mantenimiento"
+                    label={showMaintenanceForm ? 'Cancelar mantenimiento' : 'Pasar a mantenimiento'}
                   />
+                  {showMaintenanceForm && (
+                    <MaintenanceInlineForm
+                      reason={maintenanceReason}
+                      isSubmitting={isChangingStatus}
+                      onChange={setMaintenanceReason}
+                      onSubmit={handleSubmitMaintenance}
+                      onCancel={() => { setShowMaintenanceForm(false); setMaintenanceReason('') }}
+                    />
+                  )}
                 </>
               )}
 
@@ -674,6 +709,67 @@ function PaymentInlineForm({ form, balance, onChange, onSubmit, onCancel }: Paym
           style={{ background: 'var(--color-primary)', color: '#fff' }}
         >
           Guardar abono
+        </button>
+        <button
+          onClick={onCancel}
+          className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
+          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  )
+}
+
+interface MaintenanceInlineFormProps {
+  reason: string
+  isSubmitting: boolean
+  onChange: (reason: string) => void
+  onSubmit: () => void
+  onCancel: () => void
+}
+
+function MaintenanceInlineForm({ reason, isSubmitting, onChange, onSubmit, onCancel }: MaintenanceInlineFormProps) {
+  const isValid = reason.trim().length > 0
+
+  return (
+    <div
+      className="rounded-xl p-3 space-y-3 border"
+      style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
+    >
+      <div className="flex items-center gap-2">
+        <Wrench size={13} style={{ color: '#F97316' }} />
+        <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+          ¿Cuál es el problema de la habitación?
+        </p>
+      </div>
+
+      <textarea
+        autoFocus
+        rows={3}
+        placeholder="Ej: aire acondicionado dañado, fuga en el baño, bombillo quemado…"
+        value={reason}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 rounded-lg text-sm border outline-none resize-none"
+        style={{
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-default)',
+          color: 'var(--text-primary)',
+        }}
+      />
+
+      <div className="flex gap-2">
+        <button
+          onClick={onSubmit}
+          disabled={!isValid || isSubmitting}
+          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-80"
+          style={{ background: '#F97316', color: '#fff' }}
+        >
+          {isSubmitting
+            ? <RefreshCw size={13} className="animate-spin" />
+            : <Wrench size={13} />}
+          Enviar a mantenimiento
         </button>
         <button
           onClick={onCancel}

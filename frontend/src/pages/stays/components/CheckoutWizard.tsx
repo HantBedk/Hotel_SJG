@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, Plus, Trash2, Download, ExternalLink, Loader2, CheckCircle2 } from 'lucide-react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -36,7 +36,6 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
   const [payMethod, setPayMethod] = useState('cash')
   const [payBy, setPayBy] = useState('guest')
   const [payAmount, setPayAmount] = useState('')
-  const [addPayment, setAddPayment] = useState(false)
   const [receiptStayId, setReceiptStayId] = useState<string | null>(null)
 
   const activeRooms = stay.stay_rooms?.filter((sr) => sr.is_active) ?? []
@@ -75,6 +74,13 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
       toast.error(e?.response?.data?.message ?? 'Error al registrar pago.'),
   })
 
+  // Pre-llenar el monto con el saldo pendiente al llegar al paso de pago
+  useEffect(() => {
+    if (step === 'pago' && balance > 0 && !payAmount) {
+      setPayAmount(String(Math.round(balance)))
+    }
+  }, [step, balance, payAmount])
+
   const checkoutMutation = useMutation({
     mutationFn: () => checkoutStayApi(stay.id, {
       late_checkout_fee: lateFeeNum || undefined,
@@ -99,7 +105,7 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
   }
 
   const handleConfirm = async () => {
-    if (addPayment && parseFloat(payAmount) > 0) {
+    if (parseFloat(payAmount) > 0) {
       await paymentMutation.mutateAsync({
         amount:         parseFloat(payAmount),
         payment_method: payMethod,
@@ -439,47 +445,33 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
               </div>
 
               {balance > 0 ? (
-                <div className="space-y-3">
-                  <label className="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={addPayment}
-                      onChange={(e) => {
-                        setAddPayment(e.target.checked)
-                        if (e.target.checked) setPayAmount(String(Math.round(balance)))
-                      }}
-                      className="rounded"
-                    />
-                    <span style={{ color: 'var(--text-primary)' }}>Registrar pago al hacer checkout</span>
-                  </label>
-
-                  {addPayment && (
-                    <div className="space-y-2 rounded-xl p-4 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
-                      <input
-                        type="number" min={0} placeholder="Monto"
-                        value={payAmount}
-                        onChange={(e) => setPayAmount(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                      />
-                      <div className="grid grid-cols-2 gap-2">
-                        <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)}
-                          className="px-2 py-2 rounded-lg text-xs border outline-none"
-                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
-                          <option value="cash">Efectivo</option>
-                          <option value="transfer">Transferencia</option>
-                          <option value="card">Tarjeta</option>
-                        </select>
-                        <select value={payBy} onChange={(e) => setPayBy(e.target.value)}
-                          className="px-2 py-2 rounded-lg text-xs border outline-none"
-                          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
-                          <option value="guest">Huésped</option>
-                          <option value="company">Empresa</option>
-                          <option value="mixed">Mixto</option>
-                        </select>
-                      </div>
-                    </div>
-                  )}
+                <div className="space-y-2 rounded-xl p-4 border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
+                  <p className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                    Registrar pago del saldo
+                  </p>
+                  <input
+                    type="number" min={0} placeholder="Monto"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
+                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <select value={payMethod} onChange={(e) => setPayMethod(e.target.value)}
+                      className="px-2 py-2 rounded-lg text-xs border outline-none"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                      <option value="cash">Efectivo</option>
+                      <option value="transfer">Transferencia</option>
+                      <option value="card">Tarjeta</option>
+                    </select>
+                    <select value={payBy} onChange={(e) => setPayBy(e.target.value)}
+                      className="px-2 py-2 rounded-lg text-xs border outline-none"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                      <option value="guest">Huésped</option>
+                      <option value="company">Empresa</option>
+                      <option value="mixed">Mixto</option>
+                    </select>
+                  </div>
                 </div>
               ) : (
                 <p className="text-sm rounded-xl p-3 text-center"
