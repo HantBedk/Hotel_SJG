@@ -31,12 +31,14 @@ class MinibarController extends Controller
             'name'              => 'required|string|max:150',
             'presentation'      => 'nullable|string|max:100',
             'inventory_item_id' => 'nullable|uuid|exists:inventory_items,id',
-            'sale_price'        => 'required|numeric|min:0',
             'cost_price'        => 'nullable|numeric|min:0',
+            'sale_price'        => 'required|numeric|min:0|gt:cost_price',
             'damage_price'      => 'nullable|numeric|min:0',
             'stock_quantity'    => 'nullable|integer|min:0',
             'expiration_date'   => 'nullable|date',
             'description'       => 'nullable|string|max:255',
+        ], [
+            'sale_price.gt' => 'El precio de venta debe ser mayor al precio de compra.',
         ]);
 
         $product = MinibarProduct::create($data);
@@ -45,18 +47,25 @@ class MinibarController extends Controller
 
     public function productsUpdate(Request $request, MinibarProduct $minibarProduct): JsonResponse
     {
+        // Si el request no envía cost_price, validamos contra el valor actual.
+        $request->merge([
+            'cost_price' => $request->input('cost_price', (string) $minibarProduct->cost_price),
+        ]);
+
         $data = $request->validate([
             'code'              => 'nullable|string|max:50|unique:minibar_products,code,' . $minibarProduct->id,
             'name'              => 'sometimes|string|max:150',
             'presentation'      => 'nullable|string|max:100',
             'inventory_item_id' => 'nullable|uuid|exists:inventory_items,id',
-            'sale_price'        => 'sometimes|numeric|min:0',
             'cost_price'        => 'nullable|numeric|min:0',
+            'sale_price'        => 'sometimes|numeric|min:0|gt:cost_price',
             'damage_price'      => 'nullable|numeric|min:0',
             'stock_quantity'    => 'nullable|integer|min:0',
             'expiration_date'   => 'nullable|date',
             'description'       => 'nullable|string|max:255',
             'active'            => 'sometimes|boolean',
+        ], [
+            'sale_price.gt' => 'El precio de venta debe ser mayor al precio de compra.',
         ]);
 
         $minibarProduct->update($data);

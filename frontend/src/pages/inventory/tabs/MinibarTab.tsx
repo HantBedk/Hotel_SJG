@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Plus, Pencil, Trash2, X, RefreshCw, Clock, BedDouble, ChevronRight } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import {
   useMinibarProducts,
   useMinibarProductMutations,
@@ -7,6 +9,7 @@ import {
   useMinibars,
   useMinibarMutations,
 } from '@/hooks/useInventory'
+import { restockRoomMinibarApi } from '@/services/inventory.service'
 import { useRooms } from '@/hooks/useRooms'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonTable } from '@/components/ui/Skeleton'
@@ -29,7 +32,6 @@ interface ProductFormData {
   presentation: string
   sale_price: string
   cost_price: string
-  damage_price: string
   stock_quantity: string
   expiration_date: string
   has_expiration: boolean
@@ -51,7 +53,6 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
     presentation:     product?.presentation ?? '',
     sale_price:       product?.sale_price != null ? String(product.sale_price) : '',
     cost_price:       product?.cost_price != null ? String(product.cost_price) : '',
-    damage_price:     product?.damage_price != null ? String(product.damage_price) : '',
     stock_quantity:   product?.stock_quantity != null ? String(product.stock_quantity) : '0',
     expiration_date:  product?.expiration_date ?? '',
     has_expiration:   !!product?.expiration_date,
@@ -60,15 +61,19 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
   const set = <K extends keyof ProductFormData>(k: K, v: ProductFormData[K]) =>
     setForm((f) => ({ ...f, [k]: v }))
 
+  const costNum = parseFloat(form.cost_price) || 0
+  const saleNum = parseFloat(form.sale_price) || 0
+  const priceInvalid = form.sale_price !== '' && saleNum <= costNum
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (priceInvalid) return
     const payload: Partial<MinibarProduct> = {
       code:            form.code.trim() || null,
       name:            form.name.trim(),
       presentation:    form.presentation.trim() || null,
       sale_price:      form.sale_price,
       cost_price:      form.cost_price || '0',
-      damage_price:    form.damage_price || null,
       stock_quantity:  Number(form.stock_quantity) || 0,
       expiration_date: form.has_expiration && form.expiration_date ? form.expiration_date : null,
       description:     form.description.trim() || null,
@@ -141,32 +146,29 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
                 value={form.sale_price}
                 onChange={(e) => set('sale_price', e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border text-sm"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                style={{
+                  background: 'var(--bg-input)',
+                  borderColor: priceInvalid ? '#EF4444' : 'var(--border-default)',
+                  color: 'var(--text-primary)',
+                }}
               />
             </div>
           </div>
+          {priceInvalid && (
+            <p className="text-[11px] -mt-2" style={{ color: '#EF4444' }}>
+              El precio de venta debe ser mayor al precio de compra (${costNum.toLocaleString('es-CO')}).
+            </p>
+          )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Precio daño</label>
-              <input
-                type="number" min="0" step="any"
-                value={form.damage_price}
-                onChange={(e) => set('damage_price', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border text-sm"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Cantidad *</label>
-              <input
-                type="number" required min="0"
-                value={form.stock_quantity}
-                onChange={(e) => set('stock_quantity', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border text-sm"
-                style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Cantidad *</label>
+            <input
+              type="number" required min="0"
+              value={form.stock_quantity}
+              onChange={(e) => set('stock_quantity', e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            />
           </div>
 
           <div>
@@ -208,7 +210,7 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
               style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
               Cancelar
             </button>
-            <button type="submit" disabled={saving} className="px-4 py-2 rounded-lg text-sm text-white font-medium"
+            <button type="submit" disabled={saving || priceInvalid} className="px-4 py-2 rounded-lg text-sm text-white font-medium disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: 'var(--color-primary)' }}>
               {saving ? 'Guardando…' : 'Guardar'}
             </button>
@@ -219,71 +221,154 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
   )
 }
 
-// ── Restock room modal ────────────────────────────────────────────────────────
+// ── Restock room modal (multi-producto) ──────────────────────────────────────
+interface RestockItem {
+  id: string                // identificador local de la fila
+  productId: string
+  qty: string
+}
+
 interface RestockRoomModalProps {
   roomId: string
   roomNumber: string
   products: MinibarProduct[]
-  onSave: (data: { room_id: string; minibar_product_id: string; quantity: number }) => void
+  onSave: (items: { minibar_product_id: string; quantity: number }[]) => void
   onClose: () => void
   saving: boolean
 }
 
-function RestockRoomModal({ roomId, roomNumber, products, onSave, onClose, saving }: RestockRoomModalProps) {
-  const [productId, setProductId] = useState('')
-  const [qty, setQty] = useState('1')
+function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: RestockRoomModalProps) {
+  const newRow = (): RestockItem => ({
+    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+    productId: '',
+    qty: '1',
+  })
+  const [items, setItems] = useState<RestockItem[]>([newRow()])
 
-  const qtyNum = Number(qty)
-  const valid = productId && qtyNum > 0
+  const updateItem = (id: string, patch: Partial<RestockItem>) =>
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)))
+  const removeItem = (id: string) =>
+    setItems((prev) => (prev.length === 1 ? prev : prev.filter((it) => it.id !== id)))
+  const addRow = () => setItems((prev) => [...prev, newRow()])
+
+  const activeProducts = products.filter((p) => p.active)
+
+  const validItems = items
+    .map((it) => ({ ...it, qtyNum: Number(it.qty) }))
+    .filter((it) => it.productId && it.qtyNum > 0)
+
+  // Productos ya seleccionados en otras filas — se ocultan del select.
+  const selectedProductIds = (currentId: string) =>
+    new Set(items.filter((it) => it.id !== currentId && it.productId).map((it) => it.productId))
+
+  const handleSubmit = () => {
+    // Consolidar duplicados (por si el usuario eligió el mismo producto dos veces).
+    const map = new Map<string, number>()
+    for (const it of validItems) {
+      map.set(it.productId, (map.get(it.productId) ?? 0) + it.qtyNum)
+    }
+    const payload = Array.from(map.entries()).map(([minibar_product_id, quantity]) => ({
+      minibar_product_id,
+      quantity,
+    }))
+    onSave(payload)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }}>
-      <div className="w-full max-w-sm rounded-xl shadow-2xl" style={{ background: 'var(--bg-surface)' }}>
+      <div className="w-full max-w-2xl rounded-xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col" style={{ background: 'var(--bg-surface)' }}>
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
           <h2 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
             Reponer minibar — Hab. {roomNumber}
           </h2>
           <button onClick={onClose}><X size={18} style={{ color: 'var(--text-secondary)' }} /></button>
         </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Producto *</label>
-            <select
-              required value={productId} onChange={(e) => setProductId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border text-sm"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-            >
-              <option value="">Seleccionar…</option>
-              {products.filter(p => p.active).map((p) => (
-                <option key={p.id} value={p.id}>{p.name} — {formatCurrency(p.sale_price)}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Cantidad a agregar *</label>
-            <input
-              type="number" min="1" value={qty} onChange={(e) => setQty(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border text-sm"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-            />
-          </div>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            La cantidad se suma al stock actual del minibar de esta habitación.
+
+        <div className="p-6 space-y-3 overflow-y-auto">
+          {items.map((it, idx) => {
+            const usedIds = selectedProductIds(it.id)
+            return (
+              <div key={it.id} className="flex items-end gap-2">
+                <div className="flex-1 min-w-0">
+                  {idx === 0 && (
+                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                      Producto
+                    </label>
+                  )}
+                  <select
+                    value={it.productId}
+                    onChange={(e) => updateItem(it.id, { productId: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border text-sm"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="">Seleccionar…</option>
+                    {activeProducts
+                      .filter((p) => !usedIds.has(p.id))
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.code ? `[${p.code}] ` : ''}{p.name}
+                          {p.presentation ? ` · ${p.presentation}` : ''} — {formatCurrency(p.sale_price)}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div className="w-24">
+                  {idx === 0 && (
+                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                      Cantidad
+                    </label>
+                  )}
+                  <input
+                    type="number" min="1"
+                    value={it.qty}
+                    onChange={(e) => updateItem(it.id, { qty: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border text-sm"
+                    style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeItem(it.id)}
+                  disabled={items.length === 1}
+                  className="p-2 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  style={{ color: '#EF4444' }}
+                  title="Quitar fila"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )
+          })}
+
+          <button
+            type="button"
+            onClick={addRow}
+            className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            <Plus size={13} /> Agregar otro producto
+          </button>
+
+          <p className="text-xs pt-2" style={{ color: 'var(--text-muted)' }}>
+            Las cantidades se suman al stock actual del minibar de esta habitación.
+            {validItems.length > 0 && (
+              <> Total: <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>{validItems.length} producto(s)</span>.</>
+            )}
           </p>
-          <div className="flex justify-end gap-3">
-            <button onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm border"
-              style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
-              Cancelar
-            </button>
-            <button
-              disabled={saving || !valid}
-              onClick={() => onSave({ room_id: roomId, minibar_product_id: productId, quantity: qtyNum })}
-              className="px-4 py-2 rounded-lg text-sm text-white font-medium disabled:opacity-40"
-              style={{ background: 'var(--color-primary)' }}>
-              {saving ? 'Reponiendo…' : 'Reponer'}
-            </button>
-          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: 'var(--border-default)' }}>
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border"
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+            Cancelar
+          </button>
+          <button
+            disabled={saving || validItems.length === 0}
+            onClick={handleSubmit}
+            className="px-4 py-2 rounded-lg text-sm text-white font-medium disabled:opacity-40"
+            style={{ background: 'var(--color-primary)' }}>
+            {saving ? 'Reponiendo…' : 'Reponer'}
+          </button>
         </div>
       </div>
     </div>
@@ -329,7 +414,7 @@ function CatalogueSection() {
         <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>Sin productos de minibar.</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
+          <table className="w-full min-w-[820px] text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
                 {['Código', 'Nombre', 'Presentación', 'P. compra', 'P. venta', 'Cantidad', 'Vence', 'Estado', ''].map((h) => (
@@ -495,15 +580,16 @@ function MinibarsSection() {
   const { hasPermission } = useAuth()
   const canManage = hasPermission('manage_inventory')
 
+  const qc = useQueryClient()
   const { rooms } = useRooms()
   const { data: minibars = [], isLoading: loadingMinibars } = useMinibars()
   const { data: products = [] } = useMinibarProducts()
-  const { restockRoomMutation } = useMinibarProductMutations()
   const { createMutation, deleteMutation } = useMinibarMutations()
 
   const [showNew, setShowNew] = useState(false)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
   const [restocking, setRestocking] = useState(false)
+  const [savingRestock, setSavingRestock] = useState(false)
 
   const { data: roomMinibars = [], isLoading: loadingItems } = useRoomMinibars(selectedRoomId)
 
@@ -537,8 +623,27 @@ function MinibarsSection() {
     })
   }
 
-  const handleRestock = (data: { room_id: string; minibar_product_id: string; quantity: number }) => {
-    restockRoomMutation.mutate(data, { onSuccess: () => setRestocking(false) })
+  const handleRestock = async (items: { minibar_product_id: string; quantity: number }[]) => {
+    if (!selectedRoomId || items.length === 0) return
+    setSavingRestock(true)
+    try {
+      await Promise.all(
+        items.map((it) => restockRoomMinibarApi({ room_id: selectedRoomId, ...it })),
+      )
+      toast.success(
+        items.length === 1
+          ? 'Producto agregado al minibar.'
+          : `${items.length} productos agregados al minibar.`,
+      )
+      qc.invalidateQueries({ queryKey: ['room-minibars', selectedRoomId] })
+      qc.invalidateQueries({ queryKey: ['minibars'] })
+      setRestocking(false)
+    } catch (e) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err?.response?.data?.message ?? 'Error al reponer el minibar.')
+    } finally {
+      setSavingRestock(false)
+    }
   }
 
   return (
@@ -690,7 +795,7 @@ function MinibarsSection() {
           products={products}
           onSave={handleRestock}
           onClose={() => setRestocking(false)}
-          saving={restockRoomMutation.isPending}
+          saving={savingRestock}
         />
       )}
     </div>

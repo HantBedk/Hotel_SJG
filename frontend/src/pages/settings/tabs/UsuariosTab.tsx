@@ -24,10 +24,21 @@ const EMPTY: UserForm = {
   is_active: true,
 }
 
-// Solo admin y superadmin acceden al sistema (requieren email + contraseña).
-// El resto (recepción, housekeeping, mantenimiento, etc.) son personal solo para tracking.
-const LOGIN_ROLES = new Set(['admin', 'superadmin'])
+// Roles que acceden al sistema con email + contraseña.
+const LOGIN_ROLES = new Set(['admin', 'superadmin', 'receptionist'])
 const roleNeedsLogin = (role: string) => LOGIN_ROLES.has(role)
+
+// Etiquetas en español para mostrar al usuario. El value que viaja al backend
+// sigue siendo el nombre interno (admin, receptionist, etc.).
+const ROLE_LABELS: Record<string, string> = {
+  superadmin:   'Super administrador',
+  admin:        'Administrador',
+  receptionist: 'Recepcionista',
+  housekeeping: 'Camarera',
+  maintenance:  'Mantenimiento',
+}
+const roleLabel = (role: string | null | undefined) =>
+  role ? (ROLE_LABELS[role] ?? role) : '—'
 
 const slugify = (s: string) =>
   s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'user'
@@ -149,10 +160,10 @@ export default function UsuariosTab() {
                 </td>
                 <td className="py-2">
                   <span
-                    className="px-1.5 py-0.5 rounded text-xs font-medium capitalize"
+                    className="px-1.5 py-0.5 rounded text-xs font-medium"
                     style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}
                   >
-                    {u.role ?? '—'}
+                    {roleLabel(u.role)}
                   </span>
                 </td>
                 <td className="py-2">
@@ -203,11 +214,11 @@ export default function UsuariosTab() {
                 className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
                 style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
               >
-                {roleNames.map(r => <option key={r} value={r} className="capitalize">{r}</option>)}
+                {roleNames.map(r => <option key={r} value={r}>{roleLabel(r)}</option>)}
               </select>
               {!roleNeedsLogin(form.role) && (
                 <p className="mt-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                  Este rol es solo personal (sin acceso al sistema). No requiere email ni contraseña.
+                  Este rol es solo para seguimiento interno y no tiene acceso al sistema.
                 </p>
               )}
             </div>

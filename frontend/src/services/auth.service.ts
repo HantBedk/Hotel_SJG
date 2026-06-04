@@ -14,3 +14,7 @@ export async function getMeApi(): Promise<ApiResponse<AuthUser>> {
   const { data } = await api.get<ApiResponse<AuthUser>>('/me')
   return data
 }
+
+export async function forgotPasswordApi(email: string): Promise<void> {
+  await api.post('/forgot-password', { email })
+}
