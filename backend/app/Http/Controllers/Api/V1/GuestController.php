@@ -32,8 +32,10 @@ class GuestController extends Controller
     {
         $data = $request->validate([
             'full_name'       => 'required|string|max:200',
-            'document_type'   => 'required|in:cc,ce,passport',
+            'document_type'   => 'required|in:cc,ce,passport,ti,rc',
             'document_number' => 'required|string|max:50|unique:guests,document_number',
+            'is_minor'        => 'nullable|boolean',
+            'relationship'    => 'nullable|string|max:80',
             'email'           => 'nullable|email|max:200',
             'phone'           => 'nullable|string|max:30',
             'nationality'     => 'nullable|string|max:80',
@@ -71,8 +73,10 @@ class GuestController extends Controller
     {
         $data = $request->validate([
             'full_name'       => 'sometimes|string|max:200',
-            'document_type'   => 'sometimes|in:cc,ce,passport',
+            'document_type'   => 'sometimes|in:cc,ce,passport,ti,rc',
             'document_number' => 'sometimes|string|max:50|unique:guests,document_number,' . $guest->id,
+            'is_minor'        => 'nullable|boolean',
+            'relationship'    => 'nullable|string|max:80',
             'email'           => 'nullable|email|max:200',
             'phone'           => 'nullable|string|max:30',
             'nationality'     => 'nullable|string|max:80',

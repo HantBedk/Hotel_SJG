@@ -112,7 +112,7 @@ export interface Room {
 
 // ── Guests ────────────────────────────────────────────────────────────────────
 
-export type DocumentType = 'cc' | 'ce' | 'passport'
+export type DocumentType = 'cc' | 'ce' | 'passport' | 'ti' | 'rc'
 
 export interface GuestCompanion {
   id: string
@@ -129,6 +129,8 @@ export interface Guest {
   full_name: string
   document_type: DocumentType
   document_number: string
+  is_minor: boolean
+  relationship: string | null
   email: string | null
   phone: string | null
   nationality: string | null

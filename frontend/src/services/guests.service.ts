@@ -27,6 +27,8 @@ export const createGuestApi = async (payload: {
   full_name: string
   document_type: string
   document_number: string
+  is_minor?: boolean
+  relationship?: string
   email?: string
   phone?: string
   nationality?: string

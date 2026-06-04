@@ -27,8 +27,16 @@ interface AdditionalGuestForm {
   found: Guest | null
   notFound: boolean
   isEditing: boolean
-  editData: { full_name: string; phone: string; email: string; nationality: string }
-  newGuest: { full_name: string; document_type: string; document_number: string; phone: string; email: string; nationality: string }
+  editData: { full_name: string; phone: string; email: string; nationality: string; relationship: string }
+  newGuest: {
+    full_name: string
+    document_type: string
+    document_number: string
+    phone: string
+    email: string
+    nationality: string
+    relationship: string
+  }
   registered: boolean
 }
 
@@ -58,15 +66,37 @@ const DOCUMENT_TYPES = [
   { value: 'passport', label: 'Pasaporte' },
 ]
 
-function makeExtraForm(): AdditionalGuestForm {
+// Tipos de documento permitidos para menores de edad (sin cédula).
+const DOCUMENT_TYPES_MINOR = [
+  { value: 'ti',       label: 'Tarjeta de identidad' },
+  { value: 'rc',       label: 'Registro civil' },
+  { value: 'passport', label: 'Pasaporte' },
+]
+
+// El titular es siempre el primer adulto. Por lo tanto, de los slots extra:
+//   - los primeros (adults - 1) son adultos,
+//   - los restantes son menores.
+function isExtraMinor(idx: number, adults: number): boolean {
+  return idx >= Math.max(0, adults - 1)
+}
+
+function makeExtraForm(isMinor = false): AdditionalGuestForm {
   return {
     documentInput: '',
     isSearching: false,
     found: null,
     notFound: false,
     isEditing: false,
-    editData: { full_name: '', phone: '', email: '', nationality: '' },
-    newGuest: { full_name: '', document_type: 'cc', document_number: '', phone: '', email: '', nationality: '' },
+    editData: { full_name: '', phone: '', email: '', nationality: '', relationship: '' },
+    newGuest: {
+      full_name:       '',
+      document_type:   isMinor ? 'ti' : 'cc',
+      document_number: '',
+      phone:           '',
+      email:           '',
+      nationality:     '',
+      relationship:    '',
+    },
     registered: false,
   }
 }
@@ -147,9 +177,12 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
   const syncAdditionalForms = (adults: number, children: number) => {
     const needed = Math.max(0, adults + children - 1)
     setState((s) => {
-      if (s.additionalGuests.length === needed) return s
-      if (s.additionalGuests.length < needed) {
-        const extra = Array.from({ length: needed - s.additionalGuests.length }, makeExtraForm)
+      const cur = s.additionalGuests.length
+      if (cur === needed) return s
+      if (cur < needed) {
+        const extra = Array.from({ length: needed - cur }, (_, i) =>
+          makeExtraForm(isExtraMinor(cur + i, adults)),
+        )
         return { ...s, additionalGuests: [...s.additionalGuests, ...extra] }
       }
       return { ...s, additionalGuests: s.additionalGuests.slice(0, needed) }
@@ -217,10 +250,21 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
     const ag = state.additionalGuests[idx]
     if (!ag) return
     if (!ag.newGuest.full_name.trim() || !ag.newGuest.document_number.trim()) return
+    const isMinor = isExtraMinor(idx, state.adults)
 
     setIsSaving(true)
     try {
-      const created = await createGuestApi(ag.newGuest)
+      const payload = {
+        full_name:       ag.newGuest.full_name,
+        document_type:   ag.newGuest.document_type,
+        document_number: ag.newGuest.document_number,
+        is_minor:        isMinor,
+        relationship:    isMinor ? (ag.newGuest.relationship || undefined) : undefined,
+        phone:           isMinor ? undefined : ag.newGuest.phone,
+        email:           isMinor ? undefined : ag.newGuest.email,
+        nationality:     ag.newGuest.nationality || undefined,
+      }
+      const created = await createGuestApi(payload)
       setExtra(idx, { found: created, notFound: false, registered: true })
       toast.success('Huésped guardado.')
     } catch (err) {
@@ -234,10 +278,18 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
   const confirmExtraGuest = async (idx: number) => {
     const ag = state.additionalGuests[idx]
     if (!ag?.found) return
+    const isMinor = isExtraMinor(idx, state.adults)
     setIsSaving(true)
     try {
       if (ag.isEditing) {
-        await updateGuestApi(ag.found.id, ag.editData)
+        const editPayload = isMinor
+          ? {
+              full_name:    ag.editData.full_name,
+              relationship: ag.editData.relationship || null,
+              is_minor:     true,
+            }
+          : ag.editData
+        await updateGuestApi(ag.found.id, editPayload)
         toast.success('Datos actualizados.')
       }
       setExtra(idx, { registered: true, isEditing: false })
@@ -288,10 +340,11 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
         setExtra(idx, {
           isSearching: false, found: guest, notFound: false,
           editData: {
-            full_name:   guest.full_name,
-            phone:       guest.phone ?? '',
-            email:       guest.email ?? '',
-            nationality: guest.nationality ?? '',
+            full_name:    guest.full_name,
+            phone:        guest.phone ?? '',
+            email:        guest.email ?? '',
+            nationality:  guest.nationality ?? '',
+            relationship: guest.relationship ?? '',
           },
         })
       } else {
@@ -338,11 +391,22 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
       }
 
       const additionalGuestIds: string[] = []
-      for (const ag of state.additionalGuests) {
+      for (let i = 0; i < state.additionalGuests.length; i++) {
+        const ag = state.additionalGuests[i]
         if (ag.found) {
           additionalGuestIds.push(ag.found.id)
         } else if (ag.notFound) {
-          const created = await createGuestApi(ag.newGuest)
+          const isMinor = isExtraMinor(i, state.adults)
+          const created = await createGuestApi({
+            full_name:       ag.newGuest.full_name,
+            document_type:   ag.newGuest.document_type,
+            document_number: ag.newGuest.document_number,
+            is_minor:        isMinor,
+            relationship:    isMinor ? (ag.newGuest.relationship || undefined) : undefined,
+            phone:           isMinor ? undefined : ag.newGuest.phone,
+            email:           isMinor ? undefined : ag.newGuest.email,
+            nationality:     ag.newGuest.nationality || undefined,
+          })
           additionalGuestIds.push(created.id)
         }
       }
@@ -609,7 +673,15 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
 
     const total     = state.adults + state.children
     const guestNum  = idx + 2
-    const newFormOk = ag.newGuest.full_name.trim() !== '' && ag.newGuest.document_number.trim() !== ''
+    const isMinor   = isExtraMinor(idx, state.adults)
+    const docOptions = isMinor ? DOCUMENT_TYPES_MINOR : DOCUMENT_TYPES
+    // Si el slot es para un menor pero el doc_type quedó como cc/ce (cambio de adultos→niños), forzamos uno válido.
+    const docTypeForRender = isMinor && !DOCUMENT_TYPES_MINOR.some(d => d.value === ag.newGuest.document_type)
+      ? 'ti'
+      : ag.newGuest.document_type
+    const newFormOk = ag.newGuest.full_name.trim() !== ''
+      && ag.newGuest.document_number.trim() !== ''
+      && (!isMinor || ag.newGuest.relationship.trim() !== '')
 
     return (
       <div className="space-y-4">
@@ -617,6 +689,14 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
         <div className="flex items-center justify-between">
           <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
             HUÉSPED {guestNum} DE {total}
+            {isMinor && (
+              <span
+                className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold align-middle"
+                style={{ background: '#FEF3C7', color: '#92400E' }}
+              >
+                NIÑO
+              </span>
+            )}
           </p>
           {ag.registered && (
             <span className="flex items-center gap-1 text-xs font-medium" style={{ color: 'var(--status-available)' }}>
@@ -638,7 +718,12 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
                     </p>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                       {ag.found.document_type.toUpperCase()} {ag.found.document_number}
-                      {ag.isEditing && ag.editData.phone ? ` · ${ag.editData.phone}` : ag.found.phone ? ` · ${ag.found.phone}` : ''}
+                      {isMinor
+                        ? ((ag.isEditing ? ag.editData.relationship : ag.found.relationship) &&
+                            ` · ${ag.isEditing ? ag.editData.relationship : ag.found.relationship}`)
+                        : (ag.isEditing && ag.editData.phone
+                            ? ` · ${ag.editData.phone}`
+                            : ag.found.phone ? ` · ${ag.found.phone}` : '')}
                     </p>
                   </>
                 ) : (
@@ -646,6 +731,7 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
                     <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{ag.newGuest.full_name}</p>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                       {ag.newGuest.document_type.toUpperCase()} {ag.newGuest.document_number}
+                      {isMinor && ag.newGuest.relationship && ` · ${ag.newGuest.relationship}`}
                       <span className="ml-1" style={{ color: 'var(--color-primary)' }}>· Nuevo</span>
                     </p>
                   </>
@@ -721,31 +807,44 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
                         onChange={(e) => setExtra(idx, { editData: { ...ag.editData, full_name: e.target.value } })}
                         className={cn('col-span-2', inputCls)} style={{ ...inputStyle, padding: '6px 12px' }}
                       />
-                      <input
-                        placeholder="Teléfono"
-                        value={ag.editData.phone}
-                        onChange={(e) => setExtra(idx, { editData: { ...ag.editData, phone: e.target.value } })}
-                        className={inputCls} style={{ ...inputStyle, padding: '6px 12px' }}
-                      />
-                      <input
-                        placeholder="Email"
-                        value={ag.editData.email}
-                        onChange={(e) => setExtra(idx, { editData: { ...ag.editData, email: e.target.value } })}
-                        className={inputCls} style={{ ...inputStyle, padding: '6px 12px' }}
-                      />
-                      <input
-                        placeholder="Nacionalidad"
-                        value={ag.editData.nationality}
-                        onChange={(e) => setExtra(idx, { editData: { ...ag.editData, nationality: e.target.value } })}
-                        className={cn('col-span-2', inputCls)} style={{ ...inputStyle, padding: '6px 12px' }}
-                      />
+                      {isMinor ? (
+                        <input
+                          placeholder="Parentesco con el titular *"
+                          value={ag.editData.relationship}
+                          onChange={(e) => setExtra(idx, { editData: { ...ag.editData, relationship: e.target.value } })}
+                          className={cn('col-span-2', inputCls)} style={{ ...inputStyle, padding: '6px 12px' }}
+                        />
+                      ) : (
+                        <>
+                          <input
+                            placeholder="Teléfono"
+                            value={ag.editData.phone}
+                            onChange={(e) => setExtra(idx, { editData: { ...ag.editData, phone: e.target.value } })}
+                            className={inputCls} style={{ ...inputStyle, padding: '6px 12px' }}
+                          />
+                          <input
+                            placeholder="Email"
+                            value={ag.editData.email}
+                            onChange={(e) => setExtra(idx, { editData: { ...ag.editData, email: e.target.value } })}
+                            className={inputCls} style={{ ...inputStyle, padding: '6px 12px' }}
+                          />
+                          <input
+                            placeholder="Nacionalidad"
+                            value={ag.editData.nationality}
+                            onChange={(e) => setExtra(idx, { editData: { ...ag.editData, nationality: e.target.value } })}
+                            className={cn('col-span-2', inputCls)} style={{ ...inputStyle, padding: '6px 12px' }}
+                          />
+                        </>
+                      )}
                     </div>
                   ) : (
                     <>
                       <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{ag.found.full_name}</p>
                       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                         {ag.found.document_type.toUpperCase()} {ag.found.document_number}
-                        {ag.found.phone && ` · ${ag.found.phone}`}
+                        {isMinor
+                          ? (ag.found.relationship && ` · ${ag.found.relationship}`)
+                          : (ag.found.phone && ` · ${ag.found.phone}`)}
                       </p>
                     </>
                   )}
@@ -802,11 +901,11 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
                     />
                   </div>
                   <select
-                    value={ag.newGuest.document_type}
+                    value={docTypeForRender}
                     onChange={(e) => setExtra(idx, { newGuest: { ...ag.newGuest, document_type: e.target.value } })}
                     className={inputCls} style={inputStyle}
                   >
-                    {DOCUMENT_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                    {docOptions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
                   </select>
                   <input
                     placeholder="Número de documento *"
@@ -814,18 +913,29 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
                     onChange={(e) => setExtra(idx, { newGuest: { ...ag.newGuest, document_number: e.target.value } })}
                     className={inputCls} style={inputStyle}
                   />
-                  <input
-                    placeholder="Teléfono"
-                    value={ag.newGuest.phone}
-                    onChange={(e) => setExtra(idx, { newGuest: { ...ag.newGuest, phone: e.target.value } })}
-                    className={inputCls} style={inputStyle}
-                  />
-                  <input
-                    placeholder="Email"
-                    value={ag.newGuest.email}
-                    onChange={(e) => setExtra(idx, { newGuest: { ...ag.newGuest, email: e.target.value } })}
-                    className={inputCls} style={inputStyle}
-                  />
+                  {isMinor ? (
+                    <input
+                      placeholder="Parentesco con el titular *"
+                      value={ag.newGuest.relationship}
+                      onChange={(e) => setExtra(idx, { newGuest: { ...ag.newGuest, relationship: e.target.value } })}
+                      className={cn('col-span-2', inputCls)} style={inputStyle}
+                    />
+                  ) : (
+                    <>
+                      <input
+                        placeholder="Teléfono"
+                        value={ag.newGuest.phone}
+                        onChange={(e) => setExtra(idx, { newGuest: { ...ag.newGuest, phone: e.target.value } })}
+                        className={inputCls} style={inputStyle}
+                      />
+                      <input
+                        placeholder="Email"
+                        value={ag.newGuest.email}
+                        onChange={(e) => setExtra(idx, { newGuest: { ...ag.newGuest, email: e.target.value } })}
+                        className={inputCls} style={inputStyle}
+                      />
+                    </>
+                  )}
                 </div>
                 <button
                   onClick={() => { if (newFormOk) persistExtraGuest(idx) }}

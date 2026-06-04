@@ -204,6 +204,11 @@ export function DashboardRoomModal({
                   <div>
                     <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>Empresa</p>
                     <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>{stay.company.name}</p>
+                    {stay.company.nit && (
+                      <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                        NIT {stay.company.nit}
+                      </p>
+                    )}
                   </div>
                 )}
                 <div>
