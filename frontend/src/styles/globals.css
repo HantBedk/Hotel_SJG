@@ -117,12 +117,31 @@
   box-sizing: border-box;
 }
 
+/* color-scheme indica al browser qué paleta usar para controles nativos:
+   dropdowns de <select>, calendarios de <input type="date">, scrollbars,
+   form autofill, etc. Sin esto el dropdown del select aparece blanco
+   en modo oscuro y rompe contraste con el resto de la UI. */
+:root              { color-scheme: light; }
+[data-theme="dark"] { color-scheme: dark; }
+
 html {
   font-family: var(--font-sans);
   color: var(--text-primary);
   background-color: var(--bg-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Los <option> heredan estilos del browser, no del <select>. Forzamos que
+   respeten el tema actual para que el desplegable tenga el mismo contraste. */
+option {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
+option:checked,
+option:hover {
+  background-color: var(--color-primary-light);
+  color: var(--text-primary);
 }
 
 body {

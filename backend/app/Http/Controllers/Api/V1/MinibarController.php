@@ -7,6 +7,7 @@ use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Models\Minibar;
 use App\Models\MinibarProduct;
+use App\Models\MinibarRestockLog;
 use App\Models\Room;
 use App\Models\RoomMinibar;
 use App\Models\Setting;
@@ -42,6 +43,23 @@ class MinibarController extends Controller
         ]);
 
         $product = MinibarProduct::create($data);
+
+        // Si el producto se crea con stock inicial, dejamos rastro en el historial del minibar.
+        $initialStock = (int) ($data['stock_quantity'] ?? 0);
+        if ($initialStock > 0) {
+            $unitPrice = (float) ($product->cost_price ?? 0);
+            MinibarRestockLog::create([
+                'room_id'            => null,
+                'minibar_product_id' => $product->id,
+                'product_name'       => $product->name,
+                'quantity'           => $initialStock,
+                'unit_price'         => $unitPrice,
+                'total_value'        => $unitPrice * $initialStock,
+                'performed_by'       => $request->user()->id,
+                'notes'              => 'Ingreso inicial al catálogo del minibar',
+            ]);
+        }
+
         return response()->json(['success' => true, 'data' => $product, 'message' => 'Producto de minibar creado.'], 201);
     }
 
@@ -68,7 +86,25 @@ class MinibarController extends Controller
             'sale_price.gt' => 'El precio de venta debe ser mayor al precio de compra.',
         ]);
 
+        $prevStock = (int) $minibarProduct->stock_quantity;
         $minibarProduct->update($data);
+
+        // Si cambió el stock del catálogo, dejamos rastro en el historial.
+        if (array_key_exists('stock_quantity', $data) && (int) $data['stock_quantity'] !== $prevStock) {
+            $delta = (int) $data['stock_quantity'] - $prevStock;
+            $unitPrice = (float) ($minibarProduct->cost_price ?? 0);
+            MinibarRestockLog::create([
+                'room_id'            => null,
+                'minibar_product_id' => $minibarProduct->id,
+                'product_name'       => $minibarProduct->name,
+                'quantity'           => $delta,
+                'unit_price'         => $unitPrice,
+                'total_value'        => $unitPrice * abs($delta),
+                'performed_by'       => $request->user()->id,
+                'notes'              => 'Ajuste de stock del catálogo (' . $prevStock . ' → ' . (int) $data['stock_quantity'] . ')',
+            ]);
+        }
+
         return response()->json(['success' => true, 'data' => $minibarProduct, 'message' => 'Producto actualizado.']);
     }
 
@@ -175,13 +211,9 @@ class MinibarController extends Controller
 
         $product = MinibarProduct::findOrFail($data['minibar_product_id']);
 
-        abort_if(
-            !$product->inventory_item_id,
-            409,
-            'El producto "' . $product->name . '" no está vinculado a un ítem del catálogo de inventario. Edítalo desde el catálogo del minibar y vincúlalo antes de reponer.'
-        );
-
         DB::transaction(function () use ($data, $product, $request) {
+            $room = Room::find($data['room_id']);
+
             // Buscamos primero (con lock) para decidir si crear o incrementar.
             // No usamos updateOrCreate con DB::raw porque en el INSERT la
             // expresión "quantity + N" referencia una columna que aún no existe
@@ -206,27 +238,134 @@ class MinibarController extends Controller
                 ]);
             }
 
-            // Deduct from inventory item if linked
+            // Descuento del stock origen:
+            //   - Si el producto está vinculado a un ítem del catálogo de inventario,
+            //     descontamos de InventoryItem.current_stock y registramos transacción.
+            //   - Si no, descontamos del propio MinibarProduct.stock_quantity (bodega
+            //     interna del minibar). De este modo el catálogo no queda sin tocar.
+            $unitPrice = (float) ($product->cost_price ?? 0);
+
             if ($product->inventory_item_id) {
                 $item = InventoryItem::lockForUpdate()->findOrFail($product->inventory_item_id);
-                abort_if($item->current_stock < $data['quantity'], 409, 'Stock de inventario insuficiente.');
+                abort_if(
+                    $item->current_stock < $data['quantity'],
+                    409,
+                    'Stock insuficiente en el catálogo (' . $item->current_stock . ' disponibles).'
+                );
 
                 $item->decrement('current_stock', $data['quantity']);
 
                 InventoryTransaction::create([
-                    'inventory_item_id'  => $item->id,
-                    'type'               => 'exit_to_minibar',
-                    'quantity'           => -$data['quantity'],
-                    'unit_price'         => $item->cost_price,
-                    'total_value'        => $item->cost_price * $data['quantity'],
-                    'performed_by'       => $request->user()->id,
+                    'inventory_item_id'   => $item->id,
+                    'type'                => 'exit_to_minibar',
+                    'quantity'            => -$data['quantity'],
+                    'unit_price'          => $item->cost_price,
+                    'total_value'         => $item->cost_price * $data['quantity'],
+                    'performed_by'        => $request->user()->id,
                     'destination_room_id' => $data['room_id'],
-                    'notes'              => "Reposición minibar hab. " . Room::find($data['room_id'])?->number,
+                    'notes'               => 'Reposición minibar hab. ' . $room?->number,
                 ]);
+
+                $unitPrice = (float) $item->cost_price;
+            } else {
+                $fresh = MinibarProduct::lockForUpdate()->findOrFail($product->id);
+                abort_if(
+                    $fresh->stock_quantity < $data['quantity'],
+                    409,
+                    'Stock insuficiente en "' . $fresh->name . '" (' . $fresh->stock_quantity . ' disponibles en la bodega del minibar).'
+                );
+                $fresh->decrement('stock_quantity', $data['quantity']);
             }
+
+            // Log de movimiento del minibar (siempre, con o sin vínculo a inventario).
+            // quantity positivo = entrada al minibar de habitación.
+            MinibarRestockLog::create([
+                'room_id'            => $data['room_id'],
+                'minibar_product_id' => $data['minibar_product_id'],
+                'product_name'       => $product->name,
+                'quantity'           => $data['quantity'],
+                'unit_price'         => $unitPrice,
+                'total_value'        => $unitPrice * $data['quantity'],
+                'performed_by'       => $request->user()->id,
+                'notes'              => 'Reposición minibar hab. ' . $room?->number,
+            ]);
         });
 
         return response()->json(['success' => true, 'message' => 'Minibar repuesto.']);
+    }
+
+    public function returnFromRoom(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'room_id'            => 'required|uuid|exists:rooms,id',
+            'minibar_product_id' => 'required|uuid|exists:minibar_products,id',
+            'quantity'           => 'required|integer|min:1',
+        ]);
+
+        $product = MinibarProduct::findOrFail($data['minibar_product_id']);
+
+        DB::transaction(function () use ($data, $product, $request) {
+            $rm = RoomMinibar::where('room_id', $data['room_id'])
+                ->where('minibar_product_id', $data['minibar_product_id'])
+                ->lockForUpdate()
+                ->first();
+
+            abort_if(
+                ! $rm,
+                422,
+                'Este producto no está asignado al minibar de esta habitación.'
+            );
+            abort_if(
+                $rm->quantity < $data['quantity'],
+                409,
+                'No se puede devolver más de lo que hay en el minibar (' . $rm->quantity . ' disponibles).'
+            );
+
+            $rm->decrement('quantity', $data['quantity']);
+
+            // Si quedó en 0, eliminamos la fila para no dejar entradas vacías.
+            if ($rm->fresh()->quantity <= 0) {
+                $rm->delete();
+            }
+
+            $unitPrice = (float) ($product->cost_price ?? 0);
+
+            // Devolver al origen del stock (inverso al restock):
+            if ($product->inventory_item_id) {
+                $item = InventoryItem::lockForUpdate()->findOrFail($product->inventory_item_id);
+                $item->increment('current_stock', $data['quantity']);
+
+                InventoryTransaction::create([
+                    'inventory_item_id'   => $item->id,
+                    'type'                => 'adjustment',
+                    'quantity'            => $data['quantity'],
+                    'unit_price'          => $item->cost_price,
+                    'total_value'         => $item->cost_price * $data['quantity'],
+                    'performed_by'        => $request->user()->id,
+                    'destination_room_id' => $data['room_id'],
+                    'notes'               => 'Devolución desde minibar hab. ' . Room::find($data['room_id'])?->number,
+                ]);
+
+                $unitPrice = (float) $item->cost_price;
+            } else {
+                $fresh = MinibarProduct::lockForUpdate()->findOrFail($product->id);
+                $fresh->increment('stock_quantity', $data['quantity']);
+            }
+
+            // Log de movimiento del minibar — quantity negativo = salida del minibar.
+            MinibarRestockLog::create([
+                'room_id'            => $data['room_id'],
+                'minibar_product_id' => $data['minibar_product_id'],
+                'product_name'       => $product->name,
+                'quantity'           => -$data['quantity'],
+                'unit_price'         => $unitPrice,
+                'total_value'        => $unitPrice * $data['quantity'],
+                'performed_by'       => $request->user()->id,
+                'notes'              => 'Devolución al catálogo desde hab. ' . Room::find($data['room_id'])?->number,
+            ]);
+        });
+
+        return response()->json(['success' => true, 'message' => 'Productos devueltos al catálogo.']);
     }
 
     // ── Minibars (1 por habitación) ────────────────────────────────────────────

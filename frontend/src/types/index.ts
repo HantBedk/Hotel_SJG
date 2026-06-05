@@ -469,6 +469,36 @@ export interface InventoryTransaction {
   destination_user?: { id: string; name: string } | null
 }
 
+export type InventoryMovementType =
+  | 'entry'
+  | 'exit_to_minibar'
+  | 'exit_to_housekeeping'
+  | 'adjustment'
+  | 'sale'
+  | 'minibar_consumed'
+  | 'minibar_damaged'
+  | 'minibar_missing'
+
+export interface InventoryMovement {
+  id: string
+  source: 'inventory' | 'minibar_consumption'
+  type: InventoryMovementType
+  item_name: string
+  item_code: string | null
+  quantity: number
+  unit_price: string | null
+  total_value: string | null
+  performed_by: string | null
+  destination: string | null
+  notes: string | null
+  occurred_at: string
+}
+
+export interface InventoryHistoryPage {
+  data: InventoryMovement[]
+  meta: { total: number; per_page: number; current_page: number; last_page: number }
+}
+
 export interface InventoryItem {
   id: string
   category_id: string

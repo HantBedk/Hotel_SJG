@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Package, Wrench, ShoppingCart, AlertTriangle, ClipboardList } from 'lucide-react'
+import { Package, Wrench, ShoppingCart, AlertTriangle, ClipboardList, History } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useReverb } from '@/hooks/useReverb'
+import { useAuth } from '@/hooks/useAuth'
 import ConsumiblesTab from './tabs/ConsumiblesTab'
 import ActivosTab from './tabs/ActivosTab'
 import MinibarTab from './tabs/MinibarTab'
 import MantenimientosTab from './tabs/MantenimientosTab'
 import ReparacionesTab from './tabs/ReparacionesTab'
+import HistorialTab from './tabs/HistorialTab'
 
-const TABS = [
+const BASE_TABS = [
   { key: 'consumibles',    label: 'Consumibles',    icon: Package },
   { key: 'activos',        label: 'Activos',         icon: Wrench },
   { key: 'minibar',        label: 'Minibar',         icon: ShoppingCart },
@@ -18,8 +20,13 @@ const TABS = [
   { key: 'reparaciones',   label: 'Reparaciones',    icon: ClipboardList },
 ] as const
 
-type TabKey = (typeof TABS)[number]['key']
-const VALID_TABS = new Set<string>(TABS.map(t => t.key))
+const ADMIN_TABS = [
+  ...BASE_TABS,
+  { key: 'historial', label: 'Historial', icon: History },
+] as const
+
+type TabKey = (typeof ADMIN_TABS)[number]['key']
+const ALL_VALID_TABS = new Set<string>(ADMIN_TABS.map(t => t.key))
 
 const INVENTORY_ALERT_TYPES = new Set(['low_stock', 'expiring_product', 'maintenance_due'])
 
@@ -32,16 +39,20 @@ interface NotificationEvent {
 
 export default function InventoryPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const { hasRole } = useAuth()
+  const isAdmin = hasRole('admin') || hasRole('superadmin')
+  const TABS = isAdmin ? ADMIN_TABS : BASE_TABS
+
   const initialTab = (searchParams.get('tab') ?? '').toLowerCase()
   const [tab, setTab] = useState<TabKey>(
-    VALID_TABS.has(initialTab) ? (initialTab as TabKey) : 'consumibles',
+    ALL_VALID_TABS.has(initialTab) ? (initialTab as TabKey) : 'consumibles',
   )
   const queryClient = useQueryClient()
 
   // Reaccionar a cambios de ?tab (back/forward del navegador)
   useEffect(() => {
     const next = (searchParams.get('tab') ?? '').toLowerCase()
-    if (VALID_TABS.has(next) && next !== tab) setTab(next as TabKey)
+    if (ALL_VALID_TABS.has(next) && next !== tab) setTab(next as TabKey)
   }, [searchParams, tab])
 
   const changeTab = (key: TabKey) => {
@@ -94,6 +105,7 @@ export default function InventoryPage() {
       {tab === 'minibar'        && <MinibarTab />}
       {tab === 'mantenimientos' && <MantenimientosTab />}
       {tab === 'reparaciones'   && <ReparacionesTab />}
+      {tab === 'historial'      && isAdmin && <HistorialTab />}
     </div>
   )
 }

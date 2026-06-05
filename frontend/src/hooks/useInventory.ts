@@ -31,6 +31,8 @@ import {
   createRepairOrderApi,
   assignRepairOrderApi,
   closeRepairOrderApi,
+  getInventoryHistoryApi,
+  type HistoryFilters,
   type ItemFilters,
 } from '@/services/inventory.service'
 import type { Asset, InventoryItem, MinibarProduct } from '@/types'
@@ -147,7 +149,10 @@ export function useRoomMinibars(roomId: string | null) {
 
 export function useMinibarProductMutations() {
   const qc = useQueryClient()
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['minibar-products'] })
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['minibar-products'] })
+    qc.invalidateQueries({ queryKey: ['inventory-history'] })
+  }
 
   const createMutation = useMutation({
     mutationFn: createMinibarProductApi,
@@ -173,6 +178,7 @@ export function useMinibarProductMutations() {
     onSuccess: (_data, vars) => {
       toast.success('Minibar repuesto.')
       qc.invalidateQueries({ queryKey: ['room-minibars', vars.room_id] })
+      qc.invalidateQueries({ queryKey: ['inventory-history'] })
     },
     onError: (e: ApiError) => toast.error(errMsg(e, 'Error al reponer minibar.')),
   })
@@ -326,4 +332,14 @@ export function useRepairOrderMutations() {
   })
 
   return { createMutation, assignMutation, closeMutation }
+}
+
+// ── Inventory history ─────────────────────────────────────────────────────────
+
+export function useInventoryHistory(filters?: HistoryFilters) {
+  return useQuery({
+    queryKey: ['inventory-history', filters],
+    queryFn:  () => getInventoryHistoryApi(filters),
+    staleTime: 30_000,
+  })
 }

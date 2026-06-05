@@ -3,6 +3,7 @@ import type {
   Asset,
   AssetMaintenance,
   InventoryCategory,
+  InventoryHistoryPage,
   InventoryItem,
   InventoryTransaction,
   Minibar,
@@ -124,6 +125,14 @@ export const restockRoomMinibarApi = async (data: {
   quantity: number
 }): Promise<void> => {
   await api.post('/inventory/minibar/restock-room', data)
+}
+
+export const returnFromRoomMinibarApi = async (data: {
+  room_id: string
+  minibar_product_id: string
+  quantity: number
+}): Promise<void> => {
+  await api.post('/inventory/minibar/return-from-room', data)
 }
 
 // ── Minibars (1 por habitación) ──────────────────────────────────────────────
@@ -248,5 +257,22 @@ export const closeRepairOrderApi = async (
   data: { cost?: number; notes?: string }
 ): Promise<RepairOrder> => {
   const res = await api.patch(`/inventory/repair-orders/${id}/close`, data)
+  return res.data.data
+}
+
+// ── Inventory history (admin only) ────────────────────────────────────────────
+
+export interface HistoryFilters {
+  source?: 'all' | 'inventory' | 'minibar'
+  search?: string
+  date_from?: string
+  date_to?: string
+  page?: number
+}
+
+export const getInventoryHistoryApi = async (
+  filters?: HistoryFilters
+): Promise<InventoryHistoryPage> => {
+  const res = await api.get('/inventory/history', { params: filters })
   return res.data.data
 }

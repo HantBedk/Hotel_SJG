@@ -193,6 +193,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/items/{inventoryItem}/deliver', [InventoryController::class, 'deliver'])
                  ->middleware('permission:manage_inventory');
             Route::get('/items/{inventoryItem}/transactions', [InventoryController::class, 'transactions']);
+            Route::get('/history', [InventoryController::class, 'history'])
+                 ->middleware('role:admin|superadmin');
 
             // Minibar — productos
             Route::get('/minibar/products',               [MinibarController::class, 'productsIndex']);
@@ -204,6 +206,8 @@ Route::prefix('v1')->group(function () {
                  ->middleware('permission:manage_inventory');
             Route::get('/minibar/room-minibars', [MinibarController::class, 'roomMinibars']);
             Route::post('/minibar/restock-room', [MinibarController::class, 'restockRoom'])
+                 ->middleware('permission:manage_inventory');
+            Route::post('/minibar/return-from-room', [MinibarController::class, 'returnFromRoom'])
                  ->middleware('permission:manage_inventory');
 
             // Minibars (1 por habitación)

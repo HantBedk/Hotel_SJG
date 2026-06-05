@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
+use App\Models\MinibarConsumption;
+use App\Models\MinibarRestockLog;
 use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -253,6 +255,125 @@ class InventoryController extends Controller
             ->paginate($this->perPage($request, 30));
 
         return response()->json(['success' => true, 'data' => $transactions]);
+    }
+
+    public function history(Request $request): JsonResponse
+    {
+        $search   = $request->query('search');
+        $source   = $request->query('source', 'all');   // all | inventory | minibar
+        $dateFrom = $request->query('date_from');
+        $dateTo   = $request->query('date_to');
+        $perPage  = 60;
+        $page     = max(1, (int) $request->query('page', 1));
+
+        $rows = collect();
+
+        // ── Inventory transactions ──────────────────────────────────────────
+        if ($source !== 'minibar') {
+            InventoryTransaction::with([
+                'item:id,name,code',
+                'performedBy:id,name',
+                'destinationRoom:id,number',
+                'destinationUser:id,name',
+            ])
+            ->when($search, fn($q) => $q->whereHas('item', fn($q2) =>
+                $q2->where('name', 'ilike', "%{$search}%")
+                   ->orWhere('code', 'ilike', "%{$search}%")))
+            ->when($dateFrom, fn($q) => $q->whereDate('created_at', '>=', $dateFrom))
+            ->when($dateTo,   fn($q) => $q->whereDate('created_at', '<=', $dateTo))
+            ->orderByDesc('created_at')
+            ->chunk(500, function ($txs) use (&$rows) {
+                $rows = $rows->merge($txs->map(fn($tx) => [
+                    'id'           => $tx->id,
+                    'source'       => 'inventory',
+                    'type'         => $tx->type,
+                    'item_name'    => $tx->item?->name ?? '—',
+                    'item_code'    => $tx->item?->code,
+                    'quantity'     => $tx->quantity,
+                    'unit_price'   => $tx->unit_price,
+                    'total_value'  => $tx->total_value,
+                    'performed_by' => $tx->performedBy?->name,
+                    'destination'  => $tx->destinationRoom
+                                        ? 'Hab. ' . $tx->destinationRoom->number
+                                        : $tx->destinationUser?->name,
+                    'notes'        => $tx->notes,
+                    'occurred_at'  => $tx->created_at?->toIso8601String(),
+                ]));
+            });
+        }
+
+        // ── Minibar consumptions (ventas estadía) ───────────────────────────
+        if ($source !== 'inventory') {
+            MinibarConsumption::with([
+                'registeredBy:id,name',
+                'room:id,number',
+                'stay:id',
+            ])
+            ->when($search, fn($q) => $q->where('product_name', 'ilike', "%{$search}%"))
+            ->when($dateFrom, fn($q) => $q->whereDate('registered_at', '>=', $dateFrom))
+            ->when($dateTo,   fn($q) => $q->whereDate('registered_at', '<=', $dateTo))
+            ->orderByDesc('registered_at')
+            ->chunk(500, function ($mcs) use (&$rows) {
+                $rows = $rows->merge($mcs->map(fn($mc) => [
+                    'id'           => $mc->id,
+                    'source'       => 'minibar_consumption',
+                    'type'         => 'minibar_' . $mc->type,
+                    'item_name'    => $mc->product_name,
+                    'item_code'    => null,
+                    'quantity'     => $mc->quantity,
+                    'unit_price'   => $mc->unit_price,
+                    'total_value'  => $mc->total,
+                    'performed_by' => $mc->registeredBy?->name,
+                    'destination'  => $mc->room ? 'Hab. ' . $mc->room->number : null,
+                    'notes'        => $mc->stay_id ? "Estadía registrada" : null,
+                    'occurred_at'  => $mc->registered_at?->toIso8601String(),
+                ]));
+            });
+
+            // ── Minibar restocks (reposición de productos a la habitación) ──
+            MinibarRestockLog::with([
+                'performedBy:id,name',
+                'room:id,number',
+            ])
+            ->when($search, fn($q) => $q->where('product_name', 'ilike', "%{$search}%"))
+            ->when($dateFrom, fn($q) => $q->whereDate('created_at', '>=', $dateFrom))
+            ->when($dateTo,   fn($q) => $q->whereDate('created_at', '<=', $dateTo))
+            ->orderByDesc('created_at')
+            ->chunk(500, function ($logs) use (&$rows) {
+                $rows = $rows->merge($logs->map(function ($log) {
+                    $qty  = (int) $log->quantity;
+                    $type = $qty >= 0 ? 'minibar_restock' : 'minibar_return';
+                    return [
+                        'id'           => $log->id,
+                        'source'       => 'minibar',
+                        'type'         => $type,
+                        'item_name'    => $log->product_name,
+                        'item_code'    => null,
+                        'quantity'     => $qty,
+                        'unit_price'   => $log->unit_price,
+                        'total_value'  => $log->total_value,
+                        'performed_by' => $log->performedBy?->name,
+                        'destination'  => $log->room ? 'Hab. ' . $log->room->number : 'Catálogo',
+                        'notes'        => $log->notes,
+                        'occurred_at'  => $log->created_at?->toIso8601String(),
+                    ];
+                }));
+            });
+        }
+
+        $sorted = $rows->sortByDesc('occurred_at')->values();
+        $total  = $sorted->count();
+        $data   = $sorted->slice(($page - 1) * $perPage, $perPage)->values();
+
+        return $this->success([
+            'data' => $data,
+            'meta' => [
+                'total'        => $total,
+                'per_page'     => $perPage,
+                'current_page' => $page,
+                'last_page'    => (int) ceil($total / $perPage),
+            ],
+        ]);
     }
 
     public function storeCategory(Request $request): JsonResponse
