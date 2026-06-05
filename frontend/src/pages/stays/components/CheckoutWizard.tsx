@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { X, Plus, Trash2, Download, ExternalLink, Loader2, CheckCircle2 } from 'lucide-react'
+import { X, Plus, Trash2, Download, ExternalLink, Loader2, CheckCircle2, Minus } from 'lucide-react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import type { MinibarItem, StayAccount, Stay, MinibarConsumptionType } from '@/types'
+import type { MinibarItem, StayAccount, Stay, MinibarConsumptionType, StayRoom } from '@/types'
 import { addMinibarChargesApi, checkoutStayApi, addPaymentApi, getStayAccountApi, downloadStayReceiptApi } from '@/services/stays.service'
+import { useRoomMinibars } from '@/hooks/useInventory'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 
 interface Props {
@@ -28,9 +29,165 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
+// Key compuesto para identificar un consumo desde el minibar (por habitación + producto).
+// Se mantiene fuera de MinibarItem para no contaminar el contrato hacia el backend.
+type PickedItemKey = string // `${roomId}::${productId}`
+type PickedItems = Record<PickedItemKey, MinibarItem>
+
+const pickedKey = (roomId: string, productId: string): PickedItemKey =>
+  `${roomId}::${productId}`
+
+interface RoomMinibarPickerProps {
+  stayRoom: StayRoom
+  showRoomHeader: boolean
+  pickedItems: PickedItems
+  onChangePicked: React.Dispatch<React.SetStateAction<PickedItems>>
+}
+
+function RoomMinibarPicker({ stayRoom, showRoomHeader, pickedItems, onChangePicked }: RoomMinibarPickerProps) {
+  const { data: rows = [], isLoading } = useRoomMinibars(stayRoom.room_id)
+
+  const setQty = (productId: string, productName: string, salePrice: number, qty: number, type: MinibarConsumptionType) => {
+    const key = pickedKey(stayRoom.room_id, productId)
+    onChangePicked((prev) => {
+      if (qty <= 0) {
+        const { [key]: _removed, ...rest } = prev
+        return rest
+      }
+      return {
+        ...prev,
+        [key]: {
+          product_name: productName,
+          room_id:      stayRoom.room_id,
+          type,
+          quantity:     qty,
+          unit_price:   salePrice,
+        },
+      }
+    })
+  }
+
+  const setType = (productId: string, productName: string, salePrice: number, type: MinibarConsumptionType) => {
+    const key = pickedKey(stayRoom.room_id, productId)
+    const current = pickedItems[key]
+    if (!current) return
+    onChangePicked((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], type, product_name: productName, unit_price: salePrice },
+    }))
+  }
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl p-4 text-xs"
+        style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
+        Cargando minibar de Hab. {stayRoom.room?.number}…
+      </div>
+    )
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl p-4 text-xs"
+        style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
+        {showRoomHeader && <span className="block font-semibold mb-1" style={{ color: 'var(--text-secondary)' }}>Hab. {stayRoom.room?.number}</span>}
+        La habitación no tiene productos asignados en su minibar.
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border" style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
+      {showRoomHeader && (
+        <div className="px-3 py-2 border-b text-xs font-semibold uppercase tracking-wider"
+          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
+          Minibar Hab. {stayRoom.room?.number}
+        </div>
+      )}
+      <div className="divide-y" style={{ borderColor: 'var(--border-default)' }}>
+        {rows.map((rm) => {
+          const productId   = rm.minibar_product_id
+          const productName = rm.product?.name ?? '—'
+          const salePrice   = Number(rm.product?.sale_price ?? 0)
+          const available   = rm.quantity
+          const key         = pickedKey(stayRoom.room_id, productId)
+          const current     = pickedItems[key]
+          const consumedQty = current?.quantity ?? 0
+          const type        = current?.type ?? 'consumed'
+          const exceeded    = consumedQty > available
+
+          return (
+            <div key={rm.id} className="flex items-center gap-3 px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>{productName}</p>
+                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  En minibar: <span className="tabular-nums">{available}</span>
+                  {' · '}Precio: <span className="tabular-nums">{formatCurrency(salePrice)}</span>
+                </p>
+                {exceeded && (
+                  <p className="text-[11px]" style={{ color: '#EF4444' }}>
+                    El consumo ({consumedQty}) supera lo asignado al minibar ({available}).
+                  </p>
+                )}
+              </div>
+
+              <select
+                value={type}
+                onChange={(e) => setType(productId, productName, salePrice, e.target.value as MinibarConsumptionType)}
+                disabled={consumedQty === 0}
+                className="px-2 py-1.5 rounded-lg text-xs border outline-none disabled:opacity-50"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+              >
+                {MINIBAR_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setQty(productId, productName, salePrice, Math.max(0, consumedQty - 1), type)}
+                  disabled={consumedQty <= 0}
+                  className="w-7 h-7 rounded-md border flex items-center justify-center disabled:opacity-40"
+                  style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+                  aria-label="Restar"
+                >
+                  <Minus size={12} />
+                </button>
+                <input
+                  type="number"
+                  min={0}
+                  value={consumedQty}
+                  onChange={(e) => setQty(productId, productName, salePrice, parseInt(e.target.value) || 0, type)}
+                  className="w-12 text-center px-1 py-1 rounded-md text-sm border outline-none"
+                  style={{
+                    background: 'var(--bg-surface)',
+                    border: '1px solid ' + (exceeded ? '#EF4444' : 'var(--border-default)'),
+                    color: 'var(--text-primary)',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setQty(productId, productName, salePrice, consumedQty + 1, type)}
+                  className="w-7 h-7 rounded-md border flex items-center justify-center"
+                  style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                  aria-label="Sumar"
+                >
+                  <Plus size={12} />
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
   const [step, setStep] = useState<Step>('minibar')
-  const [minibarItems, setMinibarItems] = useState<MinibarItem[]>([])
+  const [pickedItems, setPickedItems] = useState<PickedItems>({})
+  const [manualItems, setManualItems] = useState<MinibarItem[]>([])
+  // Lista consolidada que se envía al backend. Se recalcula bajo demanda.
+  const minibarItems: MinibarItem[] = [...Object.values(pickedItems), ...manualItems]
   const [minibarSubmitted, setMinibarSubmitted] = useState(false)
   const [lateFee, setLateFee] = useState('')
   const [payMethod, setPayMethod] = useState('cash')
@@ -156,16 +313,16 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
     }
   }
 
-  const addMinibarRow = () => {
-    setMinibarItems((prev) => [...prev, { product_name: '', room_id: defaultRoomId, type: 'consumed', quantity: 1, unit_price: 0 }])
+  const addManualRow = () => {
+    setManualItems((prev) => [...prev, { product_name: '', room_id: defaultRoomId, type: 'consumed', quantity: 1, unit_price: 0 }])
   }
 
-  const removeMinibarRow = (i: number) => {
-    setMinibarItems((prev) => prev.filter((_, idx) => idx !== i))
+  const removeManualRow = (i: number) => {
+    setManualItems((prev) => prev.filter((_, idx) => idx !== i))
   }
 
-  const updateMinibarRow = (i: number, field: keyof MinibarItem, value: string | number) => {
-    setMinibarItems((prev) => prev.map((item, idx) => idx === i ? { ...item, [field]: value } : item))
+  const updateManualRow = (i: number, field: keyof MinibarItem, value: string | number) => {
+    setManualItems((prev) => prev.map((item, idx) => idx === i ? { ...item, [field]: value } : item))
   }
 
   const isBusy = minibarMutation.isPending || paymentMutation.isPending || checkoutMutation.isPending
@@ -236,7 +393,7 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
           {step === 'minibar' && (
             <div className="space-y-4">
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                Registra consumos de minibar antes del checkout. Puedes omitir si no aplica.
+                Marca lo que el huésped consumió de cada minibar antes del checkout. Puedes omitir si no aplica.
               </p>
 
               {minibarSubmitted && (
@@ -247,20 +404,38 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
 
               {!minibarSubmitted && (
                 <>
-                  {minibarItems.map((item, i) => (
+                  {/* Por cada habitación activa, muestra los productos asignados a su minibar */}
+                  {activeRooms.map((sr) => (
+                    <RoomMinibarPicker
+                      key={sr.room_id}
+                      stayRoom={sr}
+                      showRoomHeader={activeRooms.length > 1}
+                      pickedItems={pickedItems}
+                      onChangePicked={setPickedItems}
+                    />
+                  ))}
+
+                  {/* Ítems manuales (productos que no estaban en el minibar) */}
+                  {manualItems.length > 0 && (
+                    <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                      Otros consumos manuales
+                    </p>
+                  )}
+
+                  {manualItems.map((item, i) => (
                     <div key={i} className="grid gap-2 rounded-xl p-3 border"
                       style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', gridTemplateColumns: '1fr auto auto auto auto auto' }}>
                       <input
                         placeholder="Producto"
                         value={item.product_name}
-                        onChange={(e) => updateMinibarRow(i, 'product_name', e.target.value)}
+                        onChange={(e) => updateManualRow(i, 'product_name', e.target.value)}
                         className="px-2 py-1.5 rounded-lg text-xs border outline-none"
                         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                       />
                       {activeRooms.length > 1 && (
                         <select
                           value={item.room_id}
-                          onChange={(e) => updateMinibarRow(i, 'room_id', e.target.value)}
+                          onChange={(e) => updateManualRow(i, 'room_id', e.target.value)}
                           className="px-2 py-1.5 rounded-lg text-xs border outline-none"
                           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                         >
@@ -271,7 +446,7 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
                       )}
                       <select
                         value={item.type}
-                        onChange={(e) => updateMinibarRow(i, 'type', e.target.value as MinibarConsumptionType)}
+                        onChange={(e) => updateManualRow(i, 'type', e.target.value as MinibarConsumptionType)}
                         className="px-2 py-1.5 rounded-lg text-xs border outline-none"
                         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                       >
@@ -280,18 +455,18 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
                       <input
                         type="number" min={1} placeholder="Cant."
                         value={item.quantity}
-                        onChange={(e) => updateMinibarRow(i, 'quantity', parseInt(e.target.value) || 1)}
+                        onChange={(e) => updateManualRow(i, 'quantity', parseInt(e.target.value) || 1)}
                         className="w-14 px-2 py-1.5 rounded-lg text-xs border outline-none"
                         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                       />
                       <input
                         type="number" min={0} placeholder="Precio unit."
                         value={item.unit_price || ''}
-                        onChange={(e) => updateMinibarRow(i, 'unit_price', parseFloat(e.target.value) || 0)}
+                        onChange={(e) => updateManualRow(i, 'unit_price', parseFloat(e.target.value) || 0)}
                         className="w-24 px-2 py-1.5 rounded-lg text-xs border outline-none"
                         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                       />
-                      <button onClick={() => removeMinibarRow(i)} className="p-1.5 rounded-lg hover:opacity-70"
+                      <button onClick={() => removeManualRow(i)} className="p-1.5 rounded-lg hover:opacity-70"
                         style={{ color: 'var(--status-occupied)' }}>
                         <Trash2 size={14} />
                       </button>
@@ -299,11 +474,11 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
                   ))}
 
                   <button
-                    onClick={addMinibarRow}
+                    onClick={addManualRow}
                     className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border hover:opacity-80"
                     style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
                   >
-                    <Plus size={13} /> Agregar ítem
+                    <Plus size={13} /> Agregar consumo manual
                   </button>
                 </>
               )}

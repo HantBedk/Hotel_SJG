@@ -195,6 +195,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/items/{inventoryItem}/transactions', [InventoryController::class, 'transactions']);
             Route::get('/history', [InventoryController::class, 'history'])
                  ->middleware('role:admin|superadmin');
+            Route::get('/low-stock-threshold',  [InventoryController::class, 'getLowStockThreshold'])
+                 ->middleware('permission:manage_inventory');
+            Route::post('/low-stock-threshold', [InventoryController::class, 'setLowStockThreshold'])
+                 ->middleware('permission:manage_inventory');
 
             // Minibar — productos
             Route::get('/minibar/products',               [MinibarController::class, 'productsIndex']);

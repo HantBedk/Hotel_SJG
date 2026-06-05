@@ -716,10 +716,10 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                   className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
                   style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                 />
-                <div className={stay.company ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
+                <div className={stay.company ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-1 gap-2'}>
                   {(stay.company
-                    ? ['payment_method', 'payment_type', 'paid_by']
-                    : ['payment_method', 'payment_type']
+                    ? ['payment_method', 'paid_by']
+                    : ['payment_method']
                   ).map((field) => (
                     <select key={field} value={payForm[field as keyof PaymentForm]}
                       onChange={(e) => setPayForm((s) => ({ ...s, [field]: e.target.value }))}
@@ -729,11 +729,6 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                         <option value="cash">Efectivo</option>
                         <option value="transfer">Transferencia</option>
                         <option value="card">Tarjeta</option>
-                      </>}
-                      {field === 'payment_type' && <>
-                        <option value="deposit">Depósito</option>
-                        <option value="partial">Parcial</option>
-                        <option value="final">Final</option>
                       </>}
                       {field === 'paid_by' && <>
                         <option value="guest">Huésped</option>

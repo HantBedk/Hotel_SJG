@@ -26,16 +26,21 @@ class ActivityLogController extends Controller
         'reservation.created'    => 'Reserva creada',
         'reservation.cancelled'  => 'Reserva cancelada',
         'reservation.updated'    => 'Reserva actualizada',
+        'reservation.group_created' => 'Reserva grupal creada',
         'reservation.checkin'    => 'Check-in desde reserva',
         'room_created'           => 'Habitación creada',
-        'room.status_changed'    => 'Cambio de estado de habitación',
+        'room_updated'           => 'Habitación actualizada',
+        'room_deactivated'       => 'Habitación desactivada',
+        'room.status_changed'    => 'Cambio de estado',
+        'room.cleaning'          => 'Habitación en limpieza',
+        'room.maintenance'       => 'Habitación en mantenimiento',
         'inventory.restock'      => 'Reposición de inventario',
         'inventory.adjust'       => 'Ajuste de inventario',
     ];
 
     public function index(Request $request): JsonResponse
     {
-        $query = ActivityLog::with('user')
+        $query = ActivityLog::with('user.roles')
             ->orderByDesc('created_at');
 
         if ($action = $request->query('action')) {
@@ -60,6 +65,7 @@ class ActivityLogController extends Controller
             'action_label' => self::ACTION_LABELS[$log->action] ?? $log->action,
             'user_id'    => $log->user_id,
             'user_name'  => $log->user?->name ?? 'Sistema',
+            'user_role'  => $log->user?->roles->first()?->name,
             'payload'    => $log->payload,
             'created_at' => $log->created_at,
         ]);

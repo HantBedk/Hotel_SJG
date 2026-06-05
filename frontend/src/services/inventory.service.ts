@@ -30,6 +30,7 @@ export interface ItemFilters {
   category_id?: string
   search?: string
   low_stock?: boolean
+  min_stock_below?: number
   expiring_in_days?: number
   page?: number
   per_page?: number
@@ -274,5 +275,15 @@ export const getInventoryHistoryApi = async (
   filters?: HistoryFilters
 ): Promise<InventoryHistoryPage> => {
   const res = await api.get('/inventory/history', { params: filters })
+  return res.data.data
+}
+
+export const getLowStockThresholdApi = async (): Promise<{ threshold: number | null }> => {
+  const res = await api.get('/inventory/low-stock-threshold')
+  return res.data.data
+}
+
+export const setLowStockThresholdApi = async (threshold: number): Promise<{ threshold: number }> => {
+  const res = await api.post('/inventory/low-stock-threshold', { threshold })
   return res.data.data
 }

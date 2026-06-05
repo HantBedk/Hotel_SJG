@@ -8,6 +8,9 @@ use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Models\MinibarConsumption;
 use App\Models\MinibarRestockLog;
+use App\Models\Notification;
+use App\Models\Setting;
+use App\Models\User;
 use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,6 +44,10 @@ class InventoryController extends Controller
 
         if ($request->boolean('low_stock')) {
             $query->whereRaw('current_stock <= min_stock_threshold');
+        }
+
+        if (($minBelow = $request->query('min_stock_below')) !== null && is_numeric($minBelow)) {
+            $query->where('current_stock', '<=', (int) $minBelow);
         }
 
         if ($days = (int) $request->query('expiring_in_days')) {
@@ -216,6 +223,8 @@ class InventoryController extends Controller
             $inventoryItem->update(['current_stock' => $data['new_stock']]);
         });
 
+        self::checkItemLowStock($inventoryItem->refresh());
+
         return response()->json(['success' => true, 'data' => $inventoryItem->refresh(), 'message' => 'Stock ajustado.']);
     }
 
@@ -244,6 +253,8 @@ class InventoryController extends Controller
             $inventoryItem->decrement('current_stock', $data['quantity']);
         });
 
+        self::checkItemLowStock($inventoryItem->refresh());
+
         return response()->json(['success' => true, 'data' => $inventoryItem->refresh(), 'message' => 'Entrega registrada.']);
     }
 
@@ -271,7 +282,7 @@ class InventoryController extends Controller
         // ── Inventory transactions ──────────────────────────────────────────
         if ($source !== 'minibar') {
             InventoryTransaction::with([
-                'item:id,name,code',
+                'item:id,name,code,presentation',
                 'performedBy:id,name',
                 'destinationRoom:id,number',
                 'destinationUser:id,name',
@@ -284,20 +295,21 @@ class InventoryController extends Controller
             ->orderByDesc('created_at')
             ->chunk(500, function ($txs) use (&$rows) {
                 $rows = $rows->merge($txs->map(fn($tx) => [
-                    'id'           => $tx->id,
-                    'source'       => 'inventory',
-                    'type'         => $tx->type,
-                    'item_name'    => $tx->item?->name ?? '—',
-                    'item_code'    => $tx->item?->code,
-                    'quantity'     => $tx->quantity,
-                    'unit_price'   => $tx->unit_price,
-                    'total_value'  => $tx->total_value,
-                    'performed_by' => $tx->performedBy?->name,
-                    'destination'  => $tx->destinationRoom
-                                        ? 'Hab. ' . $tx->destinationRoom->number
-                                        : $tx->destinationUser?->name,
-                    'notes'        => $tx->notes,
-                    'occurred_at'  => $tx->created_at?->toIso8601String(),
+                    'id'               => $tx->id,
+                    'source'           => 'inventory',
+                    'type'             => $tx->type,
+                    'item_name'        => $tx->item?->name ?? '—',
+                    'item_code'        => $tx->item?->code,
+                    'item_presentation'=> $tx->item?->presentation,
+                    'quantity'         => $tx->quantity,
+                    'unit_price'       => $tx->unit_price,
+                    'total_value'      => $tx->total_value,
+                    'performed_by'     => $tx->performedBy?->name,
+                    'destination'      => $tx->destinationRoom
+                                            ? 'Hab. ' . $tx->destinationRoom->number
+                                            : $tx->destinationUser?->name,
+                    'notes'            => $tx->notes,
+                    'occurred_at'      => $tx->created_at?->toIso8601String(),
                 ]));
             });
         }
@@ -315,18 +327,19 @@ class InventoryController extends Controller
             ->orderByDesc('registered_at')
             ->chunk(500, function ($mcs) use (&$rows) {
                 $rows = $rows->merge($mcs->map(fn($mc) => [
-                    'id'           => $mc->id,
-                    'source'       => 'minibar_consumption',
-                    'type'         => 'minibar_' . $mc->type,
-                    'item_name'    => $mc->product_name,
-                    'item_code'    => null,
-                    'quantity'     => $mc->quantity,
-                    'unit_price'   => $mc->unit_price,
-                    'total_value'  => $mc->total,
-                    'performed_by' => $mc->registeredBy?->name,
-                    'destination'  => $mc->room ? 'Hab. ' . $mc->room->number : null,
-                    'notes'        => $mc->stay_id ? "Estadía registrada" : null,
-                    'occurred_at'  => $mc->registered_at?->toIso8601String(),
+                    'id'               => $mc->id,
+                    'source'           => 'minibar_consumption',
+                    'type'             => 'minibar_' . $mc->type,
+                    'item_name'        => $mc->product_name,
+                    'item_code'        => null,
+                    'item_presentation'=> null,
+                    'quantity'         => $mc->quantity,
+                    'unit_price'       => $mc->unit_price,
+                    'total_value'      => $mc->total,
+                    'performed_by'     => $mc->registeredBy?->name,
+                    'destination'      => $mc->room ? 'Hab. ' . $mc->room->number : null,
+                    'notes'            => $mc->stay_id ? "Estadía registrada" : null,
+                    'occurred_at'      => $mc->registered_at?->toIso8601String(),
                 ]));
             });
 
@@ -334,6 +347,7 @@ class InventoryController extends Controller
             MinibarRestockLog::with([
                 'performedBy:id,name',
                 'room:id,number',
+                'minibarProduct:id,presentation',
             ])
             ->when($search, fn($q) => $q->where('product_name', 'ilike', "%{$search}%"))
             ->when($dateFrom, fn($q) => $q->whereDate('created_at', '>=', $dateFrom))
@@ -341,21 +355,29 @@ class InventoryController extends Controller
             ->orderByDesc('created_at')
             ->chunk(500, function ($logs) use (&$rows) {
                 $rows = $rows->merge($logs->map(function ($log) {
-                    $qty  = (int) $log->quantity;
-                    $type = $qty >= 0 ? 'minibar_restock' : 'minibar_return';
+                    $qty = (int) $log->quantity;
+                    // Diferenciamos:
+                    //   - room_id NULL  → movimiento en el catálogo (alta inicial o ajuste).
+                    //   - room_id !NULL → movimiento contra una habitación (reposición o devolución).
+                    if ($log->room_id === null) {
+                        $type = $qty >= 0 ? 'minibar_catalog_entry' : 'minibar_catalog_adjustment';
+                    } else {
+                        $type = $qty >= 0 ? 'minibar_restock' : 'minibar_return';
+                    }
                     return [
-                        'id'           => $log->id,
-                        'source'       => 'minibar',
-                        'type'         => $type,
-                        'item_name'    => $log->product_name,
-                        'item_code'    => null,
-                        'quantity'     => $qty,
-                        'unit_price'   => $log->unit_price,
-                        'total_value'  => $log->total_value,
-                        'performed_by' => $log->performedBy?->name,
-                        'destination'  => $log->room ? 'Hab. ' . $log->room->number : 'Catálogo',
-                        'notes'        => $log->notes,
-                        'occurred_at'  => $log->created_at?->toIso8601String(),
+                        'id'               => $log->id,
+                        'source'           => 'minibar',
+                        'type'             => $type,
+                        'item_name'        => $log->product_name,
+                        'item_code'        => null,
+                        'item_presentation'=> $log->minibarProduct?->presentation,
+                        'quantity'         => $qty,
+                        'unit_price'       => $log->unit_price,
+                        'total_value'      => $log->total_value,
+                        'performed_by'     => $log->performedBy?->name,
+                        'destination'      => $log->room ? 'Hab. ' . $log->room->number : 'Catálogo',
+                        'notes'            => $log->notes,
+                        'occurred_at'      => $log->created_at?->toIso8601String(),
                     ];
                 }));
             });
@@ -365,13 +387,16 @@ class InventoryController extends Controller
         $total  = $sorted->count();
         $data   = $sorted->slice(($page - 1) * $perPage, $perPage)->values();
 
-        return $this->success([
-            'data' => $data,
-            'meta' => [
-                'total'        => $total,
-                'per_page'     => $perPage,
-                'current_page' => $page,
-                'last_page'    => (int) ceil($total / $perPage),
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'data' => $data,
+                'meta' => [
+                    'total'        => $total,
+                    'per_page'     => $perPage,
+                    'current_page' => $page,
+                    'last_page'    => (int) ceil($total / $perPage),
+                ],
             ],
         ]);
     }
@@ -385,5 +410,85 @@ class InventoryController extends Controller
 
         $category = InventoryCategory::create($data);
         return response()->json(['success' => true, 'data' => $category, 'message' => 'Categoría creada.'], 201);
+    }
+
+    // ── Low-stock threshold (global) ──────────────────────────────────────────
+
+    public function getLowStockThreshold(): JsonResponse
+    {
+        $threshold = Setting::get('inventory.low_stock_threshold', null);
+        return response()->json(['success' => true, 'data' => ['threshold' => $threshold !== null ? (int) $threshold : null]]);
+    }
+
+    public function setLowStockThreshold(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'threshold' => 'required|integer|min:1',
+        ]);
+
+        Setting::set('inventory.low_stock_threshold', $data['threshold'], 'integer', 'inventory');
+
+        // Disparar alertas inmediatas para los ítems que ya están bajo el umbral
+        $this->fireImmediateLowStockAlerts($data['threshold']);
+
+        return response()->json(['success' => true, 'data' => ['threshold' => $data['threshold']], 'message' => 'Umbral guardado.']);
+    }
+
+    private function fireImmediateLowStockAlerts(int $threshold): void
+    {
+        $staffIds = User::permission('manage_inventory')->pluck('id');
+        if ($staffIds->isEmpty()) return;
+
+        $lowItems = InventoryItem::where('active', true)
+            ->where('current_stock', '<=', $threshold)
+            ->get();
+
+        foreach ($lowItems as $item) {
+            foreach ($staffIds as $userId) {
+                $exists = Notification::where('user_id', $userId)
+                    ->where('type', 'low_stock')
+                    ->whereJsonContains('payload->item_id', $item->id)
+                    ->whereDate('created_at', today())
+                    ->exists();
+
+                if ($exists) continue;
+
+                Notification::create([
+                    'type'       => 'low_stock',
+                    'title'      => "Stock bajo: {$item->name}",
+                    'message'    => "Quedan {$item->current_stock} unidad(es). Umbral configurado: {$threshold}.",
+                    'payload'    => ['item_id' => $item->id, 'code' => $item->code, 'threshold' => $threshold],
+                    'action_url' => '/inventory?tab=consumibles',
+                    'user_id'    => $userId,
+                ]);
+            }
+        }
+    }
+
+    public static function checkItemLowStock(InventoryItem $item): void
+    {
+        $threshold = Setting::get('inventory.low_stock_threshold', null);
+        if ($threshold === null || $item->current_stock > (int) $threshold) return;
+
+        $staffIds = User::permission('manage_inventory')->pluck('id');
+
+        foreach ($staffIds as $userId) {
+            $exists = Notification::where('user_id', $userId)
+                ->where('type', 'low_stock')
+                ->whereJsonContains('payload->item_id', $item->id)
+                ->whereDate('created_at', today())
+                ->exists();
+
+            if ($exists) continue;
+
+            Notification::create([
+                'type'       => 'low_stock',
+                'title'      => "Stock bajo: {$item->name}",
+                'message'    => "Quedan {$item->current_stock} unidad(es). Umbral configurado: {$threshold}.",
+                'payload'    => ['item_id' => $item->id, 'code' => $item->code, 'threshold' => (int) $threshold],
+                'action_url' => '/inventory?tab=consumibles',
+                'user_id'    => $userId,
+            ]);
+        }
     }
 }

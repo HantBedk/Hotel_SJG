@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   X, BedDouble, Sparkles, Wrench, XCircle, Check, Calendar, User,
@@ -74,6 +74,11 @@ export function DashboardRoomModal({
   const [showReservationPicker, setShowReservationPicker] = useState(false)
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false)
   const [maintenanceReason, setMaintenanceReason] = useState('')
+
+  useEffect(() => {
+    setShowPayForm(false)
+    setPayForm(EMPTY_PAYMENT)
+  }, [room?.id])
 
   if (!room) return null
 
@@ -644,7 +649,7 @@ function PaymentInlineForm({ form, balance, hasCompany, onChange, onSubmit, onCa
         </p>
       </div>
 
-      <div>
+      <div className={hasCompany ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
         <input
           type="number"
           min="0"
@@ -652,21 +657,9 @@ function PaymentInlineForm({ form, balance, hasCompany, onChange, onSubmit, onCa
           placeholder="Monto"
           value={form.amount}
           onChange={(e) => onChange({ ...form, amount: e.target.value })}
-          className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
-          style={{
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-default)',
-            color: 'var(--text-primary)',
-          }}
+          className="px-3 py-2 rounded-lg text-sm border outline-none"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
         />
-        {exceedsBalance && (
-          <p className="text-[11px] mt-1" style={{ color: '#F59E0B' }}>
-            El monto supera el saldo pendiente.
-          </p>
-        )}
-      </div>
-
-      <div className={hasCompany ? 'grid grid-cols-3 gap-2' : 'grid grid-cols-2 gap-2'}>
         <select
           value={form.payment_method}
           onChange={(e) => onChange({ ...form, payment_method: e.target.value })}
@@ -676,16 +669,6 @@ function PaymentInlineForm({ form, balance, hasCompany, onChange, onSubmit, onCa
           <option value="cash">Efectivo</option>
           <option value="transfer">Transferencia</option>
           <option value="card">Tarjeta</option>
-        </select>
-        <select
-          value={form.payment_type}
-          onChange={(e) => onChange({ ...form, payment_type: e.target.value })}
-          className="px-2 py-2 rounded-lg text-xs border outline-none"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-        >
-          <option value="deposit">Depósito</option>
-          <option value="partial">Parcial</option>
-          <option value="final">Final</option>
         </select>
         {hasCompany && (
           <select
@@ -700,6 +683,9 @@ function PaymentInlineForm({ form, balance, hasCompany, onChange, onSubmit, onCa
           </select>
         )}
       </div>
+      {exceedsBalance && (
+        <p className="text-[11px]" style={{ color: '#F59E0B' }}>El monto supera el saldo pendiente.</p>
+      )}
 
       <input
         type="text"

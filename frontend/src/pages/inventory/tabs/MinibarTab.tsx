@@ -99,6 +99,18 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
           <button onClick={onClose}><X size={18} style={{ color: 'var(--text-secondary)' }} /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Nombre *</label>
+            <input
+              type="text"
+              required
+              value={form.name}
+              onChange={(e) => set('name', e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm"
+              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Código</label>
@@ -122,18 +134,6 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
                 style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
               />
             </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Nombre *</label>
-            <input
-              type="text"
-              required
-              value={form.name}
-              onChange={(e) => set('name', e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border text-sm"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-            />
           </div>
 
           <div>

@@ -478,13 +478,18 @@ export type InventoryMovementType =
   | 'minibar_consumed'
   | 'minibar_damaged'
   | 'minibar_missing'
+  | 'minibar_restock'
+  | 'minibar_return'
+  | 'minibar_catalog_entry'
+  | 'minibar_catalog_adjustment'
 
 export interface InventoryMovement {
   id: string
-  source: 'inventory' | 'minibar_consumption'
+  source: 'inventory' | 'minibar_consumption' | 'minibar'
   type: InventoryMovementType
   item_name: string
   item_code: string | null
+  item_presentation: string | null
   quantity: number
   unit_price: string | null
   total_value: string | null
@@ -651,6 +656,7 @@ export interface ActivityLogEntry {
   action_label: string
   user_id: string | null
   user_name: string
+  user_role: string | null
   payload: Record<string, unknown> | null
   created_at: string
 }

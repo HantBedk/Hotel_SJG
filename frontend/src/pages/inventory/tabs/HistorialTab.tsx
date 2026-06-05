@@ -8,14 +8,18 @@ import type { HistoryFilters as ServiceHistoryFilters } from '@/services/invento
 /* ── Helpers ──────────────────────────────────────────────────────────────── */
 
 const TYPE_META: Record<InventoryMovementType, { label: string; color: string; bg: string; sign: '+' | '-' | '±' }> = {
-  entry:                   { label: 'Compra / Entrada',      color: '#16a34a', bg: '#dcfce7', sign: '+' },
-  exit_to_minibar:         { label: 'Salida a Minibar',      color: '#7c3aed', bg: '#ede9fe', sign: '-' },
-  exit_to_housekeeping:    { label: 'Salida a Limpieza',     color: '#0369a1', bg: '#e0f2fe', sign: '-' },
-  adjustment:              { label: 'Ajuste de stock',       color: '#d97706', bg: '#fef3c7', sign: '±' },
-  sale:                    { label: 'Venta directa',         color: '#be185d', bg: '#fce7f3', sign: '-' },
-  minibar_consumed:        { label: 'Consumo minibar',       color: '#6d28d9', bg: '#ede9fe', sign: '-' },
-  minibar_damaged:         { label: 'Daño en minibar',       color: '#b91c1c', bg: '#fee2e2', sign: '-' },
-  minibar_missing:         { label: 'Faltante minibar',      color: '#92400e', bg: '#fef3c7', sign: '-' },
+  entry:                       { label: 'Compra / Entrada',        color: '#16a34a', bg: '#dcfce7', sign: '+' },
+  exit_to_minibar:             { label: 'Salida a Minibar',        color: '#7c3aed', bg: '#ede9fe', sign: '-' },
+  exit_to_housekeeping:        { label: 'Salida a Limpieza',       color: '#0369a1', bg: '#e0f2fe', sign: '-' },
+  adjustment:                  { label: 'Ajuste de stock',         color: '#d97706', bg: '#fef3c7', sign: '±' },
+  sale:                        { label: 'Venta directa',           color: '#be185d', bg: '#fce7f3', sign: '-' },
+  minibar_consumed:            { label: 'Consumo minibar',         color: '#6d28d9', bg: '#ede9fe', sign: '-' },
+  minibar_damaged:             { label: 'Daño en minibar',         color: '#b91c1c', bg: '#fee2e2', sign: '-' },
+  minibar_missing:             { label: 'Faltante minibar',        color: '#92400e', bg: '#fef3c7', sign: '-' },
+  minibar_catalog_entry:       { label: 'Ingreso al catálogo',     color: '#16a34a', bg: '#dcfce7', sign: '+' },
+  minibar_catalog_adjustment:  { label: 'Ajuste catálogo minibar', color: '#d97706', bg: '#fef3c7', sign: '±' },
+  minibar_restock:             { label: 'Reposición minibar',      color: '#0369a1', bg: '#e0f2fe', sign: '+' },
+  minibar_return:              { label: 'Devolución minibar',      color: '#0891b2', bg: '#cffafe', sign: '+' },
 }
 
 const SOURCE_OPTIONS = [
@@ -199,6 +203,9 @@ export default function HistorialTab() {
                         <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{m.item_name}</p>
                         {m.item_code && (
                           <p className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.item_code}</p>
+                        )}
+                        {m.item_presentation && (
+                          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.item_presentation}</p>
                         )}
                       </td>
 

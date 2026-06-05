@@ -32,6 +32,8 @@ import {
   assignRepairOrderApi,
   closeRepairOrderApi,
   getInventoryHistoryApi,
+  getLowStockThresholdApi,
+  setLowStockThresholdApi,
   type HistoryFilters,
   type ItemFilters,
 } from '@/services/inventory.service'
@@ -341,5 +343,27 @@ export function useInventoryHistory(filters?: HistoryFilters) {
     queryKey: ['inventory-history', filters],
     queryFn:  () => getInventoryHistoryApi(filters),
     staleTime: 30_000,
+  })
+}
+
+// ── Low-stock threshold ───────────────────────────────────────────────────────
+
+export function useLowStockThreshold() {
+  return useQuery({
+    queryKey: ['low-stock-threshold'],
+    queryFn:  getLowStockThresholdApi,
+    staleTime: 60_000,
+  })
+}
+
+export function useSetLowStockThreshold() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: setLowStockThresholdApi,
+    onSuccess: () => {
+      toast.success('Umbral de stock bajo guardado.')
+      qc.invalidateQueries({ queryKey: ['low-stock-threshold'] })
+    },
+    onError: (e: ApiError) => toast.error(errMsg(e, 'Error al guardar umbral.')),
   })
 }

@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { Plus, Search, Pencil, Trash2, RefreshCw, SlidersHorizontal, X, Truck } from 'lucide-react'
-import { useInventoryItems, useInventoryCategories, useInventoryMutations } from '@/hooks/useInventory'
+import { useState, useRef, useEffect } from 'react'
+import { Plus, Search, Pencil, Trash2, RefreshCw, SlidersHorizontal, X, Truck, FolderPlus, Check } from 'lucide-react'
+import { useInventoryItems, useInventoryCategories, useInventoryMutations, useCreateCategory, useLowStockThreshold, useSetLowStockThreshold } from '@/hooks/useInventory'
 import { useAdminUsers } from '@/hooks/useAdmin'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonTable } from '@/components/ui/Skeleton'
@@ -23,6 +23,82 @@ function StockBadge({ item }: { item: InventoryItem }) {
     >
       {item.current_stock} {item.unit}
     </span>
+  )
+}
+
+// ── Category quick-create ─────────────────────────────────────────────────────
+const CATEGORY_TYPES = [
+  { value: 'consumable', label: 'Consumible' },
+  { value: 'asset',      label: 'Activo' },
+  { value: 'cleaning',   label: 'Limpieza' },
+]
+
+function CategoryQuickForm({ onCreated }: { onCreated: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState('')
+  const [type, setType] = useState('consumable')
+  const { mutate, isPending } = useCreateCategory()
+
+  const submit = () => {
+    if (!name.trim()) return
+    mutate({ name: name.trim(), type }, {
+      onSuccess: (cat) => { onCreated(cat.id); setOpen(false); setName('') },
+    })
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-1 text-xs mt-1"
+        style={{ color: 'var(--color-primary)' }}
+      >
+        <FolderPlus size={12} /> Nueva categoría
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-2 p-3 rounded-lg space-y-2" style={{ background: 'var(--bg-main)', border: '1px solid var(--border-default)' }}>
+      <input
+        autoFocus
+        type="text"
+        placeholder="Nombre de la categoría"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), submit())}
+        className="w-full px-3 py-1.5 rounded-lg border text-sm"
+        style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+      />
+      <select
+        value={type}
+        onChange={(e) => setType(e.target.value)}
+        className="w-full px-3 py-1.5 rounded-lg border text-sm"
+        style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+      >
+        {CATEGORY_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={isPending || !name.trim()}
+          className="px-3 py-1 rounded-lg text-xs text-white font-medium disabled:opacity-40"
+          style={{ background: 'var(--color-primary)' }}
+        >
+          {isPending ? 'Guardando…' : 'Guardar'}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setName('') }}
+          className="px-3 py-1 rounded-lg text-xs border"
+          style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -94,16 +170,15 @@ function ItemForm({ item, categories, existingItems, onSave, onClose, onRestockE
               <option value="">Seleccionar…</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
+            <CategoryQuickForm onCreated={(id) => set('category_id', id)} />
           </div>
           {[
             { key: 'name',         label: 'Nombre *',       required: true },
             { key: 'brand',        label: 'Marca',          required: false },
             { key: 'presentation', label: 'Presentación',   required: false },
-            { key: 'unit',         label: 'Unidad',         required: false },
             { key: 'cost_price',   label: 'Precio costo *', required: true, type: 'number' },
             { key: 'sale_price',   label: 'Precio venta',   required: false, type: 'number' },
             { key: 'current_stock',label: 'Stock inicial',  required: false, type: 'number' },
-            { key: 'min_stock_threshold', label: 'Stock mínimo', required: false, type: 'number' },
             { key: 'expiry_date',  label: 'Vencimiento',    required: false, type: 'date' },
             { key: 'supplier',     label: 'Proveedor',      required: false },
             { key: 'location',     label: 'Ubicación',      required: false },
@@ -321,7 +396,27 @@ export default function ConsumiblesTab() {
 
   const [search, setSearch] = useState('')
   const [categoryId, setCategoryId] = useState('')
-  const [lowStock, setLowStock] = useState(false)
+  const [thresholdOpen, setThresholdOpen] = useState(false)
+  const [thresholdInput, setThresholdInput] = useState('')
+  const thresholdRef = useRef<HTMLDivElement>(null)
+
+  const { data: thresholdData } = useLowStockThreshold()
+  const setThreshold = useSetLowStockThreshold()
+  const currentThreshold = thresholdData?.threshold ?? null
+
+  useEffect(() => {
+    if (thresholdOpen) setThresholdInput(currentThreshold !== null ? String(currentThreshold) : '')
+  }, [thresholdOpen, currentThreshold])
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (thresholdRef.current && !thresholdRef.current.contains(e.target as Node)) {
+        setThresholdOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
   const [modalItem, setModalItem] = useState<InventoryItem | null | undefined>(undefined)
   const [restockItem, setRestockItem] = useState<InventoryItem | null>(null)
   const [deliverItem, setDeliverItem] = useState<InventoryItem | null>(null)
@@ -335,7 +430,6 @@ export default function ConsumiblesTab() {
   const filters = {
     search: search || undefined,
     category_id: categoryId || undefined,
-    low_stock: lowStock || undefined,
   }
 
   const { data, isLoading } = useInventoryItems(filters)
@@ -388,18 +482,72 @@ export default function ConsumiblesTab() {
           <option value="">Todas las categorías</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <button
-          onClick={() => setLowStock((v) => !v)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors"
-          style={{
-            background: lowStock ? '#FEF2F2' : 'var(--bg-input)',
-            borderColor: lowStock ? '#DC2626' : 'var(--border-default)',
-            color: lowStock ? '#DC2626' : 'var(--text-secondary)',
-          }}
-        >
-          <SlidersHorizontal size={14} />
-          Stock bajo
-        </button>
+        <div className="relative" ref={thresholdRef}>
+          <button
+            onClick={() => setThresholdOpen((v) => !v)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors"
+            style={{
+              background: currentThreshold !== null ? '#FEF2F2' : 'var(--bg-input)',
+              borderColor: currentThreshold !== null ? '#DC2626' : 'var(--border-default)',
+              color: currentThreshold !== null ? '#DC2626' : 'var(--text-secondary)',
+            }}
+          >
+            <SlidersHorizontal size={14} />
+            Stock bajo{currentThreshold !== null && ` ≤ ${currentThreshold}`}
+          </button>
+          {thresholdOpen && (
+            <div
+              className="absolute top-full left-0 mt-1 z-20 rounded-xl p-3 shadow-lg space-y-2 w-52"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+            >
+              <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                Notificar cuando stock ≤
+              </p>
+              <input
+                autoFocus
+                type="number"
+                min="1"
+                placeholder="Ej: 5"
+                value={thresholdInput}
+                onChange={(e) => setThresholdInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && thresholdInput) {
+                    setThreshold.mutate(Number(thresholdInput), { onSuccess: () => setThresholdOpen(false) })
+                  }
+                }}
+                className="w-full px-3 py-1.5 rounded-lg border text-sm"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (thresholdInput) setThreshold.mutate(Number(thresholdInput), { onSuccess: () => setThresholdOpen(false) })
+                  }}
+                  disabled={!thresholdInput || setThreshold.isPending}
+                  className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs text-white font-medium disabled:opacity-40"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  <Check size={11} />
+                  {setThreshold.isPending ? 'Guardando…' : 'Guardar'}
+                </button>
+                {currentThreshold !== null && (
+                  <button
+                    onClick={() => { setThresholdInput(''); setThresholdOpen(false) }}
+                    className="px-2 py-1.5 rounded-lg text-xs border"
+                    style={{ borderColor: 'var(--border-default)', color: 'var(--text-muted)' }}
+                  >
+                    <X size={11} />
+                  </button>
+                )}
+              </div>
+              {currentThreshold !== null && (
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  Umbral actual: {currentThreshold} unidades
+                </p>
+              )}
+            </div>
+          )}
+        </div>
         {canManage && (
           <button
             onClick={() => setModalItem(null)}

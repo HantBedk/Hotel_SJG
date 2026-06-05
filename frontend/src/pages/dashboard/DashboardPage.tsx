@@ -1,29 +1,21 @@
 import { useState } from 'react'
 import {
   Building2, BedDouble, Users, CalendarCheck, DollarSign,
-  Sparkles, Clock, Activity, X, TrendingUp, Package, Briefcase,
+  Sparkles, Clock, Activity, X,
   Home, Wrench, XCircle, Check, Calendar, Bell, AlertTriangle,
 } from 'lucide-react'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useRooms, useHousekeepers } from '@/hooks/useRooms'
 import { useStays } from '@/hooks/useStays'
 import { useActivityLogs } from '@/hooks/useActivity'
-import { useSuggestions, useDismissSuggestion } from '@/hooks/useActivity'
 import { useNotifications } from '@/hooks/useNotifications'
-import { useAuth } from '@/hooks/useAuth'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import CheckInWizard from '@/pages/checkin/CheckInWizard'
 import { CheckoutWizard } from '@/pages/stays/components/CheckoutWizard'
 import CheckInFromReservationModal from '@/pages/reservations/components/CheckInFromReservationModal'
 import { DashboardChart } from './components/DashboardChart'
 import { DashboardRoomModal } from './components/DashboardRoomModal'
-import type { Reservation, Room, RoomStatus, Suggestion, Stay } from '@/types'
-
-const SUGGESTION_ICONS: Record<string, React.ElementType> = {
-  minibar_restock:  Package,
-  price_adjustment: TrendingUp,
-  corporate_rate:   Briefcase,
-}
+import type { Reservation, Room, RoomStatus, Stay } from '@/types'
 
 function AlertsWidget() {
   const { notifications, unreadCount, markRead } = useNotifications()
@@ -88,12 +80,15 @@ function AlertsWidget() {
   )
 }
 
-function SuggestionsWidget() {
-  const { hasPermission }                = useAuth()
-  const { data: suggestions = [] }       = useSuggestions()
-  const { mutate: dismiss, isPending }   = useDismissSuggestion()
+interface PendingBalanceRow {
+  stay:    Stay
+  total:   number
+  paid:    number
+  balance: number
+}
 
-  if (!hasPermission('manage_settings') && !hasPermission('view_dashboard')) return null
+function PendingBalancesWidget({ items, onSelect }: { items: PendingBalanceRow[]; onSelect: (row: PendingBalanceRow) => void }) {
+  const total = items.reduce((acc, it) => acc + it.balance, 0)
 
   return (
     <div
@@ -101,57 +96,82 @@ function SuggestionsWidget() {
       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
     >
       <div className="flex items-center gap-2 mb-2 shrink-0">
-        <Sparkles size={13} style={{ color: '#F59E0B' }} />
+        <DollarSign size={13} style={{ color: '#EF4444' }} />
         <h3 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-          Sugerencias del día
+          Saldos pendientes
         </h3>
-        {suggestions.length > 0 && (
+        {items.length > 0 && (
           <span
             className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-            style={{ background: '#FEF3C7', color: '#92400E' }}
+            style={{ background: '#FEE2E2', color: '#991B1B' }}
           >
-            {suggestions.length}
+            {items.length}
           </span>
         )}
       </div>
-      {suggestions.length === 0 ? (
+
+      {items.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-            Sin sugerencias activas
+            Sin saldos pendientes
           </p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
-          {suggestions.map((s: Suggestion) => {
-            const Icon = SUGGESTION_ICONS[s.type] ?? Sparkles
-            const score = Math.round(parseFloat(s.confidence_score) * 100)
-            return (
-              <div
-                key={s.id}
-                className="flex items-start gap-2 p-2 rounded-lg"
-                style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-default)' }}
-              >
-                <div className="flex-shrink-0 mt-0.5">
-                  <Icon size={12} style={{ color: '#F59E0B' }} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{s.title}</p>
-                  <p className="text-[10px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{s.description}</p>
-                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--text-muted)' }}>Confianza: {score}%</p>
-                </div>
-                <button
-                  onClick={() => dismiss(s.id)}
-                  disabled={isPending}
-                  title="Descartar sugerencia"
-                  className="flex-shrink-0 p-0.5 rounded hover:bg-red-50"
-                  style={{ color: 'var(--text-muted)' }}
+        <>
+          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
+            {items.map(({ stay, total: t, paid, balance }) => {
+              const roomsLabel = (stay.stay_rooms ?? [])
+                .filter((sr) => sr.is_active !== false)
+                .map((sr) => sr.room?.number)
+                .filter(Boolean)
+                .join(', ')
+              return (
+                <div
+                  key={stay.id}
+                  className="flex items-start gap-2 p-2 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
+                  onClick={() => onSelect({ stay, total: t, paid, balance })}
                 >
-                  <X size={11} />
-                </button>
-              </div>
-            )
-          })}
-        </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+                        style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}
+                      >
+                        Hab. {roomsLabel || '—'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                      {stay.guest?.full_name ?? '—'}
+                    </p>
+                    <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                      Total ${t.toLocaleString('es-CO')} · Pagado ${paid.toLocaleString('es-CO')}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[9px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>
+                      Saldo
+                    </p>
+                    <p className="text-xs font-bold tabular-nums" style={{ color: '#EF4444' }}>
+                      ${balance.toLocaleString('es-CO')}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div
+            className="flex items-center justify-between pt-2 mt-2 shrink-0 text-[11px]"
+            style={{ borderTop: '1px solid var(--border-default)' }}
+          >
+            <span className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Total por cobrar
+            </span>
+            <span className="font-bold tabular-nums" style={{ color: '#EF4444' }}>
+              ${total.toLocaleString('es-CO')}
+            </span>
+          </div>
+        </>
       )}
     </div>
   )
@@ -184,25 +204,41 @@ const ROOM_LABEL: Record<RoomStatus, string> = {
 }
 
 const ACTION_LABELS: Record<string, string> = {
-  'stay.checkin':          'Check-in',
-  'stay.checkout':         'Check-out',
-  'stay.payment':          'Pago',
-  'reservation.created':   'Reserva creada',
-  'reservation.cancelled': 'Reserva cancelada',
-  'stay.transfer':         'Transferencia',
+  'login':                     'Inicio de sesión',
+  'login_failed':              'Login fallido',
+  'logout':                    'Cierre de sesión',
+  'stay.checkin':              'Check-in',
+  'stay.checkout':             'Check-out',
+  'stay.payment':              'Pago registrado',
+  'stay.service':              'Servicio agregado',
+  'stay.transfer':             'Transferencia de habitación',
+  'stay.extended':             'Estadía extendida',
+  'reservation.created':       'Reserva creada',
+  'reservation.cancelled':     'Reserva cancelada',
+  'reservation.updated':       'Reserva actualizada',
+  'reservation.group_created': 'Reserva grupal creada',
+  'reservation.checkin':       'Check-in desde reserva',
+  'room_created':              'Habitación creada',
+  'room_updated':              'Habitación actualizada',
+  'room_deactivated':          'Habitación desactivada',
+  'room_status_changed':       'Cambio de estado',
+  'room.status_changed':       'Cambio de estado',
+  'room.cleaning':             'Limpieza de habitación',
+  'room.maintenance':          'Mantenimiento de habitación',
+  'inventory.restock':         'Reposición de inventario',
+  'inventory.adjust':          'Ajuste de inventario',
 }
 
 export default function DashboardPage() {
   const { stats, isLoading } = useDashboard()
   const { rooms, isLoading: loadingRooms, changeStatus, isChanging } = useRooms()
-  const { rooms: cleaningRooms } = useRooms('cleaning')
   const { data: activityData } = useActivityLogs({ page: 1 })
   const { data: housekeepers = [] } = useHousekeepers()
 
   const [checkingIn, setCheckingIn] = useState<Room[]>([])
   const [checkoutStay, setCheckoutStay] = useState<Stay | null>(null)
   const [showOccupancy, setShowOccupancy] = useState(false)
-  const [showBalance, setShowBalance] = useState(false)
+  const [selectedBalanceStay, setSelectedBalanceStay] = useState<PendingBalanceRow | null>(null)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [checkInReservation, setCheckInReservation] = useState<Reservation | null>(null)
 
@@ -272,14 +308,12 @@ export default function DashboardPage() {
     },
     {
       label:   'Saldo pendiente',
-      value:   stats?.pending_balance != null
-                 ? `$${Number(stats.pending_balance).toLocaleString('es-CO')}`
-                 : '—',
-      sub:     'Por cobrar',
-      icon:    DollarSign,
-      color:   '#EF4444',
-      colorBg: '#FFF1F2',
-      onClick: () => setShowBalance(true),
+      value:   'En construcción',
+      sub:     'Próximamente',
+      icon:    Wrench,
+      color:   '#F59E0B',
+      colorBg: '#FFFBEB',
+      onClick: () => staysWithBalance.length > 0 && setSelectedBalanceStay(staysWithBalance[0]),
     },
   ]
 
@@ -358,68 +392,76 @@ export default function DashboardPage() {
       {/* ── Main grid: 3 columnas a altura completa, sin scroll de página ── */}
       <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3">
 
-        {/* ── Col A (col-span-6): Habitaciones, scroll interno ─────────────── */}
-        <div
-          className="lg:col-span-6 rounded-xl shadow-sm p-3 flex flex-col min-h-0"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
-        >
-          <h3 className="text-sm font-bold mb-2 shrink-0" style={{ color: 'var(--text-primary)' }}>
-            Estado de Habitaciones
-          </h3>
+        {/* ── Col A (col-span-6): Habitaciones (arriba) + Gráfico (abajo) ──── */}
+        <div className="lg:col-span-6 flex flex-col gap-3 min-h-0">
+          {/* Estado de habitaciones — más bajo, deja espacio al gráfico */}
+          <div
+            className="rounded-xl shadow-sm p-3 flex flex-col min-h-0 flex-[3]"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+          >
+            <h3 className="text-sm font-bold mb-2 shrink-0" style={{ color: 'var(--text-primary)' }}>
+              Estado de Habitaciones
+            </h3>
 
-          <div className="flex-1 overflow-y-auto min-h-0 pr-1">
-            {loadingRooms ? (
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
-                {Array.from({ length: 16 }).map((_, i) => (
-                  <div key={i} className="aspect-[4/3] rounded-lg animate-pulse" style={{ background: 'var(--bg-input)' }} />
-                ))}
-              </div>
-            ) : rooms.length === 0 ? (
-              <div className="h-full flex items-center justify-center">
-                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin habitaciones configuradas</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
-                {rooms.map((room) => {
-                  const bg = ROOM_COLOR[room.status] ?? '#94A3B8'
-                  const StatusIcon =
-                    room.status === 'cleaning'    ? Sparkles  :
-                    room.status === 'maintenance' ? Wrench    :
-                    room.status === 'blocked'     ? XCircle   :
-                    room.status === 'reserved'    ? Calendar  :
-                    room.status === 'occupied'    ? Check     :
-                    null
+            <div className="flex-1 overflow-y-auto min-h-0 pr-1">
+              {loadingRooms ? (
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
+                  {Array.from({ length: 16 }).map((_, i) => (
+                    <div key={i} className="aspect-[4/3] rounded-lg animate-pulse" style={{ background: 'var(--bg-input)' }} />
+                  ))}
+                </div>
+              ) : rooms.length === 0 ? (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin habitaciones configuradas</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
+                  {rooms.map((room) => {
+                    const bg = ROOM_COLOR[room.status] ?? '#94A3B8'
+                    const StatusIcon =
+                      room.status === 'cleaning'    ? Sparkles  :
+                      room.status === 'maintenance' ? Wrench    :
+                      room.status === 'blocked'     ? XCircle   :
+                      room.status === 'reserved'    ? Calendar  :
+                      room.status === 'occupied'    ? Check     :
+                      null
 
-                  return (
-                    <div
-                      key={room.id}
-                      onClick={() => setSelectedRoom(room)}
-                      className="text-white rounded-lg p-1.5 aspect-[4/3] flex flex-col items-center justify-between shadow-sm transition-transform hover:scale-105 cursor-pointer"
-                      style={{ background: bg }}
-                      title={`Hab. ${room.number} — ${ROOM_LABEL[room.status]} (click para ver detalle)`}
-                    >
-                      <span className="self-end">
-                        {StatusIcon && <StatusIcon className="w-3.5 h-3.5 opacity-90" />}
-                      </span>
-                      <span className="font-bold text-sm leading-none">{room.number}</span>
-                      <span />
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+                    return (
+                      <div
+                        key={room.id}
+                        onClick={() => setSelectedRoom(room)}
+                        className="text-white rounded-lg p-1.5 aspect-[4/3] flex flex-col items-center justify-between shadow-sm transition-transform hover:scale-105 cursor-pointer"
+                        style={{ background: bg }}
+                        title={`Hab. ${room.number} — ${ROOM_LABEL[room.status]} (click para ver detalle)`}
+                      >
+                        <span className="self-end">
+                          {StatusIcon && <StatusIcon className="w-3.5 h-3.5 opacity-90" />}
+                        </span>
+                        <span className="font-bold text-sm leading-none">{room.number}</span>
+                        <span />
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Leyenda */}
+            <div
+              className="flex flex-wrap items-center justify-between gap-2 mt-2 pt-2 shrink-0 text-[10px] font-bold uppercase tracking-wider"
+              style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
+            >
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.available }}></div> Disponible</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.occupied }}></div> Ocupada</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.reserved }}></div> Reservada</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.cleaning }}></div> Limpieza</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.maintenance }}></div> Mant.</div>
+            </div>
           </div>
 
-          {/* Leyenda */}
-          <div
-            className="flex flex-wrap items-center justify-between gap-2 mt-2 pt-2 shrink-0 text-[10px] font-bold uppercase tracking-wider"
-            style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
-          >
-            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.available }}></div> Disponible</div>
-            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.occupied }}></div> Ocupada</div>
-            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.reserved }}></div> Reservada</div>
-            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.cleaning }}></div> Limpieza</div>
-            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm shadow-sm" style={{ background: ROOM_COLOR.maintenance }}></div> Mant.</div>
+          {/* Gráfico de ocupación — debajo de habitaciones */}
+          <div className="flex flex-col flex-[2] min-h-0">
+            <DashboardChart />
           </div>
         </div>
 
@@ -449,7 +491,7 @@ export default function DashboardPage() {
                       {ACTION_LABELS[log.action] ?? log.action_label}
                     </p>
                     <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                      {log.user_name}
+                      {log.user_role ? `${log.user_role} · ${log.user_name}` : log.user_name}
                     </p>
                   </div>
                   <p className="text-[9px] ml-2 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>
@@ -465,64 +507,13 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* En limpieza */}
-          <div
-            className="rounded-xl p-3 flex flex-col flex-1 min-h-0"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
-          >
-            <div className="flex items-center gap-2 mb-2 shrink-0">
-              <Sparkles size={13} style={{ color: '#8B5CF6' }} />
-              <h3 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                En limpieza
-              </h3>
-            </div>
-
-            {cleaningRooms.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                  Sin habitaciones en limpieza
-                </p>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto space-y-1 min-h-0 pr-1">
-                {cleaningRooms.map((room) => {
-                  const mins    = minutesSince(room.updated_at)
-                  const overdue = mins > 60
-                  return (
-                    <div
-                      key={room.id}
-                      className="flex items-center justify-between py-1.5 border-b"
-                      style={{ borderColor: 'var(--border-default)' }}
-                    >
-                      <div>
-                        <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-                          Hab. {room.number}
-                        </p>
-                        <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                          {room.room_type.name}
-                        </p>
-                      </div>
-                      <div
-                        className="flex items-center gap-1 text-[11px] font-semibold"
-                        style={{ color: overdue ? '#EF4444' : 'var(--text-secondary)' }}
-                      >
-                        <Clock size={11} />
-                        {formatMinutes(mins)}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
 
         </div>
 
-        {/* ── Col C (col-span-3): Alertas + Sugerencias + Gráfico ──────────── */}
+        {/* ── Col C (col-span-3): Alertas + Saldos pendientes ──────────────── */}
         <div className="lg:col-span-3 flex flex-col gap-3 min-h-0">
           <AlertsWidget />
-          <SuggestionsWidget />
-          <DashboardChart />
+          <PendingBalancesWidget items={staysWithBalance} onSelect={setSelectedBalanceStay} />
         </div>
 
       </div>
@@ -614,126 +605,130 @@ export default function DashboardPage() {
       )}
 
       {/* Modal saldo pendiente */}
-      {showBalance && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
-          onClick={() => setShowBalance(false)}
-          role="dialog"
-          aria-modal="true"
-        >
+      {selectedBalanceStay && (() => {
+        const { stay, total: t, paid, balance } = selectedBalanceStay
+        const rooms = (stay.stay_rooms ?? []).filter((sr) => sr.is_active !== false)
+        const fmt = (v: number | string) => `$${Number(v).toLocaleString('es-CO')}`
+        return (
           <div
-            className="w-full max-w-lg rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col"
-            style={{ background: 'var(--bg-surface)', maxHeight: '80vh' }}
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: 'rgba(0,0,0,0.5)' }}
+            onClick={() => setSelectedBalanceStay(null)}
+            role="dialog"
+            aria-modal="true"
           >
-            {/* Header */}
             <div
-              className="flex items-center justify-between px-5 py-4 border-b shrink-0"
-              style={{ borderColor: 'var(--border-default)' }}
+              className="w-full max-w-lg rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col"
+              style={{ background: 'var(--bg-surface)', maxHeight: '85vh' }}
+              onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center gap-2">
-                <DollarSign size={16} style={{ color: '#EF4444' }} />
-                <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
-                  Saldo pendiente por habitación
-                </h2>
-              </div>
-              <button
-                onClick={() => setShowBalance(false)}
-                className="rounded-lg p-1 transition-colors hover:opacity-70"
-                style={{ color: 'var(--text-muted)' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Body */}
-            <div className="px-5 py-4 overflow-y-auto">
-              {staysWithBalance.length === 0 ? (
-                <div className="py-8 text-center">
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    No hay estadías con saldo pendiente.
-                  </p>
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--border-default)' }}>
+                <div className="flex items-center gap-2">
+                  <DollarSign size={16} style={{ color: '#EF4444' }} />
+                  <div>
+                    <h2 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                      {stay.guest?.full_name ?? '—'}
+                    </h2>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      {rooms.map((sr) => `Hab. ${sr.room?.number}`).join(', ') || '—'}
+                    </p>
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  {staysWithBalance.map(({ stay, total, paid, balance }) => {
-                    const rooms = (stay.stay_rooms ?? [])
-                      .filter((sr) => sr.is_active !== false)
-                      .map((sr) => sr.room?.number)
-                      .filter(Boolean)
-                      .join(', ')
-                    return (
-                      <div
-                        key={stay.id}
-                        className="rounded-lg p-3 border"
-                        style={{
-                          background: 'var(--bg-input)',
-                          borderColor: 'var(--border-default)',
-                        }}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span
-                                className="text-xs font-bold px-2 py-0.5 rounded"
-                                style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}
-                              >
-                                Hab. {rooms || '—'}
-                              </span>
-                              {stay.company && (
-                                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                                  · {stay.company.name}
-                                </span>
-                              )}
-                            </div>
-                            <p
-                              className="text-sm font-semibold truncate"
-                              style={{ color: 'var(--text-primary)' }}
-                            >
-                              {stay.guest?.full_name ?? '—'}
-                            </p>
-                            <div
-                              className="flex items-center gap-3 mt-1 text-[11px]"
-                              style={{ color: 'var(--text-muted)' }}
-                            >
-                              <span>Total: ${total.toLocaleString('es-CO')}</span>
-                              <span>Pagado: ${paid.toLocaleString('es-CO')}</span>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0">
-                            <p className="text-[10px] uppercase font-semibold" style={{ color: 'var(--text-muted)' }}>
-                              Saldo
-                            </p>
-                            <p className="text-base font-bold tabular-nums" style={{ color: '#EF4444' }}>
-                              ${balance.toLocaleString('es-CO')}
-                            </p>
-                          </div>
+                <button onClick={() => setSelectedBalanceStay(null)} className="rounded-lg p-1 hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+
+                {/* Resumen financiero */}
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Total', value: fmt(t), color: 'var(--text-primary)' },
+                    { label: 'Abono', value: fmt(paid), color: '#16a34a' },
+                    { label: 'Saldo', value: fmt(balance), color: '#EF4444' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="rounded-xl p-3 text-center" style={{ background: 'var(--bg-main)', border: '1px solid var(--border-default)' }}>
+                      <p className="text-[10px] uppercase font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
+                      <p className="text-sm font-bold tabular-nums" style={{ color }}>{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Habitaciones */}
+                {rooms.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Habitaciones</p>
+                    <div className="space-y-1.5">
+                      {rooms.map((sr) => (
+                        <div key={sr.id} className="flex items-center justify-between px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--bg-main)', border: '1px solid var(--border-default)' }}>
+                          <span style={{ color: 'var(--text-primary)' }}>Hab. {sr.room?.number} · {sr.nights} noche{sr.nights !== 1 ? 's' : ''}</span>
+                          <span className="tabular-nums font-medium" style={{ color: 'var(--text-primary)' }}>{fmt(sr.subtotal)}</span>
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            {/* Footer total */}
-            {staysWithBalance.length > 0 && (
-              <div
-                className="px-5 py-3 border-t flex items-center justify-between shrink-0"
-                style={{ borderColor: 'var(--border-default)', background: 'var(--bg-input)' }}
-              >
-                <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                  Total por cobrar ({staysWithBalance.length})
-                </span>
-                <span className="text-base font-bold tabular-nums" style={{ color: '#EF4444' }}>
-                  ${staysWithBalance.reduce((acc, s) => acc + s.balance, 0).toLocaleString('es-CO')}
-                </span>
+                {/* Servicios extras */}
+                {(stay.services ?? []).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Servicios adicionales</p>
+                    <div className="space-y-1.5">
+                      {(stay.services ?? []).map((sv) => (
+                        <div key={sv.id} className="flex items-center justify-between px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--bg-main)', border: '1px solid var(--border-default)' }}>
+                          <span style={{ color: 'var(--text-primary)' }}>{sv.extra_service?.name ?? '—'} × {sv.quantity}</span>
+                          <span className="tabular-nums font-medium" style={{ color: 'var(--text-primary)' }}>{fmt(sv.total)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Minibar */}
+                {(stay.minibar_consumptions ?? []).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Consumo minibar</p>
+                    <div className="space-y-1.5">
+                      {(stay.minibar_consumptions ?? []).map((mc) => (
+                        <div key={mc.id} className="flex items-center justify-between px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--bg-main)', border: '1px solid var(--border-default)' }}>
+                          <span style={{ color: 'var(--text-primary)' }}>{mc.product_name} × {mc.quantity}</span>
+                          <span className="tabular-nums font-medium" style={{ color: 'var(--text-primary)' }}>{fmt(mc.total)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pagos realizados */}
+                {(stay.payments ?? []).length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Pagos realizados</p>
+                    <div className="space-y-1.5">
+                      {(stay.payments ?? []).map((p) => (
+                        <div key={p.id} className="flex items-center justify-between px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--bg-main)', border: '1px solid var(--border-default)' }}>
+                          <span style={{ color: 'var(--text-primary)' }}>
+                            {new Date(p.payment_date).toLocaleDateString('es-CO')} · {p.payment_method}
+                          </span>
+                          <span className="tabular-nums font-medium" style={{ color: '#16a34a' }}>{fmt(p.amount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Footer saldo */}
+              <div className="flex items-center justify-between px-5 py-3 border-t shrink-0" style={{ borderColor: 'var(--border-default)' }}>
+                <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Saldo pendiente</span>
+                <span className="text-base font-bold tabular-nums" style={{ color: '#EF4444' }}>{fmt(balance)}</span>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Modal detalle de habitación */}
       <DashboardRoomModal

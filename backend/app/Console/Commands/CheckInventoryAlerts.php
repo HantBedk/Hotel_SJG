@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\InventoryItem;
 use App\Models\AssetMaintenance;
 use App\Models\Notification;
+use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -27,12 +28,22 @@ class CheckInventoryAlerts extends Command
         $alerted = 0;
 
         DB::transaction(function () use ($staffIds, &$alerted) {
-            // Low stock items
-            $lowStock = InventoryItem::where('active', true)
-                ->whereRaw('current_stock <= min_stock_threshold')
-                ->get();
+            // Low stock items — usa umbral global si está configurado, si no, el mínimo por ítem
+            $globalThreshold = Setting::get('inventory.low_stock_threshold', null);
+
+            $lowStockQuery = InventoryItem::where('active', true);
+            if ($globalThreshold !== null) {
+                $lowStockQuery->where('current_stock', '<=', (int) $globalThreshold);
+            } else {
+                $lowStockQuery->whereRaw('current_stock <= min_stock_threshold');
+            }
+            $lowStock = $lowStockQuery->get();
 
             foreach ($lowStock as $item) {
+                $minLabel = $globalThreshold !== null
+                    ? "Umbral global: {$globalThreshold}."
+                    : "Mínimo por ítem: {$item->min_stock_threshold}.";
+
                 foreach ($staffIds as $userId) {
                     $exists = Notification::where('user_id', $userId)
                         ->where('type', 'low_stock')
@@ -45,7 +56,7 @@ class CheckInventoryAlerts extends Command
                     Notification::create([
                         'type'       => 'low_stock',
                         'title'      => "Stock bajo: {$item->name}",
-                        'message'    => "Quedan {$item->current_stock} {$item->unit}(s). Mínimo: {$item->min_stock_threshold}.",
+                        'message'    => "Quedan {$item->current_stock} unidad(es). {$minLabel}",
                         'payload'    => ['item_id' => $item->id, 'code' => $item->code],
                         'action_url' => '/inventory?tab=consumibles',
                         'user_id'    => $userId,

@@ -88,7 +88,12 @@ class RoomController extends Controller
         $oldStatus = $room->status;
         $room->update($data);
 
-        ActivityLog::record('room_status_changed', $request->user()->id, [
+        $action = match($room->status) {
+            'cleaning'    => 'room.cleaning',
+            'maintenance' => 'room.maintenance',
+            default       => 'room.status_changed',
+        };
+        ActivityLog::record($action, $request->user()->id, [
             'room_id'     => $room->id,
             'room_number' => $room->number,
             'old_status'  => $oldStatus,
