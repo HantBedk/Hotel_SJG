@@ -3,29 +3,148 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Company;
+use App\Models\Guest;
+use App\Models\InventoryItem;
+use App\Models\MinibarProduct;
+use App\Models\Reservation;
+use App\Models\Room;
+use App\Models\Setting;
+use App\Models\Stay;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
-use Illuminate\Support\Facades\Storage;
 use ZipArchive;
 
 class BackupController extends Controller
 {
-    private const DISK   = 'local';
     private const FOLDER = 'backups';
+
+    private function backupsDir(): string
+    {
+        $custom = Setting::get('backup.auto_backup_folder', '');
+        return ! empty($custom) ? rtrim($custom, '/\\') : storage_path('app/' . self::FOLDER);
+    }
+
+    /**
+     * Verifica una ruta del servidor: ¿existe?, ¿es escribible? Útil para que
+     * el usuario reciba feedback inmediato al configurar la carpeta del backup.
+     */
+    public function validateFolder(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'path' => 'nullable|string|max:500',
+        ]);
+
+        $path = trim($data['path'] ?? '');
+        $defaultPath = storage_path('app/' . self::FOLDER);
+
+        // Vacío = se usará la carpeta por defecto.
+        if ($path === '') {
+            return response()->json([
+                'success' => true,
+                'data'    => [
+                    'using_default' => true,
+                    'resolved_path' => $defaultPath,
+                    'exists'        => File::isDirectory($defaultPath) || true, // se crea on-demand
+                    'writable'      => true,
+                    'message'       => 'Se usará la carpeta por defecto: ' . $defaultPath,
+                ],
+            ]);
+        }
+
+        $exists   = File::isDirectory($path);
+        $writable = $exists && is_writable($path);
+
+        if (! $exists) {
+            $msg = 'La carpeta no existe en el servidor.';
+        } elseif (! $writable) {
+            $msg = 'La carpeta existe pero no tiene permisos de escritura.';
+        } else {
+            $msg = 'Carpeta válida y escribible.';
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'using_default' => false,
+                'resolved_path' => $path,
+                'exists'        => $exists,
+                'writable'      => $writable,
+                'message'       => $msg,
+            ],
+        ]);
+    }
+
+    public function getSettings(): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'auto_backup'        => Setting::get('backup.auto_backup', true),
+                'auto_backup_time'   => Setting::get('backup.auto_backup_time', '23:59'),
+                'auto_backup_folder' => Setting::get('backup.auto_backup_folder', ''),
+                'retention_days'     => Setting::get('backup.retention_days', 30),
+            ],
+        ]);
+    }
+
+    public function saveSettings(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'auto_backup'        => 'required|boolean',
+            'auto_backup_time'   => ['required', 'regex:/^\d{2}:\d{2}$/'],
+            'auto_backup_folder' => 'nullable|string|max:500',
+            'retention_days'     => 'required|integer|min:1|max:365',
+        ]);
+
+        Setting::set('backup.auto_backup',        $data['auto_backup'],               'boolean', 'backup');
+        Setting::set('backup.auto_backup_time',   $data['auto_backup_time'],           'string',  'backup');
+        Setting::set('backup.auto_backup_folder', $data['auto_backup_folder'] ?? '',   'string',  'backup');
+        Setting::set('backup.retention_days',     (int) $data['retention_days'],       'integer', 'backup');
+
+        return response()->json(['success' => true, 'message' => 'Configuración guardada.']);
+    }
+
+    /**
+     * Resumen de cuántos registros se incluirían en un nuevo backup. Se usa
+     * para mostrar al usuario antes de confirmar la creación, así sabe que
+     * está respaldando los datos correctos.
+     */
+    public function preview(): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data'    => [
+                'users'            => User::count(),
+                'guests'           => Guest::count(),
+                'companies'        => Company::count(),
+                'rooms'            => Room::count(),
+                'reservations'     => Reservation::count(),
+                'stays'            => Stay::count(),
+                'active_stays'     => Stay::where('status', 'active')->count(),
+                'inventory_items'  => InventoryItem::count(),
+                'minibar_products' => MinibarProduct::count(),
+            ],
+        ]);
+    }
 
     public function index(): JsonResponse
     {
-        $files = collect(Storage::disk(self::DISK)->files(self::FOLDER))
-            ->filter(fn($f) => str_ends_with($f, '.zip'))
-            ->map(function ($path) {
-                $name = basename($path);
-                return [
-                    'filename'   => $name,
-                    'size'       => Storage::disk(self::DISK)->size($path),
-                    'created_at' => date('Y-m-d\TH:i:s\Z', Storage::disk(self::DISK)->lastModified($path)),
-                ];
-            })
+        $dir = $this->backupsDir();
+        if (! File::isDirectory($dir)) {
+            return response()->json(['success' => true, 'data' => []]);
+        }
+
+        $files = collect(File::files($dir))
+            ->filter(fn($f) => str_ends_with($f->getFilename(), '.zip'))
+            ->map(fn($f) => [
+                'filename'   => $f->getFilename(),
+                'size'       => $f->getSize(),
+                'created_at' => date('Y-m-d\TH:i:s\Z', $f->getMTime()),
+            ])
             ->sortByDesc('created_at')
             ->values();
 
@@ -34,12 +153,13 @@ class BackupController extends Controller
 
     public function create(): JsonResponse
     {
-        $db   = config('database.connections.pgsql');
-        $ts   = now()->format('Y-m-d_H-i-s');
-        $sql  = storage_path("app/" . self::FOLDER . "/backup_{$ts}.sql");
-        $zip  = storage_path("app/" . self::FOLDER . "/backup_{$ts}.zip");
+        $db  = config('database.connections.pgsql');
+        $ts  = now()->format('Y-m-d_H-i-s');
+        $dir = $this->backupsDir();
+        $sql = "{$dir}/backup_{$ts}.sql";
+        $zip = "{$dir}/backup_{$ts}.zip";
 
-        Storage::disk(self::DISK)->makeDirectory(self::FOLDER);
+        File::ensureDirectoryExists($dir);
 
         $env = [
             'PGPASSWORD' => $db['password'],
@@ -79,31 +199,34 @@ class BackupController extends Controller
         ], 201);
     }
 
-    public function download(string $filename): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function download(string $filename): \Symfony\Component\HttpFoundation\BinaryFileResponse
     {
-        $path = self::FOLDER . '/' . $filename;
+        $path = $this->backupsDir() . '/' . $filename;
 
         abort_unless(
-            preg_match('/^backup_[\d_-]+\.zip$/', $filename) && Storage::disk(self::DISK)->exists($path),
+            preg_match('/^backup_[\d_-]+\.zip$/', $filename) && File::exists($path),
             404,
             'Backup no encontrado.'
         );
 
-        return Storage::disk(self::DISK)->download($path, $filename);
+        return response()->download($path, $filename);
     }
 
     public function restore(Request $request): JsonResponse
     {
         $request->validate(['file' => 'required|file|mimes:zip|max:102400']);
 
-        $db      = config('database.connections.pgsql');
-        $upload  = $request->file('file');
-        $zipPath = $upload->store('backups/tmp', self::DISK);
-        $zipFull = storage_path('app/' . $zipPath);
+        $db     = config('database.connections.pgsql');
+        $upload = $request->file('file');
+        $tmpDir = $this->backupsDir() . '/tmp';
+        File::ensureDirectoryExists($tmpDir);
 
-        $za      = new ZipArchive();
+        $zipFull = $tmpDir . '/' . uniqid('restore_') . '.zip';
+        $upload->move(dirname($zipFull), basename($zipFull));
+
+        $za = new ZipArchive();
         if ($za->open($zipFull) !== true) {
-            Storage::disk(self::DISK)->delete($zipPath);
+            @unlink($zipFull);
             return response()->json(['success' => false, 'message' => 'No se pudo abrir el ZIP.'], 422);
         }
 
@@ -118,14 +241,14 @@ class BackupController extends Controller
 
         if (! $sqlName) {
             $za->close();
-            Storage::disk(self::DISK)->delete($zipPath);
+            @unlink($zipFull);
             return response()->json(['success' => false, 'message' => 'El ZIP no contiene un archivo SQL.'], 422);
         }
 
-        $sqlPath = storage_path('app/backups/tmp/restore.sql');
+        $sqlPath = $tmpDir . '/restore.sql';
         file_put_contents($sqlPath, $za->getFromName($sqlName));
         $za->close();
-        Storage::disk(self::DISK)->delete($zipPath);
+        @unlink($zipFull);
 
         $env = ['PGPASSWORD' => $db['password']];
         $cmd = sprintf(

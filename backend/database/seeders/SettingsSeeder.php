@@ -34,6 +34,8 @@ class SettingsSeeder extends Seeder
             ['key' => 'inventory.low_stock_threshold',  'value' => '5',     'type' => 'integer', 'group' => 'inventory'],
             // Backup
             ['key' => 'backup.auto_backup',             'value' => 'true',  'type' => 'boolean', 'group' => 'backup'],
+            ['key' => 'backup.auto_backup_time',        'value' => '23:59', 'type' => 'string',  'group' => 'backup'],
+            ['key' => 'backup.auto_backup_folder',      'value' => '',      'type' => 'string',  'group' => 'backup'],
             ['key' => 'backup.retention_days',          'value' => '30',    'type' => 'integer', 'group' => 'backup'],
         ];
 

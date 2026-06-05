@@ -340,6 +340,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/backups',                            [BackupController::class, 'index'])
                  ->withoutMiddleware('permission:manage_settings')
                  ->middleware('permission:trigger_backup|restore_backup');
+            Route::get('/backups/preview',                    [BackupController::class, 'preview'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:trigger_backup');
             Route::post('/backups',                           [BackupController::class, 'create'])
                  ->withoutMiddleware('permission:manage_settings')
                  ->middleware('permission:trigger_backup');
@@ -349,6 +352,15 @@ Route::prefix('v1')->group(function () {
             Route::post('/backups/restore',                   [BackupController::class, 'restore'])
                  ->withoutMiddleware('permission:manage_settings')
                  ->middleware('permission:restore_backup');
+            Route::get('/backups/settings',                   [BackupController::class, 'getSettings'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:trigger_backup');
+            Route::post('/backups/settings',                  [BackupController::class, 'saveSettings'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:trigger_backup');
+            Route::post('/backups/validate-folder',            [BackupController::class, 'validateFolder'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:trigger_backup');
         });
     });
 });

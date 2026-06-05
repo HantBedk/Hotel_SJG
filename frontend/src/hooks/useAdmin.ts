@@ -22,6 +22,9 @@ import {
   getAdminSeasonsApi,
   getAdminUsersApi,
   getBackupsApi,
+  getBackupPreviewApi,
+  getBackupSettingsApi,
+  saveBackupSettingsApi,
   getHotelInfoApi,
   massUpdateRoomPricesApi,
   restoreBackupApi,
@@ -213,6 +216,15 @@ export function useBackups() {
   return useQuery({ queryKey: ['admin', 'backups'], queryFn: getBackupsApi })
 }
 
+export function useBackupPreview(enabled = true) {
+  return useQuery({
+    queryKey: ['admin', 'backup-preview'],
+    queryFn:  getBackupPreviewApi,
+    enabled,
+    staleTime: 0,
+  })
+}
+
 export function useBackupMutations() {
   const qc = useQueryClient()
   const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'backups'] })
@@ -221,4 +233,16 @@ export function useBackupMutations() {
   const restore = useMutation({ mutationFn: restoreBackupApi, onSuccess: inv })
 
   return { create, restore }
+}
+
+export function useBackupSettings() {
+  return useQuery({ queryKey: ['admin', 'backup-settings'], queryFn: getBackupSettingsApi })
+}
+
+export function useSaveBackupSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: saveBackupSettingsApi,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'backup-settings'] }),
+  })
 }

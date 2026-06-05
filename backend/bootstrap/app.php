@@ -2,6 +2,7 @@
 
 use App\Console\Commands\CheckInventoryAlerts;
 use App\Console\Commands\CheckReservationAlerts;
+use App\Console\Commands\CreateAutoBackup;
 use App\Console\Commands\GenerateSuggestions;
 use App\Console\Commands\SendAdminAlertSummary;
 use Illuminate\Foundation\Application;
@@ -24,6 +25,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command(GenerateSuggestions::class)->dailyAt('06:00');
         // Resumen admin: corre cada hora; el comando filtra contra hotel.admin_alert_hours
         $schedule->command(SendAdminAlertSummary::class)->hourly();
+        // Auto-backup: hora configurable desde ajustes
+        try {
+            if (\App\Models\Setting::get('backup.auto_backup', true)) {
+                $time = \App\Models\Setting::get('backup.auto_backup_time', '23:59');
+                $schedule->command(CreateAutoBackup::class)->dailyAt($time);
+            }
+        } catch (\Throwable) {
+            // DB no disponible en instalación inicial
+        }
     })
     ->withMiddleware(function (Middleware $middleware) {
         // Sanctum SPA mode: enables session-based auth on /api/* requests

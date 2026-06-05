@@ -134,6 +134,21 @@ export const updateRolePermissionsApi = (roleId: string, permissions: string[]) 
 export const getBackupsApi = () =>
   api.get('/admin/backups').then(r => r.data.data as BackupFile[])
 
+export interface BackupPreview {
+  users:            number
+  guests:           number
+  companies:        number
+  rooms:            number
+  reservations:     number
+  stays:            number
+  active_stays:     number
+  inventory_items:  number
+  minibar_products: number
+}
+
+export const getBackupPreviewApi = () =>
+  api.get('/admin/backups/preview').then(r => r.data.data as BackupPreview)
+
 export const createBackupApi = () =>
   api.post('/admin/backups').then(r => r.data.data as BackupFile)
 
@@ -147,3 +162,27 @@ export const restoreBackupApi = (file: File) => {
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then(r => r.data)
 }
+
+export interface BackupSettings {
+  auto_backup:        boolean
+  auto_backup_time:   string
+  auto_backup_folder: string
+  retention_days:     number
+}
+
+export const getBackupSettingsApi = () =>
+  api.get('/admin/backups/settings').then(r => r.data.data as BackupSettings)
+
+export const saveBackupSettingsApi = (data: BackupSettings) =>
+  api.post('/admin/backups/settings', data).then(r => r.data)
+
+export interface BackupFolderCheck {
+  using_default: boolean
+  resolved_path: string
+  exists:        boolean
+  writable:      boolean
+  message:       string
+}
+
+export const validateBackupFolderApi = (path: string) =>
+  api.post('/admin/backups/validate-folder', { path }).then(r => r.data.data as BackupFolderCheck)
