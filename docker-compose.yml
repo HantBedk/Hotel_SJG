@@ -14,7 +14,10 @@ services:
       - ./backend/database:/var/www/html/database
       - ./backend/storage:/var/www/html/storage
       - ./backend/bootstrap/cache:/var/www/html/bootstrap/cache
-      - ./backup:/var/www/html/backup
+      # Carpeta del PC donde se guardan los backups automáticos.
+      # Configurable vía BACKUP_HOST_PATH en .env. Si no se define, usa ./backup
+      # dentro del proyecto. Funciona en Windows (D:\…), Linux (/mnt/…), etc.
+      - ${BACKUP_HOST_PATH:-./backup}:/var/www/html/backup
     environment:
       - APP_ENV=${APP_ENV:-local}
       - APP_KEY=${APP_KEY}

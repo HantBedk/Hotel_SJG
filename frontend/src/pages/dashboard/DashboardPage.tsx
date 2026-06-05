@@ -313,7 +313,6 @@ export default function DashboardPage() {
       icon:    Wrench,
       color:   '#F59E0B',
       colorBg: '#FFFBEB',
-      onClick: () => staysWithBalance.length > 0 && setSelectedBalanceStay(staysWithBalance[0]),
     },
   ]
 
@@ -491,7 +490,7 @@ export default function DashboardPage() {
                       {ACTION_LABELS[log.action] ?? log.action_label}
                     </p>
                     <p className="text-[9px]" style={{ color: 'var(--text-muted)' }}>
-                      {log.user_role ? `${log.user_role} · ${log.user_name}` : log.user_name}
+                      {log.user_name}
                     </p>
                   </div>
                   <p className="text-[9px] ml-2 flex-shrink-0" style={{ color: 'var(--text-muted)' }}>

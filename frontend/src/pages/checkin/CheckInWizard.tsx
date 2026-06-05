@@ -7,7 +7,7 @@ import { useGuestSearch } from '@/hooks/useGuests'
 import { useCompanySearch } from '@/hooks/useCompanies'
 import { useStays } from '@/hooks/useStays'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
-import { createGuestApi, updateGuestApi, findGuestByDocumentApi, addCompanionApi } from '@/services/guests.service'
+import { createGuestApi, updateGuestApi, searchGuestsApi, addCompanionApi } from '@/services/guests.service'
 import { createCompanyApi } from '@/services/companies.service'
 import type { Room, Guest, Company, GuestCompanion } from '@/types'
 import { cn } from '@/lib/cn'
@@ -25,6 +25,7 @@ interface AdditionalGuestForm {
   documentInput: string
   isSearching: boolean
   found: Guest | null
+  searchResults: Guest[]
   notFound: boolean
   isEditing: boolean
   editData: { full_name: string; phone: string; email: string; nationality: string; relationship: string }
@@ -97,6 +98,7 @@ function makeExtraForm(isMinor = false): AdditionalGuestForm {
     documentInput: '',
     isSearching: false,
     found: null,
+    searchResults: [],
     notFound: false,
     isEditing: false,
     editData: { full_name: '', phone: '', email: '', nationality: '', relationship: '' },
@@ -343,45 +345,43 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
       additionalGuests: s.additionalGuests.map((ag, i) => i === idx ? { ...ag, ...patch } : ag),
     }))
 
-  const searchByDoc = async (idx: number, doc: string) => {
-    if (!doc.trim()) return
+  const pickExtraGuest = (idx: number, guest: Guest) => {
+    setExtra(idx, {
+      isSearching: false,
+      found: guest,
+      searchResults: [],
+      notFound: false,
+      documentInput: guest.full_name,
+      editData: {
+        full_name:    guest.full_name,
+        phone:        guest.phone ?? '',
+        email:        guest.email ?? '',
+        nationality:  guest.nationality ?? '',
+        relationship: guest.relationship ?? '',
+      },
+    })
+  }
+
+  const searchExtra = async (idx: number, term: string) => {
+    if (!term.trim()) return
     setExtra(idx, { isSearching: true, found: null, notFound: false, registered: false })
     try {
-      const guest = await findGuestByDocumentApi(doc.trim())
-      if (guest) {
-        setExtra(idx, {
-          isSearching: false, found: guest, notFound: false,
-          editData: {
-            full_name:    guest.full_name,
-            phone:        guest.phone ?? '',
-            email:        guest.email ?? '',
-            nationality:  guest.nationality ?? '',
-            relationship: guest.relationship ?? '',
-          },
-        })
-      } else {
-        setExtra(idx, {
-          isSearching: false, found: null, notFound: true,
-          newGuest: { ...makeExtraForm().newGuest, document_number: doc.trim() },
-        })
-      }
+      const guests = await searchGuestsApi(term.trim())
+      setExtra(idx, { isSearching: false, searchResults: guests })
     } catch {
-      setExtra(idx, {
-        isSearching: false, found: null, notFound: true,
-        newGuest: { ...makeExtraForm().newGuest, document_number: doc.trim() },
-      })
+      setExtra(idx, { isSearching: false, searchResults: [] })
     }
   }
 
   const handleDocInputChange = (idx: number, value: string) => {
-    setExtra(idx, { documentInput: value, found: null, notFound: false })
+    setExtra(idx, { documentInput: value, found: null, notFound: false, searchResults: [] })
     const prev = docSearchTimeouts.current[idx]
     if (prev) clearTimeout(prev)
     const trimmed = value.trim()
-    if (trimmed.length < 3) return
+    if (trimmed.length < 1) return
     docSearchTimeouts.current[idx] = setTimeout(() => {
-      searchByDoc(idx, trimmed)
-    }, 400)
+      searchExtra(idx, trimmed)
+    }, 300)
   }
 
   // ── Submit ─────────────────────────────────────────────────────────────────
@@ -763,12 +763,12 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
             {!ag.found && !ag.notFound && (
               <div className="space-y-3">
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                  Ingresa el número de documento. La búsqueda es automática a partir de 3 caracteres.
+                  Busca por nombre o número de documento.
                 </p>
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Número de documento"
+                    placeholder="Nombre o número de documento"
                     value={ag.documentInput}
                     onChange={(e) => handleDocInputChange(idx, e.target.value)}
                     className={cn('w-full pr-20', inputCls)} style={inputStyle}
@@ -784,6 +784,24 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
                   )}
                 </div>
 
+                {ag.searchResults.length > 0 && (
+                  <div className="border rounded-lg overflow-hidden max-h-56 overflow-y-auto" style={{ borderColor: 'var(--border-default)' }}>
+                    {ag.searchResults.map((g) => (
+                      <button
+                        key={g.id}
+                        onClick={() => pickExtraGuest(idx, g)}
+                        className="w-full text-left px-3 py-2 text-sm hover:opacity-80 border-b last:border-b-0"
+                        style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+                      >
+                        <span className="font-medium">{g.full_name}</span>
+                        <span className="ml-2 text-xs" style={{ color: 'var(--text-muted)' }}>
+                          {g.document_type.toUpperCase()} {g.document_number}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
                   <span className="flex-1 border-t" style={{ borderColor: 'var(--border-default)' }} />
                   <span>o</span>
@@ -793,6 +811,7 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
                 <button
                   onClick={() => setExtra(idx, {
                     notFound: true,
+                    searchResults: [],
                     newGuest: { ...makeExtraForm().newGuest, document_number: ag.documentInput.trim() },
                   })}
                   className="w-full flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg border"

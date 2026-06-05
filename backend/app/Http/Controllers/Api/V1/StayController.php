@@ -168,8 +168,9 @@ class StayController extends Controller
         ]);
 
         $checkoutAt = Carbon::parse($data['actual_check_out_datetime'] ?? now());
+        $cleaningRooms = collect();
 
-        DB::transaction(function () use ($stay, $checkoutAt, $data) {
+        DB::transaction(function () use ($stay, $checkoutAt, $data, $cleaningRooms) {
             $roomsTotal    = $stay->stayRooms()->where('is_active', true)->sum('subtotal');
             $servicesTotal = $stay->services()->sum('total');
             $minibarTotal  = $stay->minibarConsumptions()->sum('total');
@@ -192,6 +193,7 @@ class StayController extends Controller
             foreach ($stay->activeStayRooms as $stayRoom) {
                 $stayRoom->room->update(['status' => 'cleaning']);
                 broadcast(new RoomStatusChanged($stayRoom->room->refresh()))->toOthers();
+                $cleaningRooms->push($stayRoom->room);
             }
 
             // Deduct consumed minibar items from room_minibars
@@ -231,6 +233,16 @@ class StayController extends Controller
             'guest_name' => $stay->guest?->full_name,
             'total'      => (float) $stay->refresh()->total_amount,
         ]);
+
+        foreach ($cleaningRooms as $room) {
+            ActivityLog::record('room.cleaning', $request->user()->id, [
+                'room_id'     => $room->id,
+                'room_number' => $room->number,
+                'old_status'  => 'occupied',
+                'new_status'  => 'cleaning',
+                'reason'      => 'checkout',
+            ]);
+        }
 
         return response()->json(['success' => true, 'data' => $stay->refresh(), 'message' => 'Checkout realizado.']);
     }

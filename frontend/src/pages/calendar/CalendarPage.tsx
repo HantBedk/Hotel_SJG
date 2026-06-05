@@ -14,66 +14,6 @@ type ViewMode = 'week' | 'twoWeeks' | 'month' | 'year'
 
 const VIEW_DAYS: Record<ViewMode, number> = { week: 7, twoWeeks: 14, month: 30, year: 365 }
 
-// ── Month overview: grid 7×N con "ocupadas/total" por día ────────────────────
-function MonthOverview({ data, startDate, days }: { data: CalendarData; startDate: Date; days: number }) {
-  const dates = eachDayOfInterval({ start: startDate, end: addDays(startDate, days - 1) })
-  const totalRooms = data.rooms.length
-
-  const entries = [...data.reservations, ...data.stays]
-  const occupiedCount = (date: Date): number => {
-    const occupied = new Set<string>()
-    for (const e of entries) {
-      try {
-        if (isWithinInterval(date, { start: parseISO(e.start_date), end: parseISO(e.end_date) })) {
-          occupied.add(e.room_id)
-        }
-      } catch { /* skip */ }
-    }
-    return occupied.size
-  }
-
-  const today = format(new Date(), 'yyyy-MM-dd')
-
-  return (
-    <div className="grid grid-cols-7 gap-2 w-full">
-      {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d) => (
-        <div key={d} className="text-[10px] font-bold uppercase tracking-wider text-center pb-1"
-          style={{ color: 'var(--text-muted)' }}>
-          {d}
-        </div>
-      ))}
-      {dates.map((date) => {
-        const occ = occupiedCount(date)
-        const pct = totalRooms > 0 ? Math.round((occ / totalRooms) * 100) : 0
-        const isToday = format(date, 'yyyy-MM-dd') === today
-        const bg = pct >= 90 ? '#FEE2E2' : pct >= 60 ? '#FEF3C7' : pct > 0 ? '#ECFDF5' : 'var(--bg-input)'
-        const fg = pct >= 90 ? '#991B1B' : pct >= 60 ? '#92400E' : pct > 0 ? '#065F46' : 'var(--text-muted)'
-        return (
-          <div
-            key={format(date, 'yyyy-MM-dd')}
-            className="rounded-lg p-2 flex flex-col items-center justify-center aspect-square"
-            style={{
-              background: bg,
-              border: isToday ? '2px solid var(--color-primary)' : '1px solid var(--border-default)',
-            }}
-            title={`${format(date, "EEEE d 'de' MMMM", { locale: es })} · ${occ}/${totalRooms} ocupadas (${pct}%)`}
-          >
-            <div className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
-              {format(date, 'd MMM', { locale: es })}
-            </div>
-            <div className="text-base font-bold tabular-nums mt-1" style={{ color: fg }}>
-              {occ}/{totalRooms}
-            </div>
-            <div className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: fg }}>
-              {pct}%
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 // ── Year heatmap: 12 mini-meses con celdas por día coloreadas por ocupación ──
 function YearHeatmap({ data, startDate }: { data: CalendarData; startDate: Date }) {
   const totalRooms = data.rooms.length
@@ -344,10 +284,6 @@ export default function CalendarPage() {
           view === 'year' ? (
             <div className="flex-1 overflow-y-auto pr-2 pb-4">
               <YearHeatmap data={data} startDate={anchor} />
-            </div>
-          ) : view === 'month' ? (
-            <div className="flex-1 overflow-y-auto pr-2">
-              <MonthOverview data={data} startDate={anchor} days={days} />
             </div>
           ) : (
             <CalendarGrid

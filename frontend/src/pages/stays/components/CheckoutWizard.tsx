@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { X, Plus, Trash2, Download, ExternalLink, Loader2, CheckCircle2, Minus } from 'lucide-react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import type { MinibarItem, StayAccount, Stay, MinibarConsumptionType, StayRoom } from '@/types'
 import { addMinibarChargesApi, checkoutStayApi, addPaymentApi, getStayAccountApi, downloadStayReceiptApi } from '@/services/stays.service'
@@ -183,6 +183,7 @@ function RoomMinibarPicker({ stayRoom, showRoomHeader, pickedItems, onChangePick
 }
 
 export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
+  const queryClient = useQueryClient()
   const [step, setStep] = useState<Step>('minibar')
   const [pickedItems, setPickedItems] = useState<PickedItems>({})
   const [manualItems, setManualItems] = useState<MinibarItem[]>([])
@@ -246,6 +247,9 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
     onSuccess: (data) => {
       setReceiptStayId(data.id)
       setStep('done')
+      queryClient.invalidateQueries({ queryKey: ['stays'] })
+      queryClient.invalidateQueries({ queryKey: ['rooms'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       onSuccess()
     },
     onError: (e: { response?: { data?: { message?: string } } }) =>
