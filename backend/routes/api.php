@@ -346,6 +346,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/backups',                           [BackupController::class, 'create'])
                  ->withoutMiddleware('permission:manage_settings')
                  ->middleware('permission:trigger_backup');
+            Route::delete('/backups',                         [BackupController::class, 'deleteAll'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('role:superadmin');
             Route::get('/backups/{filename}/download',        [BackupController::class, 'download'])
                  ->withoutMiddleware('permission:manage_settings')
                  ->middleware('permission:trigger_backup|restore_backup');
@@ -359,6 +362,9 @@ Route::prefix('v1')->group(function () {
                  ->withoutMiddleware('permission:manage_settings')
                  ->middleware('permission:trigger_backup');
             Route::post('/backups/validate-folder',            [BackupController::class, 'validateFolder'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('permission:trigger_backup');
+            Route::get('/backups/migration-kit',               [BackupController::class, 'downloadMigrationKit'])
                  ->withoutMiddleware('permission:manage_settings')
                  ->middleware('permission:trigger_backup');
         });

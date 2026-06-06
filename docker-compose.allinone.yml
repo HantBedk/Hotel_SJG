@@ -1,0 +1,51 @@
+# Compose all-in-one: un solo contenedor con Postgres + Nginx + PHP-FPM + Reverb + Scheduler.
+# Uso:
+#   docker compose -f docker-compose.allinone.yml up -d --build
+# Frontend en http://localhost · WebSocket en ws://localhost:8080
+# Data de Postgres y backups persisten en volúmenes.
+
+services:
+  hotel:
+    build:
+      context: .
+      dockerfile: Dockerfile.allinone
+    container_name: hotel_all
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:8080:8080"
+    volumes:
+      # Persistencia de Postgres (¡no borrar este volumen o pierdes la BD!)
+      - hotel_pgdata:/var/lib/postgresql/data
+      # Storage de Laravel (logs, cache, comprobantes, .app_key, .seeded)
+      - hotel_storage:/var/www/html/storage
+      # Backups visibles desde el host
+      - ${BACKUP_HOST_PATH:-./backup}:/var/www/html/backup
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - APP_KEY=${APP_KEY:-}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      # DB local — el entrypoint fuerza 127.0.0.1 igual, esto es solo informativo
+      - DB_HOST=127.0.0.1
+      - DB_PORT=5432
+      - DB_DATABASE=${DB_DATABASE:-hotel_sjg}
+      - DB_USERNAME=${DB_USERNAME:-hotel_user}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme_strong_password}
+      # Reverb — el cliente apunta al MISMO host:8080 (mismo contenedor)
+      - REVERB_APP_ID=${REVERB_APP_ID:-hotel_sjg}
+      - REVERB_APP_KEY=${REVERB_APP_KEY:-hotel_reverb_key}
+      - REVERB_APP_SECRET=${REVERB_APP_SECRET:-changeme_reverb_secret}
+      - REVERB_HOST=127.0.0.1
+      - REVERB_PORT=8080
+      # Vacío a propósito: forzamos Bearer token (sin sesión/CSRF) para evitar
+      # 419 CSRF mismatch desde el navegador. Si vuelves a SPA cookies, lista
+      # aquí los hosts permitidos.
+      - SANCTUM_STATEFUL_DOMAINS=${SANCTUM_STATEFUL_DOMAINS:-}
+      - FRONTEND_ORIGINS=${FRONTEND_ORIGINS:-http://localhost,http://127.0.0.1}
+      - SESSION_SAME_SITE=${SESSION_SAME_SITE:-lax}
+      - SESSION_SECURE_COOKIE=${SESSION_SECURE_COOKIE:-false}
+      - BACKUP_HOST_PATH=${BACKUP_HOST_PATH:-./backup}
+
+volumes:
+  hotel_pgdata:
+  hotel_storage:

@@ -29,9 +29,15 @@ class NewNotification implements ShouldBroadcast
     {
         return [
             'id'         => $this->notification->id,
+            'user_id'    => $this->notification->user_id,
             'type'       => $this->notification->type,
             'title'      => $this->notification->title,
             'message'    => $this->notification->message,
+            'severity'   => $this->notification->severity,
+            'is_modal'   => $this->notification->is_modal,
+            'action_url' => $this->notification->action_url,
+            'payload'    => $this->notification->payload,
+            'is_read'    => $this->notification->is_read,
             'created_at' => $this->notification->created_at?->toIso8601String(),
         ];
     }

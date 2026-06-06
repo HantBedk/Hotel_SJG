@@ -35,6 +35,31 @@ const EMPTY: RoomForm = { room_type_id: '', house_id: '', number: '', floor: '',
 
 type MassPriceForm = { room_type_id: string; base_price: string }
 
+type FieldProps = {
+  k: keyof RoomForm
+  label: string
+  type?: string
+  children?: React.ReactNode
+  form: RoomForm
+  setForm: React.Dispatch<React.SetStateAction<RoomForm>>
+}
+function F({ k, label, type = 'text', children, form, setForm }: FieldProps) {
+  return (
+    <div>
+      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label}</label>
+      {children ?? (
+        <input
+          type={type}
+          value={String(form[k])}
+          onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
+          className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
+          style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+        />
+      )}
+    </div>
+  )
+}
+
 export default function HabitacionesTab() {
   const { data: rooms = [], isLoading } = useAdminRooms()
   const { create, update, remove }      = useAdminRoomMutations()
@@ -85,21 +110,6 @@ export default function HabitacionesTab() {
     await massPrice.mutateAsync({ room_type_id: massPriceForm.room_type_id, base_price: parseFloat(massPriceForm.base_price) })
     setMassPriceOpen(false)
   }
-
-  const F = ({ k, label, type = 'text', children }: { k: keyof RoomForm; label: string; type?: string; children?: React.ReactNode }) => (
-    <div>
-      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>{label}</label>
-      {children ?? (
-        <input
-          type={type}
-          value={String(form[k])}
-          onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
-          className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
-          style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
-        />
-      )}
-    </div>
-  )
 
   return (
     <div
@@ -191,7 +201,7 @@ export default function HabitacionesTab() {
             <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
               {editing ? `Editar hab. ${editing.number}` : 'Nueva habitación'}
             </h3>
-            <F k="room_type_id" label="Tipo de habitación *">
+            <F k="room_type_id" label="Tipo de habitación *" form={form} setForm={setForm}>
               <select
                 value={form.room_type_id}
                 onChange={e => setForm(f => ({ ...f, room_type_id: e.target.value }))}
@@ -203,7 +213,7 @@ export default function HabitacionesTab() {
                 {types.map((t: RoomType) => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </F>
-            <F k="house_id" label="Casa">
+            <F k="house_id" label="Casa" form={form} setForm={setForm}>
               <select
                 value={form.house_id}
                 onChange={e => setForm(f => ({ ...f, house_id: e.target.value }))}
@@ -215,10 +225,10 @@ export default function HabitacionesTab() {
               </select>
             </F>
             <div className="grid grid-cols-2 gap-3">
-              <F k="number" label="Número *" />
-              <F k="floor" label="Piso" type="number" />
+              <F k="number" label="Número *" form={form} setForm={setForm} />
+              <F k="floor" label="Piso" type="number" form={form} setForm={setForm} />
             </div>
-            <F k="notes" label="Notas" />
+            <F k="notes" label="Notas" form={form} setForm={setForm} />
             <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-primary)' }}>
               <input
                 type="checkbox"

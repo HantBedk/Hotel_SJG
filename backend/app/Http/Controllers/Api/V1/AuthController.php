@@ -10,9 +10,8 @@ use App\Models\User;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\PersonalAccessToken;
-use Spatie\Permission\Models\Role;
 
 class AuthController extends Controller
 {
@@ -20,9 +19,11 @@ class AuthController extends Controller
 
     public function login(LoginRequest $request): JsonResponse
     {
-        $credentials = $request->only('email', 'password');
+        // Auth manual (sin guard web) para evitar CSRF: el login emite token
+        // Sanctum directamente; el frontend lo manda como Bearer en cada request.
+        $user = User::where('email', $request->email)->first();
 
-        if (! Auth::guard('web')->attempt($credentials)) {
+        if (!$user || !Hash::check($request->password, $user->password)) {
             ActivityLog::record('login_failed', null, [
                 'email' => $request->email,
                 'ip'    => $request->ip(),
@@ -31,11 +32,7 @@ class AuthController extends Controller
             return $this->error('Credenciales incorrectas.', [], 401);
         }
 
-        /** @var User $user */
-        $user = Auth::guard('web')->user();
-
         if (! $user->is_active) {
-            Auth::guard('web')->logout();
             return $this->error('Usuario inactivo. Contacta al administrador.', [], 403);
         }
 

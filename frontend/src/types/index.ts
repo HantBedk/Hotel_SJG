@@ -645,7 +645,6 @@ export interface AppNotification {
   is_read: boolean
   read_at: string | null
   created_at: string
-  updated_at: string
 }
 
 // ── Activity log ──────────────────────────────────────────────────────────────

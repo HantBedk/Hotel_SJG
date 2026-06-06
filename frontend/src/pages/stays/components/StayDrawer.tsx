@@ -4,6 +4,7 @@ import type { Stay, MinibarItem, MinibarConsumptionType } from '@/types'
 import { useStay, useExtraServices } from '@/hooks/useStays'
 import { useRooms } from '@/hooks/useRooms'
 import { useMinibarProducts } from '@/hooks/useInventory'
+import { useHotelTimes } from '@/hooks/useHotelTimes'
 import { downloadStayReceiptApi, downloadCheckInReceiptApi } from '@/services/stays.service'
 import toast from 'react-hot-toast'
 
@@ -45,7 +46,23 @@ function formatCurrency(amount: string | number | null | undefined) {
 }
 
 function nightsElapsed(checkIn: string): number {
-  return Math.floor((Date.now() - new Date(checkIn).getTime()) / 86400000)
+  const diffDays = (Date.now() - new Date(checkIn).getTime()) / 86400000
+  return Math.max(0, Math.floor(diffDays))
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+function toLocalDateTimeInput(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+}
+
+function nextDayAtTime(iso: string, hhmm: string): string {
+  const d = new Date(iso)
+  d.setDate(d.getDate() + 1)
+  const [h, m] = hhmm.split(':').map(Number)
+  d.setHours(h, m, 0, 0)
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
 }
 
 interface PaymentForm {
@@ -85,6 +102,14 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
   const { rooms: availableRooms } = useRooms('available')
   const { data: extraServices = [] } = useExtraServices()
   const { data: minibarProducts = [] } = useMinibarProducts()
+  const { checkOutTime } = useHotelTimes()
+
+  const minExtendDate = toLocalDateTimeInput(stay.check_out_datetime)
+
+  const openExtendForm = () => {
+    setExtendDate(nextDayAtTime(stay.check_out_datetime, checkOutTime))
+    setShowExtendForm(true)
+  }
 
   const [showServiceForm, setShowServiceForm] = useState(false)
   const [serviceForm, setServiceForm] = useState({ extra_service_id: '', quantity: '1' })
@@ -192,8 +217,11 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
     setPayForm({ amount: '', payment_method: 'cash', payment_type: 'partial', paid_by: 'guest', notes: '' })
   }
 
+  const isExtendDateValid =
+    !!extendDate && new Date(extendDate).getTime() > new Date(stay.check_out_datetime).getTime()
+
   const handleExtend = async () => {
-    if (!extendDate) return
+    if (!isExtendDateValid) return
     setIsExtending(true)
     try {
       await onExtend({ id: stayId, check_out_datetime: extendDate })
@@ -382,7 +410,7 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                 </div>
                 {!showExtendForm && (
                   <button
-                    onClick={() => setShowExtendForm(true)}
+                    onClick={openExtendForm}
                     className="text-xs px-2 py-1 rounded-lg border hover:opacity-80"
                     style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
                   >
@@ -394,10 +422,16 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                 <div className="rounded-xl p-4 space-y-3 border"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
                   <div>
-                    <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Nueva fecha de salida</p>
+                    <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+                      Nueva fecha de salida
+                      <span className="ml-1" style={{ color: 'var(--text-muted)' }}>
+                        (debe ser posterior a {formatDate(stay.check_out_datetime)})
+                      </span>
+                    </p>
                     <input
                       type="datetime-local"
                       value={extendDate}
+                      min={minExtendDate}
                       onChange={(e) => setExtendDate(e.target.value)}
                       className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
                       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
@@ -406,7 +440,7 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                   <div className="flex gap-2">
                     <button
                       onClick={handleExtend}
-                      disabled={!extendDate || isExtending}
+                      disabled={!isExtendDateValid || isExtending}
                       className="flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-40 hover:opacity-80"
                       style={{ background: 'var(--color-primary)', color: '#fff' }}
                     >

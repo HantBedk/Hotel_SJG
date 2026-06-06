@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Building2, BedDouble, Users, CalendarCheck, DollarSign,
-  Sparkles, Clock, Activity, X,
+  Sparkles, Clock, Activity, X, ChevronRight,
   Home, Wrench, XCircle, Check, Calendar, Bell, AlertTriangle,
 } from 'lucide-react'
 import { useDashboard } from '@/hooks/useDashboard'
@@ -15,13 +16,21 @@ import { CheckoutWizard } from '@/pages/stays/components/CheckoutWizard'
 import CheckInFromReservationModal from '@/pages/reservations/components/CheckInFromReservationModal'
 import { DashboardChart } from './components/DashboardChart'
 import { DashboardRoomModal } from './components/DashboardRoomModal'
-import type { Reservation, Room, RoomStatus, Stay } from '@/types'
+import type { AppNotification, Reservation, Room, RoomStatus, Stay } from '@/types'
 
-function AlertsWidget() {
+function resolveCta(n: AppNotification): string {
+  if (n.type === 'room_inconsistency') return 'Resolver habitación'
+  if (/low_stock|expir/i.test(n.type))  return 'Ir al inventario'
+  if (/maintenance/i.test(n.type))      return 'Ver mantenimiento'
+  if (/asset|repair/i.test(n.type))     return 'Ver reparación'
+  return 'Resolver'
+}
+
+function AlertsWidget({ onResolve }: { onResolve: (n: AppNotification) => void }) {
   const { notifications, unreadCount, markRead } = useNotifications()
   const recent = notifications
     .filter((n) => !n.is_read)
-    .filter((n) => /inventory|stock|expir|maintenance|asset|repair/i.test(n.type))
+    .filter((n) => /inventory|stock|expir|maintenance|asset|repair|room_inconsistency/i.test(n.type))
     .slice(0, 5)
 
   return (
@@ -51,29 +60,45 @@ function AlertsWidget() {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
-          {recent.map((n) => (
-            <div
-              key={n.id}
-              className="flex items-start gap-2 p-2 rounded-lg"
-              style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
-            >
-              <div className="flex-shrink-0 mt-0.5">
-                <Bell size={11} style={{ color: '#F59E0B' }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{n.title}</p>
-                <p className="text-[10px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{n.message}</p>
-              </div>
-              <button
-                onClick={() => markRead(n.id)}
-                title="Marcar leída"
-                className="flex-shrink-0 p-0.5 rounded hover:opacity-70"
-                style={{ color: 'var(--text-muted)' }}
+          {recent.map((n) => {
+            const cta = resolveCta(n)
+            return (
+              <div
+                key={n.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => onResolve(n)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    onResolve(n)
+                  }
+                }}
+                title="Click para resolver"
+                className="flex items-start gap-2 p-2 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
               >
-                <X size={11} />
-              </button>
-            </div>
-          ))}
+                <div className="flex-shrink-0 mt-0.5">
+                  <Bell size={11} style={{ color: '#F59E0B' }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{n.title}</p>
+                  <p className="text-[10px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{n.message}</p>
+                  <p className="text-[10px] mt-1 font-semibold inline-flex items-center gap-0.5" style={{ color: 'var(--color-primary)' }}>
+                    {cta} <ChevronRight size={11} />
+                  </p>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); markRead(n.id) }}
+                  title="Descartar"
+                  className="flex-shrink-0 p-0.5 rounded hover:opacity-70"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
@@ -230,10 +255,12 @@ const ACTION_LABELS: Record<string, string> = {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate()
   const { stats, isLoading } = useDashboard()
   const { rooms, isLoading: loadingRooms, changeStatus, isChanging } = useRooms()
   const { data: activityData } = useActivityLogs({ page: 1 })
   const { data: housekeepers = [] } = useHousekeepers()
+  const { markRead: markNotificationRead } = useNotifications()
 
   const [checkingIn, setCheckingIn] = useState<Room[]>([])
   const [checkoutStay, setCheckoutStay] = useState<Stay | null>(null)
@@ -255,6 +282,21 @@ export default function DashboardPage() {
       { id, status, notes },
       { onSuccess: () => setSelectedRoom(null) },
     )
+  }
+
+  const handleResolveAlert = (n: AppNotification) => {
+    markNotificationRead(n.id)
+
+    if (n.type === 'room_inconsistency') {
+      const roomId = (n.payload as { room_id?: string } | null)?.room_id
+      const room = rooms.find((r) => r.id === roomId)
+      if (room) {
+        setSelectedRoom(room)
+        return
+      }
+    }
+
+    if (n.action_url) navigate(n.action_url)
   }
   const staysWithBalance = (activeStays as Stay[])
     .map((s) => {
@@ -511,7 +553,7 @@ export default function DashboardPage() {
 
         {/* ── Col C (col-span-3): Alertas + Saldos pendientes ──────────────── */}
         <div className="lg:col-span-3 flex flex-col gap-3 min-h-0">
-          <AlertsWidget />
+          <AlertsWidget onResolve={handleResolveAlert} />
           <PendingBalancesWidget items={staysWithBalance} onSelect={setSelectedBalanceStay} />
         </div>
 

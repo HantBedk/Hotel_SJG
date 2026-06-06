@@ -1,12 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bell, Moon, Sun, Menu, Settings as SettingsIcon, LogOut } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/authStore'
 import { useAuth } from '@/hooks/useAuth'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUnreadCountApi } from '@/services/notifications.service'
 import NotificationCenter from '@/components/notifications/NotificationCenter'
 import { useReverb } from '@/hooks/useReverb'
+
+interface NotificationBroadcast {
+  id:         string
+  user_id:    string | null
+  type:       string
+  title:      string
+  message:    string | null
+  severity:   'info' | 'warning' | 'critical' | null
+  is_modal:   boolean
+  action_url: string | null
+  created_at: string
+}
 
 interface HeaderProps {
   title: string
@@ -42,15 +55,27 @@ export default function Header({ title, onToggleSidebar, darkMode, onToggleDark 
     refetchInterval: 60_000,
   })
 
-  // Real-time notification badge via Reverb
-  useReverb({
+  // Real-time notification: invalidar queries y mostrar toast si el evento
+  // está dirigido al usuario actual. El backend emite por user_id, pero el
+  // canal es compartido — por eso filtramos en cliente.
+  useReverb<NotificationBroadcast>({
     channel: 'hotel.notifications',
     event:   'notification.created',
-    onEvent: () => {
+    onEvent: (n) => {
       queryClient.invalidateQueries({ queryKey: ['notifications-unread'] })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
+
+      if (!user || n.user_id !== user.id) return
+      // Los is_modal abren NotificationModal automáticamente — no duplicar con toast.
+      if (n.is_modal) return
+
+      const opts = {
+        duration: n.severity === 'critical' ? 8000 : 5000,
+        icon:     n.severity === 'critical' ? '🚨' : n.severity === 'warning' ? '⚠️' : '🔔',
+      }
+      toast(`${n.title}${n.message ? ` — ${n.message}` : ''}`, opts)
     },
-    enabled: true,
+    enabled: !!user,
   })
 
   return (
@@ -90,7 +115,13 @@ export default function Header({ title, onToggleSidebar, darkMode, onToggleDark 
           >
             <Bell size={20} />
             {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+              <span
+                className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
+                style={{ background: '#DC2626' }}
+                aria-label={`${unreadCount} sin leer`}
+              >
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
             )}
           </button>
           <NotificationCenter open={notifOpen} onClose={() => setNotifOpen(false)} />

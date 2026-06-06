@@ -175,6 +175,40 @@ export function DashboardRoomModal({
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
 
+          {/* Banner de inconsistencia: ocupada pero sin estadía activa */}
+          {room.status === 'occupied' && !stay && (
+            <div
+              className="rounded-xl p-3 flex items-start gap-3"
+              style={{ background: '#FEF3C7', border: '1px solid #F59E0B' }}
+            >
+              <AlertTriangle size={16} className="mt-0.5 shrink-0" style={{ color: '#92400E' }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold" style={{ color: '#92400E' }}>
+                  Estado inconsistente
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: '#92400E' }}>
+                  La habitación está marcada como «ocupada» pero no hay una estadía activa.
+                  Probablemente quedó un check-out sin cerrar. Podés liberarla y dejarla disponible.
+                </p>
+                <button
+                  disabled={!canManage || isChangingStatus}
+                  onClick={() => onChangeStatus(
+                    room.id,
+                    'available',
+                    'Liberada manualmente desde alerta de inconsistencia',
+                  )}
+                  className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-opacity disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-80"
+                  style={{ background: '#F59E0B', color: '#fff' }}
+                >
+                  {isChangingStatus
+                    ? <RefreshCw size={13} className="animate-spin" />
+                    : <CheckCircle2 size={13} />}
+                  Marcar como disponible
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Estadía activa (solo si ocupada y hay stay) */}
           {room.status === 'occupied' && stay && (
             <div
@@ -399,7 +433,7 @@ export function DashboardRoomModal({
                       onClick={() => {
                         const hk = housekeepers.find((h) => h.id === housekeeperId)
                         if (!hk) return
-                        onChangeStatus(room.id, 'available', `Limpiada por: ${hk.name}`)
+                        onChangeStatus(room.id, 'available')
                       }}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                       style={{ background: '#22C55E', color: '#fff' }}

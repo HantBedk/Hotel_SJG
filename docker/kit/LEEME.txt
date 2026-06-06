@@ -1,0 +1,66 @@
+============================================================
+  Hotel Manager - Kit All-in-One
+============================================================
+
+REQUISITOS
+----------
+- Docker Desktop instalado y CORRIENDO (icono verde en la barra de tareas).
+  Si no lo tienes: https://www.docker.com/products/docker-desktop/
+
+ARCHIVOS DEL KIT
+----------------
+- hotel-allinone.tar              Imagen Docker con todo el sistema (85 MB)
+- docker-compose.allinone.yml     Configuracion de despliegue
+- .env                            Variables de entorno (claves, BD, etc.)
+- instalar.bat                    Script automatico de instalacion
+- LEEME.txt                       Este archivo
+
+COMO USARLO
+-----------
+1. Copia esta carpeta completa al PC destino (USB, nube, lo que sea).
+2. Verifica que Docker Desktop este abierto y con icono verde.
+3. Doble click en "instalar.bat".
+4. Espera. La primera vez tarda 1-2 minutos:
+   - Carga la imagen (~1 min)
+   - Inicializa Postgres y corre migraciones (~30 seg)
+5. Abre el navegador automaticamente en http://localhost
+
+PERSISTENCIA
+------------
+La base de datos y los archivos del sistema se guardan en volumenes
+de Docker llamados "hotel_pgdata" y "hotel_storage". No se borran
+aunque apagues el contenedor.
+
+Para reiniciar TODO desde cero (CUIDADO: borra la BD):
+    docker compose -f docker-compose.allinone.yml down -v
+
+ACCESO POR DEFECTO
+------------------
+Usuario:    admin
+Contrasena: ver seeder o solicitar al administrador
+
+COMANDOS UTILES
+---------------
+Ver logs en vivo:
+    docker compose -f docker-compose.allinone.yml logs -f
+
+Detener sin borrar nada:
+    docker compose -f docker-compose.allinone.yml down
+
+Reiniciar (sin borrar datos):
+    docker compose -f docker-compose.allinone.yml restart
+
+Volver a entrar:
+    docker compose -f docker-compose.allinone.yml up -d
+
+PROBLEMAS COMUNES
+-----------------
+"Docker no esta corriendo"
+    -> Abre Docker Desktop manualmente y espera al icono verde.
+
+"Puerto 80 ya en uso"
+    -> Apaga IIS, Skype, Apache o XAMPP que esten usando ese puerto.
+
+"No responde despues de 90 seg"
+    -> Mira los logs con el comando arriba; copialos y comparte
+       con soporte tecnico.

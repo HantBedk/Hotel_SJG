@@ -15,7 +15,7 @@ type ViewMode = 'week' | 'twoWeeks' | 'month' | 'year'
 const VIEW_DAYS: Record<ViewMode, number> = { week: 7, twoWeeks: 14, month: 30, year: 365 }
 
 // ── Year heatmap: 12 mini-meses con celdas por día coloreadas por ocupación ──
-function YearHeatmap({ data, startDate }: { data: CalendarData; startDate: Date }) {
+function YearHeatmap({ data, startDate, onMonthClick }: { data: CalendarData; startDate: Date; onMonthClick?: (monthStart: Date) => void }) {
   const totalRooms = data.rooms.length
   const entries = [...data.reservations, ...data.stays]
 
@@ -41,10 +41,13 @@ function YearHeatmap({ data, startDate }: { data: CalendarData; startDate: Date 
         const days = eachDayOfInterval({ start: monthStart, end: monthEnd })
         let monthTotalOccupied = 0
         return (
-          <div
+          <button
+            type="button"
             key={format(monthStart, 'yyyy-MM')}
-            className="rounded-xl border p-3"
+            onClick={() => onMonthClick?.(monthStart)}
+            className="rounded-xl border p-3 text-left transition-all hover:shadow-md hover:scale-[1.02] cursor-pointer"
             style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
+            title={`Ver ${format(monthStart, 'MMMM yyyy', { locale: es })} en vista de 30 días`}
           >
             <div className="text-xs font-bold uppercase tracking-wider mb-2 capitalize"
               style={{ color: 'var(--text-secondary)' }}>
@@ -80,7 +83,7 @@ function YearHeatmap({ data, startDate }: { data: CalendarData; startDate: Date 
             <div className="text-[10px] mt-2 text-right" style={{ color: 'var(--text-muted)' }}>
               Prom. {totalRooms > 0 ? Math.round((monthTotalOccupied / (days.length * totalRooms)) * 100) : 0}%
             </div>
-          </div>
+          </button>
         )
       })}
     </div>
@@ -283,7 +286,14 @@ export default function CalendarPage() {
         ) : data ? (
           view === 'year' ? (
             <div className="flex-1 overflow-y-auto pr-2 pb-4">
-              <YearHeatmap data={data} startDate={anchor} />
+              <YearHeatmap
+                data={data}
+                startDate={anchor}
+                onMonthClick={(monthStart) => {
+                  setView('month')
+                  setAnchor(monthStart)
+                }}
+              />
             </div>
           ) : (
             <CalendarGrid

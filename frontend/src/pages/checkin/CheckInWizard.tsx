@@ -7,6 +7,7 @@ import { useGuestSearch } from '@/hooks/useGuests'
 import { useCompanySearch } from '@/hooks/useCompanies'
 import { useStays } from '@/hooks/useStays'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
+import { useHotelTimes } from '@/hooks/useHotelTimes'
 import { createGuestApi, updateGuestApi, searchGuestsApi, addCompanionApi } from '@/services/guests.service'
 import { createCompanyApi } from '@/services/companies.service'
 import type { Room, Guest, Company, GuestCompanion } from '@/types'
@@ -169,6 +170,7 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
   const { data: guestResults = [] } = useGuestSearch(state.guestSearch)
   const { data: companyResults = [] } = useCompanySearch(state.companySearch)
   const { checkIn, isCheckingIn } = useStays()
+  const { checkOutTime } = useHotelTimes()
   const [isSaving, setIsSaving] = useState(false)
 
   // ── Error helper ───────────────────────────────────────────────────────────
@@ -434,7 +436,7 @@ export default function CheckInWizard({ rooms, onClose }: Props) {
         company_id:           companyId,
         room_ids:             rooms.map((r) => r.id),
         check_in_datetime:    toISOLocal(state.checkInDate),
-        check_out_datetime:   toISOLocal(state.checkOutDate + (state.checkOutDate.length === 10 ? 'T12:00' : '')),
+        check_out_datetime:   toISOLocal(state.checkOutDate + (state.checkOutDate.length === 10 ? `T${checkOutTime}` : '')),
         prices:               Object.fromEntries(Object.entries(state.prices).map(([k, v]) => [k, parseFloat(v)])),
         notes:                state.notes || undefined,
         additional_guest_ids: additionalGuestIds.length > 0 ? additionalGuestIds : undefined,

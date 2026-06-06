@@ -12,6 +12,7 @@ services:
       - ./backend/routes:/var/www/html/routes
       - ./backend/config:/var/www/html/config
       - ./backend/database:/var/www/html/database
+      - ./backend/resources:/var/www/html/resources
       - ./backend/storage:/var/www/html/storage
       - ./backend/bootstrap/cache:/var/www/html/bootstrap/cache
       # Carpeta del PC donde se guardan los backups automáticos.
@@ -37,6 +38,9 @@ services:
       - FRONTEND_ORIGINS=${FRONTEND_ORIGINS:-http://localhost,http://localhost:3007,http://127.0.0.1,http://127.0.0.1:3007}
       - SESSION_SAME_SITE=${SESSION_SAME_SITE:-lax}
       - SESSION_SECURE_COOKIE=${SESSION_SECURE_COOKIE:-false}
+      # Ruta del PC donde Docker monta /var/www/html/backup. Se expone a Laravel
+      # para que la UI muestre al usuario en qué carpeta de su computador aparecerán los .zip.
+      - BACKUP_HOST_PATH=${BACKUP_HOST_PATH:-./backup}
     depends_on:
       db:
         condition: service_healthy

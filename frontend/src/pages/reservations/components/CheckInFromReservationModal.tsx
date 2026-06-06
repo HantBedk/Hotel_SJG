@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X, BedDouble, CheckCircle } from 'lucide-react'
 import { useReservations } from '@/hooks/useReservations'
+import { useHotelTimes } from '@/hooks/useHotelTimes'
 import type { Reservation, Room } from '@/types'
 
 interface Props {
@@ -21,6 +22,7 @@ export default function CheckInFromReservationModal({ reservation, rooms, onClos
   const [checkOut, setCheckOut]               = useState(reservation.end_date)
 
   const { checkIn: doCheckIn, isCheckingIn } = useReservations()
+  const { checkInTime, checkOutTime }        = useHotelTimes()
 
   const toggleRoom = (roomId: string) => {
     setSelectedRoomIds(prev =>
@@ -38,8 +40,8 @@ export default function CheckInFromReservationModal({ reservation, rooms, onClos
       id:                 reservation.id,
       room_ids:           selectedRoomIds,
       prices:             pricesPayload,
-      check_in_datetime:  `${checkIn}T12:00:00`,
-      check_out_datetime: `${checkOut}T12:00:00`,
+      check_in_datetime:  `${checkIn}T${checkInTime}:00`,
+      check_out_datetime: `${checkOut}T${checkOutTime}:00`,
     })
     onSuccess?.()
   }

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Bell, CheckCheck, AlertTriangle, Package, Wrench, ChevronRight } from 'lucide-react'
 import { useNotifications } from '@/hooks/useNotifications'
+import { Skeleton } from '@/components/ui/Skeleton'
 import type { AppNotification } from '@/types'
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -125,8 +126,17 @@ export default function NotificationCenter({ open, onClose }: NotificationCenter
       {/* Body */}
       <div className="overflow-y-auto flex-1">
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <div className="p-3 space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex gap-3">
+                <Skeleton className="w-5 h-5 rounded-full flex-shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3 w-3/4 rounded" />
+                  <Skeleton className="h-2.5 w-full rounded" />
+                  <Skeleton className="h-2 w-1/3 rounded" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2">

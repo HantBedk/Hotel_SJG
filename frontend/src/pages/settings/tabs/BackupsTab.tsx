@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Download, Upload, Database, Archive, AlertTriangle, CheckCircle, XCircle, RefreshCw, FolderOpen, Clock, Save, ChevronDown, RotateCcw } from 'lucide-react'
+import { Plus, Download, Upload, Database, Archive, AlertTriangle, CheckCircle, XCircle, RefreshCw, FolderOpen, Clock, Save, ChevronDown, RotateCcw, Trash2, Package, HelpCircle } from 'lucide-react'
 import { useBackups, useBackupMutations, useBackupPreview, useBackupSettings, useSaveBackupSettings } from '@/hooks/useAdmin'
-import { getBackupDownloadUrl, validateBackupFolderApi } from '@/services/admin.service'
+import { downloadBackupApi, validateBackupFolderApi, downloadMigrationKitApi } from '@/services/admin.service'
 import type { BackupSettings, BackupFolderCheck } from '@/services/admin.service'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonText } from '@/components/ui/Skeleton'
@@ -20,7 +20,7 @@ function formatDate(iso: string) {
   })
 }
 
-type ResultState = { ok: true } | { ok: false; msg: string } | null
+type ResultState = { ok: true; msg?: string } | { ok: false; msg: string } | null
 
 const DEFAULT_SETTINGS: BackupSettings = {
   auto_backup: true,
@@ -30,14 +30,16 @@ const DEFAULT_SETTINGS: BackupSettings = {
 }
 
 export default function BackupsTab() {
-  const { hasPermission } = useAuth()
-  const canCreate  = hasPermission('trigger_backup')
-  const canRestore = hasPermission('restore_backup')
+  const { hasPermission, hasRole } = useAuth()
+  const canCreate     = hasPermission('trigger_backup')
+  const canRestore    = hasPermission('restore_backup')
+  const canDeleteAll  = hasRole('superadmin')
 
-  const { data: backups = [], isLoading } = useBackups()
-  const { create, restore }               = useBackupMutations()
+  const { data: backups = [], isLoading }    = useBackups()
+  const { create, restore, deleteAll }       = useBackupMutations()
 
   const [showCreate, setShowCreate]     = useState(false)
+  const [showDeleteAll, setShowDeleteAll] = useState(false)
   const { data: preview, isLoading: previewLoading } = useBackupPreview(showCreate)
 
   const fileRef = useRef<HTMLInputElement>(null)
@@ -54,6 +56,15 @@ export default function BackupsTab() {
   const [cfgOpen, setCfgOpen]      = useState(false)
   const [folderCheck, setFolderCheck] = useState<BackupFolderCheck | null>(null)
   const [checkingFolder, setCheckingFolder] = useState(false)
+  const [guideOpen, setGuideOpen]     = useState(false)
+  const [kitDownloading, setKitDownloading] = useState(false)
+
+  const handleDownloadKit = async () => {
+    setKitDownloading(true)
+    try { await downloadMigrationKitApi() }
+    catch { setResult({ ok: false, msg: 'No se pudo descargar el kit de migración.' }) }
+    finally { setKitDownloading(false) }
+  }
 
   // Cualquier cambio en la ruta limpia el resultado de la verificación previa.
   useEffect(() => { setFolderCheck(null) }, [cfg.auto_backup_folder])
@@ -77,9 +88,12 @@ export default function BackupsTab() {
   }
 
   const handleResetFolder  = () => setCfg(c => ({ ...c, auto_backup_folder: '' }))
-  // Carpeta del container montada como ./backup del proyecto host (docker-compose).
-  // Lo que se escriba ahí aparece directamente en C:\…\Hotel_SJG\backup\ del PC.
-  const handleSharedFolder = () => setCfg(c => ({ ...c, auto_backup_folder: '/var/www/html/backup' }))
+  // Carpeta del container montada como BACKUP_HOST_PATH del PC (docker-compose).
+  // Lo que se escriba ahí aparece directamente en la carpeta del PC del usuario.
+  const sharedContainerPath = remoteSettings?.shared_container_path ?? '/var/www/html/backup'
+  const sharedHostPath      = remoteSettings?.shared_host_path      ?? './backup'
+  const handleSharedFolder  = () => setCfg(c => ({ ...c, auto_backup_folder: sharedContainerPath }))
+  const usingSharedFolder   = cfg.auto_backup_folder.replace(/[/\\]+$/, '') === sharedContainerPath
 
   useEffect(() => {
     if (remoteSettings) setCfg(remoteSettings)
@@ -97,11 +111,30 @@ export default function BackupsTab() {
   /* ── Crear backup ───────────────────────────────────────────── */
   const confirmCreate = async () => {
     setShowCreate(false)
-    const backup = await create.mutateAsync()
-    const a = document.createElement('a')
-    a.href = getBackupDownloadUrl(backup.filename)
-    a.download = backup.filename
-    a.click()
+    try {
+      const backup = await create.mutateAsync()
+      await downloadBackupApi(backup.filename)
+    } catch {
+      setResult({ ok: false, msg: 'Error al generar o descargar el backup.' })
+    }
+  }
+
+  const handleDownload = async (filename: string) => {
+    try {
+      await downloadBackupApi(filename)
+    } catch {
+      setResult({ ok: false, msg: 'Error al descargar el backup.' })
+    }
+  }
+
+  const confirmDeleteAll = async () => {
+    setShowDeleteAll(false)
+    try {
+      const { deleted } = await deleteAll.mutateAsync()
+      setResult({ ok: true, msg: `Se eliminaron ${deleted} backup${deleted === 1 ? '' : 's'}.` })
+    } catch {
+      setResult({ ok: false, msg: 'Error al eliminar los backups.' })
+    }
   }
 
   /* ── Restaurar backup ───────────────────────────────────────── */
@@ -254,6 +287,46 @@ export default function BackupsTab() {
         </div>
       </Modal>
 
+      {/* ── Modal: Confirmar eliminar todos ─────────────────────── */}
+      <Modal open={showDeleteAll} onClose={() => setShowDeleteAll(false)} size="sm" ariaLabel="Eliminar todos los backups">
+        <div className="p-6 flex flex-col items-center gap-4 text-center">
+          <div className="w-14 h-14 rounded-full flex items-center justify-center bg-red-50">
+            <AlertTriangle size={28} className="text-red-500" />
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Eliminar todos los backups
+            </h3>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Se borrarán <strong>{backups.length}</strong> archivo{backups.length === 1 ? '' : 's'} de la carpeta del servidor.
+            </p>
+          </div>
+
+          <div className="w-full rounded-lg px-4 py-3 text-xs text-left bg-red-50 text-red-700 border border-red-200">
+            <strong>Advertencia:</strong> esta acción no puede deshacerse. Los archivos eliminados no podrán
+            recuperarse desde la aplicación.
+          </div>
+
+          <div className="flex gap-3 w-full pt-1">
+            <button
+              onClick={() => setShowDeleteAll(false)}
+              className="flex-1 px-4 py-2 rounded-lg text-sm border"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={confirmDeleteAll}
+              disabled={deleteAll.isPending}
+              className="flex-1 px-4 py-2 rounded-lg text-sm text-white font-medium bg-red-500 hover:bg-red-600 disabled:opacity-60"
+            >
+              {deleteAll.isPending ? 'Eliminando…' : 'Sí, eliminar todos'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {/* ── Modal: Resultado de restauración ────────────────────── */}
       <Modal open={result !== null} onClose={() => setResult(null)} size="sm" ariaLabel="Resultado">
         <div className="p-6 flex flex-col items-center gap-4 text-center">
@@ -264,7 +337,7 @@ export default function BackupsTab() {
           )}
           <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
             {result?.ok
-              ? 'Base de datos restaurada exitosamente.'
+              ? (result.msg ?? 'Base de datos restaurada exitosamente.')
               : (result as { ok: false; msg: string })?.msg}
           </p>
           <button
@@ -432,11 +505,20 @@ export default function BackupsTab() {
                 onClick={handleSharedFolder}
                 className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium"
                 style={{ color: 'var(--color-primary)' }}
-                title="Usa /var/www/html/backup, que en tu docker-compose está mapeado a ./backup del proyecto en tu PC."
+                title={`Configura la carpeta del PC: ${sharedHostPath}. Para cambiarla, edita BACKUP_HOST_PATH en .env y reinicia Docker.`}
               >
                 <FolderOpen size={11} />
-                Usar carpeta compartida con el PC (./backup del proyecto)
+                Usar carpeta del PC ({sharedHostPath})
               </button>
+              {usingSharedFolder && (
+                <p className="mt-2 text-[10px] rounded-md px-2 py-1.5"
+                  style={{ background: 'color-mix(in srgb, var(--color-primary) 8%, transparent)', color: 'var(--text-secondary)' }}
+                >
+                  Los .zip aparecerán en tu PC en: <code className="font-mono">{sharedHostPath}</code>
+                  <br />
+                  Para cambiar de carpeta o migrar a otro PC, edita <code className="font-mono">BACKUP_HOST_PATH</code> en el archivo <code className="font-mono">.env</code> y ejecuta <code className="font-mono">docker compose up -d</code>.
+                </p>
+              )}
               {folderCheck && (
                 <div
                   className="mt-2 flex items-start gap-1.5 text-[11px] rounded-md px-2 py-1.5"
@@ -485,6 +567,73 @@ export default function BackupsTab() {
                 <span className="text-xs" style={{ color: 'var(--text-muted)' }}>días antes de eliminar backups viejos</span>
               </div>
             </div>
+          </div>
+
+          {/* Guía: cómo cambiar la carpeta (especialmente en PC nuevo) */}
+          <div
+            className="rounded-lg overflow-hidden"
+            style={{ border: '1px solid var(--border-default)', background: 'var(--bg-elevated)' }}
+          >
+            <button
+              type="button"
+              onClick={() => setGuideOpen(o => !o)}
+              className="w-full flex items-center justify-between px-3 py-2"
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer' }}
+            >
+              <span className="flex items-center gap-2 text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                <HelpCircle size={13} style={{ color: 'var(--color-primary)' }} />
+                ¿Cómo cambiar la carpeta en otro computador?
+              </span>
+              <ChevronDown
+                size={14}
+                style={{
+                  color: 'var(--text-muted)',
+                  transform: guideOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                }}
+              />
+            </button>
+
+            {guideOpen && (
+              <div className="px-3 pb-3 space-y-2.5 text-[11px]" style={{ color: 'var(--text-secondary)', borderTop: '1px solid var(--border-default)' }}>
+                <div style={{ height: 4 }} />
+
+                <p>
+                  Te dejamos un <strong>kit listo</strong> con un script (.bat) y una guía paso a paso.
+                  Descargalo, copialo a la carpeta del proyecto en el PC nuevo y hacele doble click.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadKit}
+                  disabled={kitDownloading}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs text-white font-medium disabled:opacity-60"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  {kitDownloading ? <RefreshCw size={12} className="animate-spin" /> : <Package size={12} />}
+                  {kitDownloading ? 'Preparando…' : 'Descargar kit de migración (.zip)'}
+                </button>
+
+                <div className="rounded-md px-3 py-2 mt-2"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+                >
+                  <p className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
+                    Pasos rápidos
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1">
+                    <li>Descargá el ZIP con el botón de arriba.</li>
+                    <li>Descomprimilo y copiá <code className="font-mono">cambiar-carpeta-backups.bat</code> a la carpeta del proyecto del PC nuevo (donde está <code className="font-mono">docker-compose.yml</code>).</li>
+                    <li>Abrí Docker Desktop y esperá que esté en verde.</li>
+                    <li>Doble click en el <code className="font-mono">.bat</code> → te pide la ruta nueva (ej. <code className="font-mono">D:\Hotel\backups</code>).</li>
+                    <li>El script crea la carpeta, actualiza el <code className="font-mono">.env</code>, reinicia Docker y genera un backup de prueba para verificar.</li>
+                  </ol>
+                </div>
+
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  El archivo <code className="font-mono">LEER-PRIMERO.txt</code> dentro del ZIP tiene la guía completa con solución a problemas comunes (permisos de Docker, etc.).
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Guardar */}
@@ -537,6 +686,18 @@ export default function BackupsTab() {
                 {create.isPending ? 'Generando…' : 'Descargar backup'}
               </button>
             )}
+            {canDeleteAll && backups.length > 0 && (
+              <button
+                onClick={() => setShowDeleteAll(true)}
+                disabled={deleteAll.isPending}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border disabled:opacity-50"
+                style={{ borderColor: '#EF4444', color: '#EF4444' }}
+                title="Eliminar todos los backups del servidor (solo superadmin)"
+              >
+                <Trash2 size={12} />
+                {deleteAll.isPending ? 'Eliminando…' : 'Borrar todos'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -566,14 +727,14 @@ export default function BackupsTab() {
                   <td className="py-2" style={{ color: 'var(--text-secondary)' }}>{formatBytes(b.size)}</td>
                   <td className="py-2" style={{ color: 'var(--text-secondary)' }}>{formatDate(b.created_at)}</td>
                   <td className="py-2">
-                    <a
-                      href={getBackupDownloadUrl(b.filename)}
-                      download={b.filename}
+                    <button
+                      type="button"
+                      onClick={() => handleDownload(b.filename)}
                       className="flex items-center gap-1 px-2 py-1 rounded text-xs"
-                      style={{ color: 'var(--color-primary)' }}
+                      style={{ color: 'var(--color-primary)', background: 'transparent', border: 'none', cursor: 'pointer' }}
                     >
                       <Download size={12} /> Descargar
-                    </a>
+                    </button>
                   </td>
                 </tr>
               ))}

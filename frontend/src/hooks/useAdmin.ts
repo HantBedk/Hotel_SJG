@@ -3,6 +3,7 @@ import {
   createAdminRoomApi,
   createAdminUserApi,
   createBackupApi,
+  deleteAllBackupsApi,
   createExtraServiceApi,
   createHouseApi,
   createRoomTypeApi,
@@ -231,8 +232,9 @@ export function useBackupMutations() {
 
   const create = useMutation({ mutationFn: createBackupApi, onSuccess: inv })
   const restore = useMutation({ mutationFn: restoreBackupApi, onSuccess: inv })
+  const deleteAll = useMutation({ mutationFn: deleteAllBackupsApi, onSuccess: inv })
 
-  return { create, restore }
+  return { create, restore, deleteAll }
 }
 
 export function useBackupSettings() {

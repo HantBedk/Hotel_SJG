@@ -538,7 +538,7 @@ class StayController extends Controller
 
             $oldStayRoom->update(['is_active' => false, 'check_out_date' => now()->toDateString()]);
 
-            $newNights = max(1, now()->diffInDays(Carbon::parse($stay->check_out_datetime)));
+            $newNights = max(1, (int) now()->diffInDays(Carbon::parse($stay->check_out_datetime)));
 
             StayRoom::create([
                 'stay_id'         => $stay->id,

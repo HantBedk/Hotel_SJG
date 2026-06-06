@@ -8,7 +8,6 @@ const GROUPS = [
   { key: 'hotel',     label: 'Hotel' },
   { key: 'inventory', label: 'Inventario' },
   { key: 'system',    label: 'Sistema' },
-  { key: 'backup',    label: 'Backup' },
 ]
 
 const LABELS: Record<string, string> = {
@@ -29,8 +28,6 @@ const LABELS: Record<string, string> = {
   'system.time_format':             'Formato de hora',
   'inventory.expiry_alert_days':    'Alertar productos próximos a vencer (días)',
   'inventory.low_stock_threshold':  'Umbral de stock bajo',
-  'backup.auto_backup':             'Backup automático',
-  'backup.retention_days':          'Retención de backups (días)',
 }
 
 export default function ConfiguracionTab() {
@@ -80,25 +77,69 @@ export default function ConfiguracionTab() {
           <SkeletonText lines={5} />
         ) : (
           <>
-            {Object.entries(data ?? {}).map(([key, value]) => (
-              <div key={key}>
-                <label htmlFor={key} className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-                  {LABELS[key] ?? key}
-                </label>
-                <input
-                  id={key}
-                  type="text"
-                  value={value ?? ''}
-                  onChange={e => handleChange(key, e.target.value)}
-                  className={cn('w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500')}
-                  style={{
-                    background:  'var(--bg-base)',
-                    color:       'var(--text-primary)',
-                    borderColor: unsaved[key] ? '#F59E0B' : 'var(--border-default)',
-                  }}
-                />
-              </div>
-            ))}
+            {Object.entries(data ?? {}).map(([key, value]) => {
+              const isBool = value === 'true' || value === 'false' || value === true || value === false
+              const boolOn = value === true || value === 'true'
+
+              return (
+                <div key={key}>
+                  <label htmlFor={key} className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+                    {LABELS[key] ?? key}
+                  </label>
+
+                  {isBool ? (
+                    <div
+                      id={key}
+                      role="group"
+                      className="inline-flex p-0.5 rounded-lg text-xs font-medium"
+                      style={{
+                        background:  'var(--bg-base)',
+                        border:      `1px solid ${unsaved[key] ? '#F59E0B' : 'var(--border-default)'}`,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleChange(key, 'true')}
+                        aria-pressed={boolOn}
+                        className="px-3 py-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{
+                          background: boolOn ? 'var(--color-primary)' : 'transparent',
+                          color:      boolOn ? '#fff'                 : 'var(--text-secondary)',
+                        }}
+                      >
+                        Activado
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleChange(key, 'false')}
+                        aria-pressed={!boolOn}
+                        className="px-3 py-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        style={{
+                          background: !boolOn ? 'var(--bg-surface)'   : 'transparent',
+                          color:      !boolOn ? 'var(--text-primary)' : 'var(--text-secondary)',
+                          boxShadow:  !boolOn ? '0 1px 2px rgba(0,0,0,0.05)' : undefined,
+                        }}
+                      >
+                        Desactivado
+                      </button>
+                    </div>
+                  ) : (
+                    <input
+                      id={key}
+                      type="text"
+                      value={value ?? ''}
+                      onChange={e => handleChange(key, e.target.value)}
+                      className={cn('w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500')}
+                      style={{
+                        background:  'var(--bg-base)',
+                        color:       'var(--text-primary)',
+                        borderColor: unsaved[key] ? '#F59E0B' : 'var(--border-default)',
+                      }}
+                    />
+                  )}
+                </div>
+              )
+            })}
 
             {hasUnsaved && (
               <button

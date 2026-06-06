@@ -4,6 +4,9 @@ import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
+  // base='/app/' porque Nginx sirve el build desde /var/www/html/public/app/
+  // (los chunks dinámicos de Vite necesitan este prefijo).
+  base: '/app/',
   plugins: [
     react(),
     tailwindcss(),
@@ -27,7 +30,6 @@ export default defineConfig({
         manualChunks: {
           'vendor-react':  ['react', 'react-dom', 'react-router-dom'],
           'vendor-query':  ['@tanstack/react-query'],
-          'vendor-charts': ['recharts'],
           'vendor-dateFns':['date-fns'],
           'vendor-echo':   ['laravel-echo', 'pusher-js'],
         },

@@ -8,6 +8,7 @@ use App\Models\InventoryItem;
 use App\Models\Room;
 use App\Models\Setting;
 use App\Models\Stay;
+use App\Models\StayRoom;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -78,12 +79,29 @@ class DashboardController extends Controller
     {
         $period     = $request->query('period', 'weekly');
         $totalRooms = Room::active()->count();
-        $statuses   = ['active', 'extended', 'checked_out'];
+
+        // Una stay cubre un día $date si:
+        //   check_in <= $date  AND  (real_out >= $date)
+        // donde real_out es actual_check_out_datetime si la stay ya cerró
+        // (status=checked_out) o check_out_datetime si sigue abierta. En esta
+        // app, cuando un huésped sale antes de la fecha planificada, sólo se
+        // setea actual_check_out_datetime — el check_out_datetime y las fechas
+        // del stay_room quedan con la salida ORIGINAL, así que filtrar por esos
+        // campos sobreestimaba la ocupación.
+        $stayDateScope = function ($q, $date) {
+            $q->whereDate('check_in_datetime', '<=', $date)
+              ->where(function ($q2) use ($date) {
+                  $q2->where(function ($q3) use ($date) {
+                      $q3->whereIn('status', ['active', 'extended'])
+                         ->whereDate('check_out_datetime', '>=', $date);
+                  })->orWhere(function ($q3) use ($date) {
+                      $q3->where('status', 'checked_out')
+                         ->whereDate('actual_check_out_datetime', '>=', $date);
+                  });
+              });
+        };
 
         if ($period === 'monthly') {
-            // Para cada uno de los últimos 12 meses calculamos el promedio diario
-            // de habitaciones ocupadas. La fórmula previa dividía estadías entre
-            // (rooms * días) y producía porcentajes minúsculos siempre.
             $points = 12;
             $rows   = [];
             for ($i = $points - 1; $i >= 0; $i--) {
@@ -92,23 +110,12 @@ class DashboardController extends Controller
                 $label       = $monthStart->translatedFormat('M Y');
                 $daysInMonth = $monthStart->daysInMonth;
 
-                // Estadías que se solapan con este mes; las iteramos día a día en PHP
-                // para evitar 30 queries por mes.
-                $stays = Stay::whereDate('check_in_datetime', '<=', $monthEnd)
-                    ->whereDate('check_out_datetime', '>=', $monthStart)
-                    ->whereIn('status', $statuses)
-                    ->get(['check_in_datetime', 'check_out_datetime']);
-
                 $roomDaysOccupied = 0;
                 for ($day = $monthStart->copy(); $day <= $monthEnd; $day->addDay()) {
-                    foreach ($stays as $s) {
-                        if (
-                            $s->check_in_datetime->startOfDay()  <= $day &&
-                            $s->check_out_datetime->startOfDay() >= $day
-                        ) {
-                            $roomDaysOccupied++;
-                        }
-                    }
+                    $roomDaysOccupied += StayRoom::where('is_active', true)
+                        ->whereDate('check_in_date', '<=', $day)
+                        ->whereHas('stay', fn ($q) => $stayDateScope($q, $day))
+                        ->count();
                 }
 
                 $capacity = $totalRooms * $daysInMonth;
@@ -129,13 +136,9 @@ class DashboardController extends Controller
                 $date  = Carbon::now()->subDays($i);
                 $label = $date->translatedFormat('D d/M');
 
-                // Usamos >= para que el día de check-out también cuente como ocupado
-                // (un huésped que sale el 04/jun pasó la noche del 03→04 en el hotel,
-                // así que ese día sigue contando). El criterio previo (>) hacía que
-                // el último punto siempre cayera a 0%.
-                $occupied = Stay::whereDate('check_in_datetime', '<=', $date)
-                    ->whereDate('check_out_datetime', '>=', $date)
-                    ->whereIn('status', $statuses)
+                $occupied = StayRoom::where('is_active', true)
+                    ->whereDate('check_in_date', '<=', $date)
+                    ->whereHas('stay', fn ($q) => $stayDateScope($q, $date))
                     ->count();
 
                 $rate = $totalRooms > 0 ? round(($occupied / $totalRooms) * 100, 1) : 0;

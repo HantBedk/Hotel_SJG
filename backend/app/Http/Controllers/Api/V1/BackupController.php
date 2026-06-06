@@ -22,10 +22,23 @@ class BackupController extends Controller
 {
     private const FOLDER = 'backups';
 
+    /** Ruta dentro del container donde Docker monta la carpeta del PC del host. */
+    private const SHARED_CONTAINER_PATH = '/var/www/html/backup';
+
     private function backupsDir(): string
     {
         $custom = Setting::get('backup.auto_backup_folder', '');
         return ! empty($custom) ? rtrim($custom, '/\\') : storage_path('app/' . self::FOLDER);
+    }
+
+    /**
+     * Ruta del PC del host (Windows/Linux/Mac) que corresponde a SHARED_CONTAINER_PATH.
+     * Viene del env BACKUP_HOST_PATH (docker-compose), o './backup' como default.
+     * Útil para mostrar al usuario dónde aparecerán los .zip en su computador.
+     */
+    private function sharedHostPath(): string
+    {
+        return env('BACKUP_HOST_PATH', './backup');
     }
 
     /**
@@ -58,10 +71,17 @@ class BackupController extends Controller
         $exists   = File::isDirectory($path);
         $writable = $exists && is_writable($path);
 
+        // Si la ruta es la carpeta compartida con el PC, mostramos al usuario
+        // el path real de su computador (no /var/www/html/backup que es del container).
+        $isShared = rtrim($path, '/\\') === self::SHARED_CONTAINER_PATH;
+        $displayPath = $isShared ? $this->sharedHostPath() : $path;
+
         if (! $exists) {
             $msg = 'La carpeta no existe en el servidor.';
         } elseif (! $writable) {
             $msg = 'La carpeta existe pero no tiene permisos de escritura.';
+        } elseif ($isShared) {
+            $msg = "Carpeta válida. Los backups aparecerán en tu PC en: {$displayPath}";
         } else {
             $msg = 'Carpeta válida y escribible.';
         }
@@ -70,7 +90,7 @@ class BackupController extends Controller
             'success' => true,
             'data'    => [
                 'using_default' => false,
-                'resolved_path' => $path,
+                'resolved_path' => $displayPath,
                 'exists'        => $exists,
                 'writable'      => $writable,
                 'message'       => $msg,
@@ -83,10 +103,12 @@ class BackupController extends Controller
         return response()->json([
             'success' => true,
             'data'    => [
-                'auto_backup'        => Setting::get('backup.auto_backup', true),
-                'auto_backup_time'   => Setting::get('backup.auto_backup_time', '23:59'),
-                'auto_backup_folder' => Setting::get('backup.auto_backup_folder', ''),
-                'retention_days'     => Setting::get('backup.retention_days', 30),
+                'auto_backup'         => Setting::get('backup.auto_backup', true),
+                'auto_backup_time'    => Setting::get('backup.auto_backup_time', '23:59'),
+                'auto_backup_folder'  => Setting::get('backup.auto_backup_folder', ''),
+                'retention_days'      => Setting::get('backup.retention_days', 30),
+                'shared_container_path' => self::SHARED_CONTAINER_PATH,
+                'shared_host_path'      => $this->sharedHostPath(),
             ],
         ]);
     }
@@ -210,6 +232,59 @@ class BackupController extends Controller
         );
 
         return response()->download($path, $filename);
+    }
+
+    /**
+     * Arma al vuelo un ZIP con el script .bat y el README para que el usuario
+     * pueda llevarlo al PC nuevo y cambiar la carpeta de backups con doble click.
+     */
+    public function downloadMigrationKit(): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $kitSrcDir = resource_path('migration-kit');
+        abort_unless(File::isDirectory($kitSrcDir), 500, 'El kit de migración no está disponible.');
+
+        $tmpZip = storage_path('app/migration-kit-' . uniqid() . '.zip');
+        $za = new ZipArchive();
+        if ($za->open($tmpZip, ZipArchive::CREATE) !== true) {
+            abort(500, 'No se pudo generar el ZIP.');
+        }
+
+        foreach (File::files($kitSrcDir) as $file) {
+            $za->addFile($file->getPathname(), $file->getFilename());
+        }
+        $za->close();
+
+        return response()
+            ->download($tmpZip, 'kit-migracion-backups.zip')
+            ->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Elimina todos los archivos backup_*.zip de la carpeta configurada.
+     * Operación destructiva — la ruta debe estar restringida a superadmin.
+     */
+    public function deleteAll(): JsonResponse
+    {
+        $dir = $this->backupsDir();
+        if (! File::isDirectory($dir)) {
+            return response()->json(['success' => true, 'data' => ['deleted' => 0]]);
+        }
+
+        $deleted = 0;
+        foreach (File::files($dir) as $f) {
+            $name = $f->getFilename();
+            if (preg_match('/^backup_[\d_-]+\.zip$/', $name)) {
+                if (@unlink($f->getPathname())) {
+                    $deleted++;
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => ['deleted' => $deleted],
+            'message' => "Se eliminaron {$deleted} backups.",
+        ]);
     }
 
     public function restore(Request $request): JsonResponse

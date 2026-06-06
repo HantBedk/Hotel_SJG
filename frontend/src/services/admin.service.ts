@@ -152,8 +152,23 @@ export const getBackupPreviewApi = () =>
 export const createBackupApi = () =>
   api.post('/admin/backups').then(r => r.data.data as BackupFile)
 
-export const getBackupDownloadUrl = (filename: string) =>
-  `/api/v1/admin/backups/${encodeURIComponent(filename)}/download`
+export const deleteAllBackupsApi = () =>
+  api.delete('/admin/backups').then(r => r.data.data as { deleted: number })
+
+export const downloadBackupApi = async (filename: string): Promise<void> => {
+  const res = await api.get(
+    `/admin/backups/${encodeURIComponent(filename)}/download`,
+    { responseType: 'blob' },
+  )
+  const url = URL.createObjectURL(res.data as Blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
 
 export const restoreBackupApi = (file: File) => {
   const form = new FormData()
@@ -163,11 +178,25 @@ export const restoreBackupApi = (file: File) => {
   }).then(r => r.data)
 }
 
+export const downloadMigrationKitApi = async (): Promise<void> => {
+  const res = await api.get('/admin/backups/migration-kit', { responseType: 'blob' })
+  const url = URL.createObjectURL(res.data as Blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'kit-migracion-backups.zip'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export interface BackupSettings {
-  auto_backup:        boolean
-  auto_backup_time:   string
-  auto_backup_folder: string
-  retention_days:     number
+  auto_backup:            boolean
+  auto_backup_time:       string
+  auto_backup_folder:     string
+  retention_days:         number
+  shared_container_path?: string
+  shared_host_path?:      string
 }
 
 export const getBackupSettingsApi = () =>
