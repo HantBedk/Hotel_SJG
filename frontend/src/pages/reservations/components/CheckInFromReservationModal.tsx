@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, BedDouble, CheckCircle } from 'lucide-react'
 import { useReservations } from '@/hooks/useReservations'
 import { useHotelTimes } from '@/hooks/useHotelTimes'
+import { todayLocalISO } from '@/lib/format'
 import type { Reservation, Room } from '@/types'
 
 interface Props {
@@ -12,14 +13,35 @@ interface Props {
 }
 
 export default function CheckInFromReservationModal({ reservation, rooms, onClose, onSuccess }: Props) {
-  const today = new Date().toISOString().slice(0, 10)
+  // "Hoy" en TZ local del browser (no UTC). Si usáramos toISOString().slice(0,10)
+  // después de las 19:00 de Bogotá quedaríamos guardando el check-in con fecha
+  // de mañana, dejando la habitación fuera del KPI de ingresos de hoy.
+  const today = todayLocalISO()
 
   const availableRooms = rooms.filter(r => ['available', 'reserved'].includes(r.status) && r.is_active)
 
-  const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([])
-  const [prices, setPrices]                   = useState<Record<string, string>>({})
+  // La reserva guarda la habitación originalmente asignada (reservation.room_id).
+  // Pre-seleccionamos esa habitación y calculamos el precio por noche a partir
+  // del precio total acordado y las noches reservadas, así recepción no tiene
+  // que volver a elegirla ni re-teclear el precio.
+  const reservedRoomId = reservation.room_id
+  const reservedRoomAvailable = !!reservedRoomId && availableRooms.some(r => r.id === reservedRoomId)
+  const pricePerNight = reservation.nights > 0
+    ? Number(reservation.agreed_price ?? 0) / reservation.nights
+    : 0
+
+  const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>(
+    reservedRoomAvailable && reservedRoomId ? [reservedRoomId] : [],
+  )
+  const [prices, setPrices] = useState<Record<string, string>>(
+    reservedRoomAvailable && reservedRoomId
+      ? { [reservedRoomId]: pricePerNight > 0 ? String(Math.round(pricePerNight)) : '' }
+      : {},
+  )
   const [checkIn, setCheckIn]                 = useState(today)
-  const [checkOut, setCheckOut]               = useState(reservation.end_date)
+  // reservation.end_date viene como ISO datetime ("2026-06-23T05:00:00Z"); el
+  // input[type=date] sólo acepta "YYYY-MM-DD", así que tomamos sólo la fecha.
+  const [checkOut, setCheckOut]               = useState((reservation.end_date ?? '').slice(0, 10))
 
   const { checkIn: doCheckIn, isCheckingIn } = useReservations()
   const { checkInTime, checkOutTime }        = useHotelTimes()
@@ -103,8 +125,14 @@ export default function CheckInFromReservationModal({ reservation, rooms, onClos
               <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No hay habitaciones disponibles.</p>
             ) : (
               <div className="space-y-2 max-h-48 overflow-y-auto">
-                {availableRooms.map(room => {
+                {/* Mostrar primero la habitación reservada para que recepción la vea de una. */}
+                {[...availableRooms].sort((a, b) => {
+                  if (a.id === reservedRoomId) return -1
+                  if (b.id === reservedRoomId) return 1
+                  return 0
+                }).map(room => {
                   const selected = selectedRoomIds.includes(room.id)
+                  const isReserved = room.id === reservedRoomId
                   return (
                     <div
                       key={room.id}
@@ -117,10 +145,20 @@ export default function CheckInFromReservationModal({ reservation, rooms, onClos
                     >
                       <BedDouble size={16} style={{ color: selected ? 'var(--color-primary)' : 'var(--text-muted)' }} />
                       <div className="flex-1">
-                        <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                          Hab. {room.number}
-                          {room.house && <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>· {room.house.name}</span>}
-                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                            Hab. {room.number}
+                            {room.house && <span className="text-xs ml-1" style={{ color: 'var(--text-muted)' }}>· {room.house.name}</span>}
+                          </p>
+                          {isReserved && (
+                            <span
+                              className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+                              style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}
+                            >
+                              Reservada
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{room.room_type?.name}</p>
                       </div>
                       {selected && (

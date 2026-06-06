@@ -10,6 +10,7 @@ import {
   Settings,
   ClipboardList,
   Package,
+  DollarSign,
   LogOut,
   X,
 } from 'lucide-react'
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { to: '/reservations', label: 'Reservas',      icon: CalendarDays,    permission: 'view_reservations' },
   { to: '/calendar',     label: 'Calendario',    icon: CalendarRange,   permission: 'view_reservations' },
   { to: '/inventory',    label: 'Inventario',    icon: Package,         permission: 'view_inventory' },
+  { to: '/income',       label: 'Ingresos',      icon: DollarSign,      permission: 'view_reports' },
   { to: '/activity',     label: 'Historial',     icon: BarChart3,       permission: 'view_activity_log' },
   { to: '/settings',     label: 'Configuración', icon: Settings,        permission: 'view_settings' },
 ]

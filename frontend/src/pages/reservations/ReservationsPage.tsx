@@ -8,6 +8,7 @@ import BulkReservationWizard from './components/BulkReservationWizard'
 import CheckInFromReservationModal from './components/CheckInFromReservationModal'
 import EditReservationModal from './components/EditReservationModal'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import type { Reservation, ReservationStatus } from '@/types'
 
 const STATUS_LABELS: Record<ReservationStatus, string> = {
@@ -40,6 +41,7 @@ export default function ReservationsPage() {
   const [showBulk, setShowBulk]           = useState(false)
   const [checkingIn, setCheckingIn]       = useState<Reservation | null>(null)
   const [selected, setSelected]           = useState<Reservation | null>(null)
+  const [confirmingCancel, setConfirmingCancel] = useState<Reservation | null>(null)
 
   const { reservations, isLoading, cancel, addPayment, update } = useReservations({
     status:  status || undefined,
@@ -49,8 +51,13 @@ export default function ReservationsPage() {
   const { rooms } = useRooms()
 
   const handleCancel = (res: Reservation) => {
-    if (!window.confirm(`¿Cancelar reserva de ${res.guest?.full_name ?? 'este cliente'}?`)) return
-    cancel({ id: res.id })
+    setConfirmingCancel(res)
+  }
+
+  const confirmCancel = () => {
+    if (!confirmingCancel) return
+    cancel({ id: confirmingCancel.id })
+    setConfirmingCancel(null)
     setSelected(null)
   }
 
@@ -198,6 +205,26 @@ export default function ReservationsPage() {
           onSuccess={() => setCheckingIn(null)}
         />
       )}
+
+      {/* Cancel reservation confirmation */}
+      <ConfirmDialog
+        open={confirmingCancel !== null}
+        title="Cancelar reserva"
+        message={
+          <>
+            ¿Estás seguro que quieres cancelar la reserva de{' '}
+            <strong style={{ color: 'var(--text-primary)' }}>
+              {confirmingCancel?.guest?.full_name ?? 'este cliente'}
+            </strong>
+            ? Esta acción no se puede deshacer.
+          </>
+        }
+        confirmLabel="Sí, cancelar reserva"
+        cancelLabel="Volver"
+        variant="danger"
+        onConfirm={confirmCancel}
+        onClose={() => setConfirmingCancel(null)}
+      />
     </div>
   )
 }

@@ -97,6 +97,11 @@ export default function ConfiguracionTab() {
                         border:      `1px solid ${unsaved[key] ? '#F59E0B' : 'var(--border-default)'}`,
                       }}
                     >
+                      {/* Segmented control: el botón seleccionado siempre usa el
+                          mismo tratamiento (primario sólido + texto blanco) sin
+                          importar si es "Activado" o "Desactivado", para que la
+                          señal visual de "yo soy el seleccionado" sea idéntica y
+                          se vea bien tanto en claro como en oscuro. */}
                       <button
                         type="button"
                         onClick={() => handleChange(key, 'true')}
@@ -115,9 +120,8 @@ export default function ConfiguracionTab() {
                         aria-pressed={!boolOn}
                         className="px-3 py-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                         style={{
-                          background: !boolOn ? 'var(--bg-surface)'   : 'transparent',
-                          color:      !boolOn ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          boxShadow:  !boolOn ? '0 1px 2px rgba(0,0,0,0.05)' : undefined,
+                          background: !boolOn ? 'var(--color-primary)' : 'transparent',
+                          color:      !boolOn ? '#fff'                 : 'var(--text-secondary)',
                         }}
                       >
                         Desactivado

@@ -29,8 +29,10 @@ class RolesPermissionsSeeder extends Seeder
     ];
 
     private const ROLES = [
-        // superadmin gets all via Gate::before in AppServiceProvider
-        'superadmin'   => [],
+        // superadmin: todos los permisos. Gate::before sólo cubre $user->can();
+        // el middleware de Spatie (permission:) chequea directamente roles y
+        // permisos, así que aquí hay que asignárselos explícitamente.
+        'superadmin'   => self::PERMISSIONS,
         // admin: todos excepto manage_roles
         'admin'        => [
             'view_dashboard',
@@ -65,10 +67,7 @@ class RolesPermissionsSeeder extends Seeder
 
         foreach (self::ROLES as $roleName => $permissions) {
             $role = Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'sanctum']);
-
-            if (!empty($permissions)) {
-                $role->syncPermissions($permissions);
-            }
+            $role->syncPermissions($permissions);
         }
     }
 }

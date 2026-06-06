@@ -15,6 +15,7 @@ const SettingsPage    = lazy(() => import('@/pages/settings/SettingsPage'))
 const ReservationsPage= lazy(() => import('@/pages/reservations/ReservationsPage'))
 const CalendarPage    = lazy(() => import('@/pages/calendar/CalendarPage'))
 const InventoryPage   = lazy(() => import('@/pages/inventory/InventoryPage'))
+const IncomePage      = lazy(() => import('@/pages/income/IncomePage'))
 const ActivityPage    = lazy(() => import('@/pages/activity/ActivityPage'))
 
 function PageLoader() {
@@ -138,6 +139,14 @@ export const router = createBrowserRouter([
             element: (
               <RequirePermission permission="view_inventory">
                 <Lazy><InventoryPage /></Lazy>
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'income',
+            element: (
+              <RequirePermission permission="view_reports">
+                <Lazy><IncomePage /></Lazy>
               </RequirePermission>
             ),
           },

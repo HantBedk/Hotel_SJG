@@ -23,9 +23,21 @@ function nightsBetween(start: string, end: string): number {
   return Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86400000))
 }
 
+// El backend castea start_date/end_date como `date` y Eloquent las serializa
+// como ISO datetime ("2026-06-23T05:00:00.000000Z"). <input type="date"> sólo
+// acepta "YYYY-MM-DD", así que tomamos los primeros 10 chars (que ya son la
+// fecha en el TZ del hotel) para no introducir un shift por timezone local.
+function toDateInputValue(value: string | null | undefined): string {
+  if (!value) return ''
+  return value.slice(0, 10)
+}
+
 export default function EditReservationModal({ reservation, onSave, onClose, saving }: Props) {
-  const [startDate, setStartDate]    = useState(reservation.start_date)
-  const [endDate, setEndDate]        = useState(reservation.end_date)
+  const initialStart = toDateInputValue(reservation.start_date)
+  const initialEnd   = toDateInputValue(reservation.end_date)
+
+  const [startDate, setStartDate]    = useState(initialStart)
+  const [endDate, setEndDate]        = useState(initialEnd)
   const [agreedPrice, setAgreedPrice] = useState(String(reservation.agreed_price ?? ''))
   const [deposit, setDeposit]        = useState(String(reservation.deposit_amount ?? ''))
   const [notes, setNotes]            = useState(reservation.notes ?? '')
@@ -39,8 +51,8 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
   const handleSave = () => {
     if (!valid) return
     const payload: Parameters<Props['onSave']>[0] = { id: reservation.id }
-    if (startDate !== reservation.start_date) payload.start_date = startDate
-    if (endDate   !== reservation.end_date)   payload.end_date   = endDate
+    if (startDate !== initialStart) payload.start_date = startDate
+    if (endDate   !== initialEnd)   payload.end_date   = endDate
     if (priceNum  !== Number(reservation.agreed_price)) payload.agreed_price = priceNum
     if (deposit && Number(deposit) !== Number(reservation.deposit_amount ?? 0)) payload.deposit_amount = Number(deposit)
     if ((notes || null) !== (reservation.notes ?? null)) payload.notes = notes || null

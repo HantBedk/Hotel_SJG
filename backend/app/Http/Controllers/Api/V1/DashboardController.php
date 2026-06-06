@@ -57,6 +57,36 @@ class DashboardController extends Controller
             ->whereBetween('scheduled_date', [today(), today()->addDays(3)])
             ->count();
 
+        // Ingresos de hoy por habitaciones ocupadas: acumulativo durante el día,
+        // sólo se resetea al cierre. Una stay_room cuenta si:
+        //   - sigue activa (is_active = true)
+        //   - su estadía está activa/extendida, O hizo check-out HOY
+        // No filtramos por check_in_date porque la fuente de verdad de "qué
+        // habitaciones están generando ingreso AHORA" es el estado de la
+        // estadía y el flag is_active del stay_room; gatear por check_in_date
+        // dejaba fuera check-ins cuyo `check_in_date` quedó guardado como
+        // mañana por un shift de timezone en el wizard.
+        // Una habitación que se va hoy sigue sumando hoy (ya generó el ingreso
+        // de la noche). Sólo deja de aparecer a partir de mañana.
+        // Deduplicamos por room_id porque una misma habitación puede tener
+        // múltiples stay_rooms activos por bugs de extensión/transferencia,
+        // y el ingreso de esa habitación no debe contarse dos veces.
+        $today          = today();
+        $todayRoomRevenue = StayRoom::where('is_active', true)
+            ->whereHas('stay', function ($q) use ($today) {
+                $q->where(function ($qq) use ($today) {
+                    $qq->whereIn('status', ['active', 'extended'])
+                       ->orWhere(function ($q2) use ($today) {
+                           $q2->where('status', 'checked_out')
+                              ->whereDate('actual_check_out_datetime', '>=', $today);
+                       });
+                });
+            })
+            ->selectRaw('room_id, MAX(price_per_night) as price')
+            ->groupBy('room_id')
+            ->get()
+            ->sum('price');
+
         return $this->success([
             'rooms_by_status' => $statusCounts,
             'total_rooms'     => $totalRooms,
@@ -66,6 +96,7 @@ class DashboardController extends Controller
             'checkins_today'  => $checkinsToday,
             'active_stays'    => $activeStays,
             'pending_balance' => (float) $pendingBalance,
+            'today_room_revenue' => (float) $todayRoomRevenue,
             'inventory_alerts' => [
                 'low_stock'         => $lowStock,
                 'expiring'          => $expiring,
@@ -101,6 +132,18 @@ class DashboardController extends Controller
               });
         };
 
+        // Una habitación física puede tener varios stay_rooms activos por bugs
+        // de extensión/transferencia. Deduplicamos por room_id — mismo criterio
+        // que se aplica en el cálculo de "today_room_revenue" arriba — para que
+        // el chart no sobreestime ocupación contando dos veces la misma cama.
+        $countOccupiedRooms = function ($date) use ($stayDateScope) {
+            return StayRoom::where('is_active', true)
+                ->whereDate('check_in_date', '<=', $date)
+                ->whereHas('stay', fn ($q) => $stayDateScope($q, $date))
+                ->distinct('room_id')
+                ->count('room_id');
+        };
+
         if ($period === 'monthly') {
             $points = 12;
             $rows   = [];
@@ -112,10 +155,7 @@ class DashboardController extends Controller
 
                 $roomDaysOccupied = 0;
                 for ($day = $monthStart->copy(); $day <= $monthEnd; $day->addDay()) {
-                    $roomDaysOccupied += StayRoom::where('is_active', true)
-                        ->whereDate('check_in_date', '<=', $day)
-                        ->whereHas('stay', fn ($q) => $stayDateScope($q, $day))
-                        ->count();
+                    $roomDaysOccupied += $countOccupiedRooms($day);
                 }
 
                 $capacity = $totalRooms * $daysInMonth;
@@ -136,12 +176,9 @@ class DashboardController extends Controller
                 $date  = Carbon::now()->subDays($i);
                 $label = $date->translatedFormat('D d/M');
 
-                $occupied = StayRoom::where('is_active', true)
-                    ->whereDate('check_in_date', '<=', $date)
-                    ->whereHas('stay', fn ($q) => $stayDateScope($q, $date))
-                    ->count();
+                $occupied = $countOccupiedRooms($date);
+                $rate     = $totalRooms > 0 ? round(($occupied / $totalRooms) * 100, 1) : 0;
 
-                $rate = $totalRooms > 0 ? round(($occupied / $totalRooms) * 100, 1) : 0;
                 $rows[] = [
                     'label'    => $label,
                     'occupied' => $occupied,

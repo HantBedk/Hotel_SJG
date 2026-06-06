@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ClipboardList, CreditCard } from 'lucide-react'
 import AuditoriaTab     from './tabs/AuditoriaTab'
 import PagosHistoricoTab from './tabs/PagosHistoricoTab'
@@ -9,9 +10,28 @@ const TABS = [
 ] as const
 
 type Tab = typeof TABS[number]['key']
+const VALID_TABS = new Set<string>(TABS.map((t) => t.key))
 
 export default function ActivityPage() {
-  const [active, setActive] = useState<Tab>('auditoria')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initial = searchParams.get('tab') ?? ''
+  const [active, setActive] = useState<Tab>(
+    VALID_TABS.has(initial) ? (initial as Tab) : 'auditoria',
+  )
+
+  useEffect(() => {
+    const next = searchParams.get('tab') ?? ''
+    if (VALID_TABS.has(next) && next !== active) setActive(next as Tab)
+  }, [searchParams, active])
+
+  const changeTab = (key: Tab) => {
+    setActive(key)
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev)
+      sp.set('tab', key)
+      return sp
+    }, { replace: true })
+  }
 
   return (
     <div className="space-y-4">
@@ -23,7 +43,7 @@ export default function ActivityPage() {
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
-            onClick={() => setActive(key)}
+            onClick={() => changeTab(key)}
             className="flex items-center gap-1.5 px-4 py-2 rounded-md text-sm transition-colors"
             style={{
               background: active === key ? 'var(--bg-surface)' : 'transparent',

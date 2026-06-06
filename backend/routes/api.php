@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\CompanyController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\ExtraServiceController;
 use App\Http\Controllers\Api\V1\GuestController;
+use App\Http\Controllers\Api\V1\IncomeController;
 use App\Http\Controllers\Api\V1\InventoryController;
 use App\Http\Controllers\Api\V1\MinibarController;
 use App\Http\Controllers\Api\V1\NotificationController;
@@ -264,6 +265,12 @@ Route::prefix('v1')->group(function () {
             Route::get('/activity-logs',         [ActivityLogController::class, 'index']);
             Route::get('/activity-logs/actions', [ActivityLogController::class, 'actions']);
             Route::get('/reports/payments',      [ActivityLogController::class, 'payments']);
+        });
+
+        // ── Ingresos ──────────────────────────────────────────────────────────
+        Route::middleware('permission:view_reports')->group(function () {
+            Route::get('/income/summary', [IncomeController::class, 'summary']);
+            Route::get('/income/daily',   [IncomeController::class, 'daily']);
         });
 
         // ── Sugerencias ───────────────────────────────────────────────────────

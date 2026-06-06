@@ -16,6 +16,7 @@ import { CheckoutWizard } from '@/pages/stays/components/CheckoutWizard'
 import CheckInFromReservationModal from '@/pages/reservations/components/CheckInFromReservationModal'
 import { DashboardChart } from './components/DashboardChart'
 import { DashboardRoomModal } from './components/DashboardRoomModal'
+import { formatCOP } from '@/lib/format'
 import type { AppNotification, Reservation, Room, RoomStatus, Stay } from '@/types'
 
 function resolveCta(n: AppNotification): string {
@@ -349,12 +350,13 @@ export default function DashboardPage() {
       colorBg: '#FFFBEB',
     },
     {
-      label:   'Saldo pendiente',
-      value:   'En construcción',
-      sub:     'Próximamente',
-      icon:    Wrench,
-      color:   '#F59E0B',
-      colorBg: '#FFFBEB',
+      label:   'Ingresos de hoy',
+      value:   stats ? formatCOP(stats.today_room_revenue ?? 0) : '—',
+      sub:     'Habitaciones ocupadas esta noche',
+      icon:    DollarSign,
+      color:   '#16A34A',
+      colorBg: '#ECFDF5',
+      onClick: () => navigate('/income?preset=today'),
     },
   ]
 

@@ -12,6 +12,7 @@ import { createGuestApi, updateGuestApi, searchGuestsApi, addCompanionApi } from
 import { createCompanyApi } from '@/services/companies.service'
 import type { Room, Guest, Company, GuestCompanion } from '@/types'
 import { cn } from '@/lib/cn'
+import { addDaysLocal, nowLocalISO, todayLocalISO } from '@/lib/format'
 import { extractApiError } from '@/lib/apiError'
 import toast from 'react-hot-toast'
 
@@ -146,10 +147,12 @@ const inputCls = 'px-3 py-2 rounded-lg text-sm border outline-none'
 const inputStyle = { background: 'var(--bg-input)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }
 
 export default function CheckInWizard({ rooms, onClose }: Props) {
-  const now       = new Date()
-  const tomorrow  = new Date(now.getTime() + 86400000)
-  const localNow  = now.toISOString().slice(0, 16)
-  const localTom  = tomorrow.toISOString().slice(0, 10)
+  // Hora/fecha en TZ local del browser. Antes usábamos toISOString().slice() que
+  // devuelve UTC: en Bogotá (UTC-5) después de las 19:00 el "hoy" se shifteaba a
+  // mañana y el check-in quedaba registrado con check_in_date del día siguiente,
+  // dejando la habitación fuera del KPI "Ingresos de hoy".
+  const localNow = nowLocalISO()
+  const localTom = addDaysLocal(todayLocalISO(), 1)
 
   const [currentStep, setCurrentStep] = useState<StepId>('occupancy')
   const [state, setState] = useState<WizardState>({

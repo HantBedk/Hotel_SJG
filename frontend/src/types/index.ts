@@ -734,6 +734,7 @@ export interface DashboardStats {
   checkins_today: number
   active_stays: number
   pending_balance: number
+  today_room_revenue: number
   inventory_alerts?: {
     low_stock: number
     expiring: number
