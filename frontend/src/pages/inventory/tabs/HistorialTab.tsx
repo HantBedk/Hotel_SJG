@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Search, Filter, ChevronLeft, ChevronRight, ArrowDownCircle, ArrowUpCircle, SlidersHorizontal, ShoppingBag, Wrench, AlertCircle } from 'lucide-react'
+import { Search, Filter, ChevronLeft, ChevronRight, ArrowDownCircle, ArrowUpCircle, SlidersHorizontal, ShoppingBag } from 'lucide-react'
 import { useInventoryHistory } from '@/hooks/useInventory'
 import { SkeletonText } from '@/components/ui/Skeleton'
-import type { InventoryMovementType, HistoryFilters } from '@/types'
+import type { InventoryMovementType } from '@/types'
 import type { HistoryFilters as ServiceHistoryFilters } from '@/services/inventory.service'
 
 /* ── Helpers ──────────────────────────────────────────────────────────────── */

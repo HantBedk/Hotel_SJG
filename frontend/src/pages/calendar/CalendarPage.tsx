@@ -23,7 +23,7 @@ function YearHeatmap({ data, startDate, onMonthClick }: { data: CalendarData; st
     const occupied = new Set<string>()
     for (const e of entries) {
       try {
-        if (isWithinInterval(date, { start: parseISO(e.start_date), end: parseISO(e.end_date) })) {
+        if (e.room_id && isWithinInterval(date, { start: parseISO(e.start_date), end: parseISO(e.end_date) })) {
           occupied.add(e.room_id)
         }
       } catch { /* skip */ }
@@ -181,7 +181,7 @@ export default function CalendarPage() {
     else if (view === 'year') setAnchor(startOfWeek(new Date(), { weekStartsOn: 1 }))
   }
 
-  const handleCellClick = (roomId: string, date: Date) => {
+  const handleCellClick = (_roomId: string, date: Date) => {
     setPrefillDate(format(date, 'yyyy-MM-dd'))
     setShowWizard(true)
   }
@@ -302,7 +302,7 @@ export default function CalendarPage() {
               days={days}
               onEntryClick={setSelectedEntry}
               onCellClick={handleCellClick}
-              onRangeSelect={(roomId, start, end) => {
+              onRangeSelect={(_roomId, start, _end) => {
                 setPrefillDate(format(start, 'yyyy-MM-dd'))
                 setShowWizard(true)
               }}

@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   DollarSign, BedDouble, Sparkles, ShoppingCart, Wallet, ArrowRight,
-  CreditCard, Banknote, ArrowRightLeft, Calendar,
+  CreditCard, Banknote, ArrowRightLeft, Calendar, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { useIncomeDaily, useIncomeSummary } from '@/hooks/useIncome'
 import { formatCOP } from '@/lib/format'
@@ -76,8 +76,30 @@ export default function IncomePage() {
   }
 
   const tonight = summary?.tonight
+  const nights  = summary?.nights ?? []
   const range   = summary?.range
   const maxDaily = Math.max(1, ...(daily?.data.map((d) => d.total) ?? [1]))
+
+  // ── Navegación día a día dentro del rango ──────────────────────────────────
+  // Por defecto seleccionamos hoy si está dentro del rango; si no, el último día.
+  const [selectedNightIdx, setSelectedNightIdx] = useState(0)
+  useEffect(() => {
+    if (nights.length === 0) return
+    const today = todayIso()
+    const todayIdx = nights.findIndex((n) => n.date === today)
+    setSelectedNightIdx(todayIdx >= 0 ? todayIdx : nights.length - 1)
+  }, [summary?.period.from, summary?.period.to, nights.length])
+
+  const safeIdx        = Math.min(Math.max(selectedNightIdx, 0), Math.max(0, nights.length - 1))
+  const selectedNight  = nights[safeIdx]
+  const isToday        = selectedNight?.date === todayIso()
+  const nightLabel     = selectedNight
+    ? (isToday
+        ? 'hoy'
+        : new Date(selectedNight.date + 'T12:00:00').toLocaleDateString('es-CO', {
+            weekday: 'long', day: 'numeric', month: 'short',
+          }))
+    : '—'
 
   return (
     <div className="space-y-5">
@@ -148,7 +170,7 @@ export default function IncomePage() {
         ) : (
           <>
             <KpiCard
-              label="Ingreso devengado esta noche"
+              label="Ingreso diario de habitaciones"
               value={formatCOP(tonight?.room_revenue ?? 0)}
               sub={`${tonight?.rooms_count ?? 0} habitaciones generando ingreso`}
               icon={BedDouble}
@@ -186,7 +208,7 @@ export default function IncomePage() {
       {/* Layout principal */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-        {/* Col A: Habitaciones generando ingreso esta noche */}
+        {/* Col A: Habitaciones generando ingreso (navegable día a día) */}
         <div
           className="lg:col-span-5 rounded-xl p-4 flex flex-col"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
@@ -194,25 +216,60 @@ export default function IncomePage() {
           <div className="flex items-center gap-2 mb-3">
             <BedDouble size={16} style={{ color: '#16A34A' }} />
             <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-              Habitaciones ocupadas esta noche
+              Detallado de ingreso diario de habitaciones
             </h3>
-            {tonight?.rooms_count != null && (
+            {selectedNight?.rooms_count != null && (
               <span
                 className="ml-auto text-[10px] px-2 py-0.5 rounded-full font-semibold"
                 style={{ background: '#ECFDF5', color: '#16A34A' }}
               >
-                {tonight.rooms_count}
+                {selectedNight.rooms_count}
               </span>
             )}
           </div>
 
-          {(!tonight || tonight.rooms.length === 0) ? (
+          {/* Navegación día a día (solo si hay más de 1 noche en el rango) */}
+          {nights.length > 1 && (
+            <div
+              className="flex items-center justify-between gap-2 mb-3 px-2 py-1.5 rounded-lg"
+              style={{ background: 'var(--bg-input)' }}
+            >
+              <button
+                onClick={() => setSelectedNightIdx((i) => Math.max(0, i - 1))}
+                disabled={safeIdx === 0}
+                className="p-1 rounded-md disabled:opacity-30 hover:bg-black/5"
+                style={{ color: 'var(--text-secondary)' }}
+                aria-label="Día anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <div className="flex flex-col items-center text-center">
+                <span className="text-xs font-semibold capitalize" style={{ color: 'var(--text-primary)' }}>
+                  {nightLabel}
+                </span>
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  {safeIdx + 1} de {nights.length}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedNightIdx((i) => Math.min(nights.length - 1, i + 1))}
+                disabled={safeIdx >= nights.length - 1}
+                className="p-1 rounded-md disabled:opacity-30 hover:bg-black/5"
+                style={{ color: 'var(--text-secondary)' }}
+                aria-label="Día siguiente"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+
+          {(!selectedNight || selectedNight.rooms.length === 0) ? (
             <p className="text-xs py-8 text-center" style={{ color: 'var(--text-muted)' }}>
-              No hay habitaciones ocupadas esta noche.
+              No hay habitaciones ocupadas {nightLabel}.
             </p>
           ) : (
             <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
-              {tonight.rooms.map((r) => (
+              {selectedNight.rooms.map((r) => (
                 <button
                   key={r.stay_room_id}
                   onClick={() => navigate(`/stays?id=${r.stay_id}`)}
@@ -248,10 +305,10 @@ export default function IncomePage() {
             style={{ borderTop: '1px solid var(--border-default)' }}
           >
             <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-              Total devengado esta noche
+              Total devengado {nightLabel}
             </span>
             <span className="text-lg font-bold tabular-nums" style={{ color: '#16A34A' }}>
-              {formatCOP(tonight?.room_revenue ?? 0)}
+              {formatCOP(selectedNight?.room_revenue ?? 0)}
             </span>
           </div>
         </div>
@@ -266,7 +323,7 @@ export default function IncomePage() {
           >
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                Pagos por día
+                {daily?.granularity === 'hour' ? 'Pagos por hora' : 'Pagos por día'}
               </h3>
               <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>
                 {PRESET_LABEL[preset]}

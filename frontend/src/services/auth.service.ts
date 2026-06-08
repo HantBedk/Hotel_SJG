@@ -2,6 +2,7 @@ import api from '@/lib/axios'
 import type { ApiResponse, LoginPayload, LoginResponse, AuthUser } from '@/types'
 
 export async function loginApi(payload: LoginPayload): Promise<ApiResponse<LoginResponse>> {
+  await api.get('/sanctum/csrf-cookie', { baseURL: '/' })
   const { data } = await api.post<ApiResponse<LoginResponse>>('/login', payload)
   return data
 }

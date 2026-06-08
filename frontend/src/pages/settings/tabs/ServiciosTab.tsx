@@ -10,7 +10,7 @@ const EMPTY: ServiceForm = { name: '', price: '', description: '', active: true 
 
 export default function ServiciosTab() {
   const { data: services = [], isLoading } = useAdminExtraServices()
-  const { create, update, remove }         = useExtraServiceMutations()
+  const { create, update }                 = useExtraServiceMutations()
 
   const [form, setForm]     = useState<ServiceForm>(EMPTY)
   const [editing, setEditing] = useState<ExtraService | null>(null)

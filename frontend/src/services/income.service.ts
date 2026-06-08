@@ -42,6 +42,13 @@ export interface IncomeByMethod {
   total: number
 }
 
+export interface IncomeNight {
+  date: string
+  rooms_count: number
+  room_revenue: number
+  rooms: IncomeTonightRoom[]
+}
+
 export interface IncomeSummary {
   period: { from: string; to: string; days: number }
   tonight: {
@@ -49,6 +56,7 @@ export interface IncomeSummary {
     rooms_count: number
     rooms: IncomeTonightRoom[]
   }
+  nights: IncomeNight[]
   range: {
     payments_received: number
     payments_count: number
@@ -69,6 +77,7 @@ export interface IncomeDailyPoint {
 
 export interface IncomeDaily {
   period: { from: string; to: string }
+  granularity: 'hour' | 'day'
   data: IncomeDailyPoint[]
 }
 

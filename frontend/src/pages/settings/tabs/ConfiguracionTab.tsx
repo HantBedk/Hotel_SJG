@@ -78,8 +78,8 @@ export default function ConfiguracionTab() {
         ) : (
           <>
             {Object.entries(data ?? {}).map(([key, value]) => {
-              const isBool = value === 'true' || value === 'false' || value === true || value === false
-              const boolOn = value === true || value === 'true'
+              const isBool = value === 'true' || value === 'false'
+              const boolOn = value === 'true'
 
               return (
                 <div key={key}>

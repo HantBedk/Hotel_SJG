@@ -95,9 +95,9 @@ export function useHouseMutations() {
   const qc = useQueryClient()
   const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'houses'] })
 
-  const create = useMutation({ mutationFn: (d: { name: string; price: number }) => createHouseApi(d), onSuccess: inv })
+  const create = useMutation({ mutationFn: (d: { name: string; price: number; active?: boolean }) => createHouseApi(d), onSuccess: inv })
   const update = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<House> }) => updateHouseApi(id, data),
+    mutationFn: ({ id, data }: { id: string; data: { name?: string; price?: number; active?: boolean } }) => updateHouseApi(id, data as Partial<House>),
     onSuccess: inv,
   })
   const remove = useMutation({ mutationFn: deleteHouseApi, onSuccess: inv })
@@ -158,9 +158,9 @@ export function useExtraServiceMutations() {
   const qc = useQueryClient()
   const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'extra-services'] })
 
-  const create = useMutation({ mutationFn: (d: Partial<ExtraService>) => createExtraServiceApi(d), onSuccess: inv })
+  const create = useMutation({ mutationFn: (d: { name?: string; price?: number; description?: string | null; active?: boolean }) => createExtraServiceApi(d as Partial<ExtraService>), onSuccess: inv })
   const update = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<ExtraService> }) => updateExtraServiceApi(id, data),
+    mutationFn: ({ id, data }: { id: string; data: { name?: string; price?: number; description?: string | null; active?: boolean } }) => updateExtraServiceApi(id, data as Partial<ExtraService>),
     onSuccess: inv,
   })
   const remove = useMutation({ mutationFn: deleteExtraServiceApi, onSuccess: inv })

@@ -14,7 +14,7 @@ import { restockRoomMinibarApi, returnFromRoomMinibarApi } from '@/services/inve
 import { useRooms } from '@/hooks/useRooms'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonTable } from '@/components/ui/Skeleton'
-import type { InventoryItem, Minibar, MinibarProduct, Room } from '@/types'
+import type { InventoryItem, Minibar, MinibarProduct, Room, RoomMinibar } from '@/types'
 
 function formatCurrency(v: string | number | null) {
   if (v == null) return '—'

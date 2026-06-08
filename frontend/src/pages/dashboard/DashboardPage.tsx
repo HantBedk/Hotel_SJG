@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Building2, BedDouble, Users, CalendarCheck, DollarSign,
-  Sparkles, Clock, Activity, X, ChevronRight,
+  Sparkles, Activity, X, ChevronRight,
   Home, Wrench, XCircle, Check, Calendar, Bell, AlertTriangle,
 } from 'lucide-react'
 import { useDashboard } from '@/hooks/useDashboard'
@@ -203,15 +203,6 @@ function PendingBalancesWidget({ items, onSelect }: { items: PendingBalanceRow[]
   )
 }
 
-function minutesSince(iso: string): number {
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
-}
-function formatMinutes(mins: number): string {
-  if (mins < 60) return `${mins} min`
-  const h = Math.floor(mins / 60), m = mins % 60
-  return m > 0 ? `${h}h ${m}m` : `${h}h`
-}
-
 const ROOM_COLOR: Record<RoomStatus, string> = {
   available:   '#22C55E',
   occupied:    '#EF4444',
@@ -350,7 +341,7 @@ export default function DashboardPage() {
       colorBg: '#FFFBEB',
     },
     {
-      label:   'Ingresos de hoy',
+      label:   'Diario',
       value:   stats ? formatCOP(stats.today_room_revenue ?? 0) : '—',
       sub:     'Habitaciones ocupadas esta noche',
       icon:    DollarSign,

@@ -11,7 +11,7 @@ interface Props {
     end_date?: string
     agreed_price?: number
     deposit_amount?: number
-    notes?: string | null
+    notes?: string
   }) => void
   onClose: () => void
   saving?: boolean
@@ -55,7 +55,7 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
     if (endDate   !== initialEnd)   payload.end_date   = endDate
     if (priceNum  !== Number(reservation.agreed_price)) payload.agreed_price = priceNum
     if (deposit && Number(deposit) !== Number(reservation.deposit_amount ?? 0)) payload.deposit_amount = Number(deposit)
-    if ((notes || null) !== (reservation.notes ?? null)) payload.notes = notes || null
+    if ((notes || null) !== (reservation.notes ?? null)) payload.notes = notes || undefined
     onSave(payload)
   }
 
