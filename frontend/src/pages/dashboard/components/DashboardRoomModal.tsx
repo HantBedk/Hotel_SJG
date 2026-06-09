@@ -703,6 +703,7 @@ function PaymentInlineForm({ form, balance, hasCompany, onChange, onSubmit, onCa
           <option value="cash">Efectivo</option>
           <option value="transfer">Transferencia</option>
           <option value="card">Tarjeta</option>
+          <option value="credito">Crédito</option>
         </select>
         {hasCompany && (
           <select

@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Tailwind v4: dark variant must match the app's [data-theme="dark"] selector,
+   NOT the OS prefers-color-scheme. Without this, dark: classes fire based on
+   the user's OS setting, causing black hover backgrounds in light mode. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ── Design Tokens ─────────────────────────────────────────────────────────── */
 :root {
   /* Backgrounds */

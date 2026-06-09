@@ -747,7 +747,7 @@ class StayController extends Controller
     {
         $data = $request->validate([
             'amount'                => 'required|numeric|min:0.01',
-            'payment_method'        => 'required|in:cash,transfer,card',
+            'payment_method'        => 'required|in:cash,transfer,card,credito',
             'payment_type'          => 'required|in:deposit,partial,final',
             'paid_by'               => 'required|in:guest,company,mixed',
             'payment_split_details' => 'nullable|array',

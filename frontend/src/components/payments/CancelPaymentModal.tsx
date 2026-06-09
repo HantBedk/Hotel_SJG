@@ -20,6 +20,7 @@ const METHOD_LABELS: Record<string, string> = {
   cash:     'Efectivo',
   transfer: 'Transferencia',
   card:     'Tarjeta',
+  credito:  'Crédito',
 }
 
 export function CancelPaymentModal({ open, onClose, payment, onConfirm, isPending }: CancelPaymentModalProps) {

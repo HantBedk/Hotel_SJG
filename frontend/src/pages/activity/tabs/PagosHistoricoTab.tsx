@@ -13,6 +13,7 @@ const METHOD_LABELS: Record<string, string> = {
   cash:     'Efectivo',
   transfer: 'Transferencia',
   card:     'Tarjeta',
+  credito:  'Crédito',
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -85,6 +86,7 @@ export default function PagosHistoricoTab() {
           <option value="cash">Efectivo</option>
           <option value="transfer">Transferencia</option>
           <option value="card">Tarjeta</option>
+          <option value="credito">Crédito</option>
         </select>
         <select
           value={filters.status ?? ''}

@@ -644,6 +644,7 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
                       <option value="cash">Efectivo</option>
                       <option value="transfer">Transferencia</option>
                       <option value="card">Tarjeta</option>
+                      <option value="credito">Crédito</option>
                     </select>
                     {stay.company && (
                       <select value={payBy} onChange={(e) => setPayBy(e.target.value)}

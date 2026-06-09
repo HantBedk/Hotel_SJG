@@ -162,7 +162,7 @@ export interface Company {
 // ── Stays ─────────────────────────────────────────────────────────────────────
 
 export type StayStatus = 'active' | 'extended' | 'checked_out'
-export type PaymentMethod = 'cash' | 'transfer' | 'card'
+export type PaymentMethod = 'cash' | 'transfer' | 'card' | 'credito'
 export type PaymentType = 'deposit' | 'partial' | 'final'
 export type PaidBy = 'guest' | 'company' | 'mixed'
 

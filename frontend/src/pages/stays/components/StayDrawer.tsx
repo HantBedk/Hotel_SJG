@@ -9,6 +9,7 @@ import { useHotelTimes } from '@/hooks/useHotelTimes'
 import { downloadStayReceiptApi, downloadCheckInReceiptApi } from '@/services/stays.service'
 import { CancelPaymentModal } from '@/components/payments/CancelPaymentModal'
 import { CancelMinibarConsumptionModal } from '@/components/minibar/CancelMinibarConsumptionModal'
+import { MinibarProductPicker } from '@/components/minibar/MinibarProductPicker'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -36,7 +37,7 @@ const DOC_LABELS: Record<string, string> = {
 }
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: 'Efectivo', transfer: 'Transferencia', card: 'Tarjeta',
+  cash: 'Efectivo', transfer: 'Transferencia', card: 'Tarjeta', credito: 'Crédito',
 }
 
 function formatDate(iso: string) {
@@ -900,6 +901,7 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                         <option value="cash">Efectivo</option>
                         <option value="transfer">Transferencia</option>
                         <option value="card">Tarjeta</option>
+                        <option value="credito">Crédito</option>
                       </>}
                       {field === 'paid_by' && <>
                         <option value="guest">Huésped</option>

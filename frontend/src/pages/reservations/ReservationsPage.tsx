@@ -398,6 +398,7 @@ function ReservationDetailPanel({
                   <option value="cash">Efectivo</option>
                   <option value="transfer">Transferencia</option>
                   <option value="card">Tarjeta</option>
+                  <option value="credito">Crédito</option>
                 </select>
                 <select value={payForm.payment_type}
                   onChange={e => setPayForm(s => ({ ...s, payment_type: e.target.value }))}

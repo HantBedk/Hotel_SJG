@@ -23,12 +23,14 @@ const METHOD_LABEL: Record<string, string> = {
   cash:     'Efectivo',
   transfer: 'Transferencia',
   card:     'Tarjeta',
+  credito:  'Crédito',
 }
 
 const METHOD_ICON: Record<string, React.ElementType> = {
   cash:     Banknote,
   transfer: ArrowRightLeft,
   card:     CreditCard,
+  credito:  Wallet,
 }
 
 function todayIso(): string {

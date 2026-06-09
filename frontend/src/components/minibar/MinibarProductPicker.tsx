@@ -35,11 +35,23 @@ export function MinibarProductPicker({
 }: Props) {
   const { data: roomMinibars = [] } = useRoomMinibars(roomId || null)
 
+  // Stock disponible = lo que hay en el minibar de la habitación
+  // + lo que hay en el catálogo (stock_quantity o inventory_item.current_stock).
+  // El backend (deductMinibarStock) descuenta primero del minibar de la
+  // habitación y el resto sale del catálogo, así que ambos son fuentes válidas.
   const stockByProductId = useMemo(() => {
     const map = new Map<string, number>()
     for (const rm of roomMinibars) map.set(rm.minibar_product_id, rm.quantity)
     return map
   }, [roomMinibars])
+
+  const totalStock = (p: MinibarProduct): number => {
+    const roomQty = stockByProductId.get(p.id) ?? 0
+    const catalogQty = p.inventory_item
+      ? p.inventory_item.current_stock
+      : p.stock_quantity
+    return roomQty + catalogQty
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -52,7 +64,7 @@ export function MinibarProductPicker({
         )
     // Productos CON stock primero (ordenados por stock desc), después los agotados.
     return matched
-      .map(p => ({ product: p, stock: stockByProductId.get(p.id) ?? 0 }))
+      .map(p => ({ product: p, stock: totalStock(p) }))
       .sort((a, b) => (b.stock > 0 ? 1 : 0) - (a.stock > 0 ? 1 : 0) || b.stock - a.stock)
       .slice(0, 50)
   }, [query, products, stockByProductId])
