@@ -90,3 +90,11 @@ export async function getIncomeDailyApi(params: IncomeRangeParams = {}): Promise
   const { data } = await api.get<ApiResponse<IncomeDaily>>('/income/daily', { params })
   return data.data
 }
+
+export async function fetchIncomeReportHtml(params: IncomeRangeParams = {}): Promise<string> {
+  // El backend devuelve un HTML imprimible (no un PDF binario). El consumidor
+  // lo renderiza en un iframe dentro de un modal para mantener la navegación
+  // del usuario en la misma página.
+  const response = await api.get<string>('/income/report', { params, responseType: 'text' })
+  return response.data
+}

@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Hotel;
 use App\Models\MinibarConsumption;
 use App\Models\Payment;
+use App\Models\Setting;
 use App\Models\StayRoom;
 use App\Models\StayService;
 use App\Traits\ApiResponse;
@@ -196,22 +198,23 @@ class IncomeController extends Controller
     {
         [$from, $to] = $this->resolveRange($request);
 
+        // Traemos los pagos del rango y agrupamos en PHP. Evita HOUR()/DATE() de
+        // MySQL, que no existen idénticas en PostgreSQL.
+        $payments = Payment::active()
+            ->whereBetween('payment_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
+            ->get(['payment_date', 'amount']);
+
         // Rango de un solo día → agrupamos por hora para que el gráfico sea útil.
         if ($from->isSameDay($to)) {
-            $rows = Payment::active()
-                ->selectRaw('HOUR(payment_date) as hour, SUM(amount) as total')
-                ->whereBetween('payment_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
-                ->groupBy('hour')
-                ->orderBy('hour')
-                ->get()
-                ->keyBy('hour');
+            $byHour = $payments->groupBy(fn($p) => (int) $p->payment_date->hour)
+                ->map(fn($group) => (float) $group->sum('amount'));
 
             $data = [];
             for ($h = 0; $h < 24; $h++) {
                 $data[] = [
                     'date'  => sprintf('%s %02d:00', $from->toDateString(), $h),
                     'label' => sprintf('%02dh', $h),
-                    'total' => (float) ($rows[$h]->total ?? 0),
+                    'total' => (float) ($byHour[$h] ?? 0),
                 ];
             }
 
@@ -222,13 +225,8 @@ class IncomeController extends Controller
             ]);
         }
 
-        $rows = Payment::active()
-            ->selectRaw('DATE(payment_date) as date, SUM(amount) as total')
-            ->whereBetween('payment_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get()
-            ->keyBy('date');
+        $byDate = $payments->groupBy(fn($p) => $p->payment_date->toDateString())
+            ->map(fn($group) => (float) $group->sum('amount'));
 
         $data = [];
         for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
@@ -236,7 +234,7 @@ class IncomeController extends Controller
             $data[] = [
                 'date'  => $key,
                 'label' => $d->translatedFormat('D d/M'),
-                'total' => (float) ($rows[$key]->total ?? 0),
+                'total' => (float) ($byDate[$key] ?? 0),
             ];
         }
 
@@ -245,6 +243,80 @@ class IncomeController extends Controller
             'granularity' => 'day',
             'data'        => $data,
         ]);
+    }
+
+    /**
+     * Devuelve un HTML imprimible con el detalle de pagos del rango (activos +
+     * anulados), agrupados por método. Pensado como reporte de cierre / cuadre.
+     * El navegador lo abre en pestaña nueva y dispara Ctrl+P automáticamente,
+     * para que el usuario lo guarde como PDF desde el diálogo de impresión.
+     * Se prefiere HTML sobre una librería PDF para no requerir dependencias
+     * externas (DomPDF) que pueden no estar instaladas en el contenedor.
+     */
+    public function report(Request $request): \Illuminate\Http\Response
+    {
+        [$from, $to] = $this->resolveRange($request);
+
+        $start = $from->copy()->startOfDay();
+        $end   = $to->copy()->endOfDay();
+
+        $activePayments = Payment::active()
+            ->with(['stay.guest:id,full_name', 'stay.company:id,name', 'receptionist:id,name'])
+            ->whereBetween('payment_date', [$start, $end])
+            ->orderBy('payment_date')
+            ->get();
+
+        $cancelledPayments = Payment::cancelled()
+            ->with([
+                'stay.guest:id,full_name',
+                'stay.company:id,name',
+                'receptionist:id,name',
+                'cancelledBy:id,name',
+            ])
+            ->whereBetween('cancelled_at', [$start, $end])
+            ->orderBy('cancelled_at')
+            ->get();
+
+        $byMethod = $activePayments->groupBy('payment_method')->map(function ($group, $method) {
+            return [
+                'method' => $method,
+                'count'  => $group->count(),
+                'total'  => (float) $group->sum('amount'),
+                'items'  => $group,
+            ];
+        })->values();
+
+        $totalActive    = (float) $activePayments->sum('amount');
+        $totalCancelled = (float) $cancelledPayments->sum('amount');
+
+        $hotel      = Hotel::first();
+        $hotelName  = $hotel?->name    ?? Setting::get('hotel_name', 'Hotel');
+        $hotelPhone = $hotel?->phone   ?? Setting::get('hotel_phone', '');
+        $hotelAddr  = $hotel?->address ?? Setting::get('hotel_address', '');
+
+        $rangeLabel = $from->isSameDay($to)
+            ? $from->translatedFormat('l, d \d\e F \d\e Y')
+            : $from->translatedFormat('d/m/Y') . ' — ' . $to->translatedFormat('d/m/Y');
+
+        $generatedBy = $request->user()?->name ?? '—';
+
+        $html = view('pdf.income-report', [
+            'hotelName'         => $hotelName,
+            'hotelPhone'        => $hotelPhone,
+            'hotelAddr'         => $hotelAddr,
+            'rangeLabel'        => $rangeLabel,
+            'from'              => $from,
+            'to'                => $to,
+            'generatedBy'       => $generatedBy,
+            'byMethod'          => $byMethod,
+            'cancelledPayments' => $cancelledPayments,
+            'totalActive'       => $totalActive,
+            'totalCancelled'    => $totalCancelled,
+            'activeCount'       => $activePayments->count(),
+            'cancelledCount'    => $cancelledPayments->count(),
+        ])->render();
+
+        return response($html, 200, ['Content-Type' => 'text/html; charset=utf-8']);
     }
 
     /**

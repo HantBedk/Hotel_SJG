@@ -43,6 +43,17 @@ return Application::configure(basePath: dirname(__DIR__))
         // still work for non-stateful requests (cron, external clients).
         $middleware->statefulApi();
 
+        // Evita "Route [login] not defined" cuando un guest pega a una ruta
+        // protegida. Por defecto Laravel intenta route('login'), que no existe
+        // aquí (somos SPA + API). Devolviendo null para API/JSON dejamos que
+        // se lance AuthenticationException y el handler de abajo responda 401.
+        $middleware->redirectGuestsTo(function (Request $request) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                return null;
+            }
+            return '/login';
+        });
+
         $middleware->alias([
             'auth.sanctum'       => \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'role'               => \Spatie\Permission\Middleware\RoleMiddleware::class,

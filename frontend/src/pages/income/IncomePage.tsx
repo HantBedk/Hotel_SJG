@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import {
   DollarSign, BedDouble, Sparkles, ShoppingCart, Wallet, ArrowRight,
   CreditCard, Banknote, ArrowRightLeft, Calendar, ChevronLeft, ChevronRight,
+  FileText, X, Printer,
 } from 'lucide-react'
 import { useIncomeDaily, useIncomeSummary } from '@/hooks/useIncome'
 import { formatCOP } from '@/lib/format'
 import { SkeletonCard } from '@/components/ui/Skeleton'
-import type { IncomeRangeParams } from '@/services/income.service'
+import { fetchIncomeReportHtml, type IncomeRangeParams } from '@/services/income.service'
 
 type Preset = 'today' | 'week' | 'month' | 'last_30' | 'custom'
 
@@ -55,6 +57,41 @@ export default function IncomePage() {
 
   const { summary, isLoading, isFetching } = useIncomeSummary(queryParams)
   const { daily }                          = useIncomeDaily(queryParams)
+
+  const [openingPdf, setOpeningPdf] = useState(false)
+  const [reportHtml, setReportHtml] = useState<string | null>(null)
+  const reportIframeRef = useRef<HTMLIFrameElement | null>(null)
+
+  const handleOpenPdf = async () => {
+    if (openingPdf) return
+    setOpeningPdf(true)
+    try {
+      const html = await fetchIncomeReportHtml(queryParams)
+      setReportHtml(html)
+    } catch (e) {
+      const err = e as { response?: { data?: { message?: string } } }
+      toast.error(err?.response?.data?.message ?? 'No se pudo generar el reporte.')
+    } finally {
+      setOpeningPdf(false)
+    }
+  }
+
+  const handlePrintReport = () => {
+    const win = reportIframeRef.current?.contentWindow
+    if (!win) return
+    win.focus()
+    win.print()
+  }
+
+  // Cerrar el modal con Escape.
+  useEffect(() => {
+    if (!reportHtml) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setReportHtml(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [reportHtml])
 
   const changePreset = (next: Preset) => {
     setPreset(next)
@@ -159,10 +196,21 @@ export default function IncomePage() {
         )}
 
         {isFetching && (
-          <span className="text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
             Actualizando…
           </span>
         )}
+
+        <button
+          onClick={handleOpenPdf}
+          disabled={openingPdf || isLoading}
+          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: 'var(--color-primary)', color: '#fff' }}
+          title={`Ver reporte PDF · ${PRESET_LABEL[preset]}`}
+        >
+          <FileText size={13} />
+          {openingPdf ? 'Generando…' : 'Ver PDF'}
+        </button>
       </div>
 
       {/* KPIs principales */}
@@ -482,6 +530,58 @@ export default function IncomePage() {
           </div>
         )}
       </div>
+
+      {/* Modal: vista previa del reporte de ingresos */}
+      {reportHtml && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,.55)' }}
+          onClick={() => setReportHtml(null)}
+        >
+          <div
+            className="w-full max-w-5xl rounded-xl shadow-2xl flex flex-col"
+            style={{ background: 'var(--bg-surface)', maxHeight: '92vh' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="flex items-center justify-between px-5 py-3 border-b"
+              style={{ borderColor: 'var(--border-default)' }}
+            >
+              <h2 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+                Reporte de ingresos · {PRESET_LABEL[preset]}
+              </h2>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrintReport}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                  style={{ background: 'var(--color-primary)' }}
+                  title="Imprimir o guardar como PDF"
+                >
+                  <Printer size={13} />
+                  Imprimir / Guardar PDF
+                </button>
+                <button
+                  onClick={() => setReportHtml(null)}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  style={{ color: 'var(--text-secondary)' }}
+                  title="Cerrar (Esc)"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden" style={{ background: '#f3f4f6' }}>
+              <iframe
+                ref={reportIframeRef}
+                title="Reporte de ingresos"
+                srcDoc={reportHtml}
+                className="w-full h-full border-0"
+                style={{ minHeight: '60vh' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

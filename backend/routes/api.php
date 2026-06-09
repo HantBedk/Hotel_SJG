@@ -277,6 +277,7 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:view_reports')->group(function () {
             Route::get('/income/summary', [IncomeController::class, 'summary']);
             Route::get('/income/daily',   [IncomeController::class, 'daily']);
+            Route::get('/income/report',  [IncomeController::class, 'report']);
         });
 
         // ── Sugerencias ───────────────────────────────────────────────────────
