@@ -93,6 +93,23 @@ export const addPaymentApi = async (
   return res.data.data
 }
 
+export const cancelStayPaymentApi = async (
+  stayId: string,
+  paymentId: string,
+  reason: string,
+): Promise<{ id: string; cancelled_at: string }> => {
+  const res = await api.patch(`/stays/${stayId}/payments/${paymentId}/cancel`, { reason })
+  return res.data.data
+}
+
+export const cancelMinibarConsumptionApi = async (
+  stayId: string,
+  consumptionId: string,
+  reason: string,
+): Promise<void> => {
+  await api.delete(`/stays/${stayId}/minibar/${consumptionId}`, { data: { reason } })
+}
+
 export const addServiceApi = async (
   stayId: string,
   payload: { extra_service_id: string; quantity: number }

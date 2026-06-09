@@ -36,8 +36,10 @@ class IncomeController extends Controller
         // por cada día D del rango. Una stay_room cuenta para la noche D si:
         //   - is_active = true (no fue desplazada por una transferencia)
         //   - check_in_date <= D < check_out_date (planeada para esa noche)
-        //   - la stay sigue activa/extendida, O hizo check-out después de D
-        //     (i.e. actual_check_out_datetime > D → la noche D la durmió).
+        //   - la stay sigue activa/extendida, O hizo check-out el día D o
+        //     después (actual_check_out_datetime >= D). Usamos ">=" (no ">")
+        //     para que un check-in y check-out el mismo día siga contando la
+        //     noche pagada.
         $rangeStayRooms = StayRoom::with([
                 'room:id,number',
                 'stay:id,guest_id,company_id,status,actual_check_out_datetime',
@@ -76,7 +78,7 @@ class IncomeController extends Controller
                 if (in_array($status, ['active', 'extended'], true)) return true;
                 if ($status === 'checked_out') {
                     $actual = $sr->stay?->actual_check_out_datetime;
-                    return $actual && $actual->format('Y-m-d') > $dateStr;
+                    return $actual && $actual->format('Y-m-d') >= $dateStr;
                 }
                 return false;
             });
@@ -106,7 +108,8 @@ class IncomeController extends Controller
         ];
 
         // ── Periodo: pagos recibidos ────────────────────────────────────────
-        $payments = Payment::whereBetween('payment_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()]);
+        $payments = Payment::active()
+            ->whereBetween('payment_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()]);
         $paymentsReceived = (float) (clone $payments)->sum('amount');
         $paymentsCount    = (clone $payments)->count();
 
@@ -144,7 +147,8 @@ class IncomeController extends Controller
             ->value('total');
 
         // Recent payments del periodo (mostrar los 20 más recientes)
-        $recentPayments = Payment::with(['stay.guest:id,full_name', 'stay.company:id,name', 'receptionist:id,name'])
+        $recentPayments = Payment::active()
+            ->with(['stay.guest:id,full_name', 'stay.company:id,name', 'receptionist:id,name'])
             ->whereBetween('payment_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
             ->orderByDesc('payment_date')
             ->limit(20)
@@ -194,7 +198,8 @@ class IncomeController extends Controller
 
         // Rango de un solo día → agrupamos por hora para que el gráfico sea útil.
         if ($from->isSameDay($to)) {
-            $rows = Payment::selectRaw('HOUR(payment_date) as hour, SUM(amount) as total')
+            $rows = Payment::active()
+                ->selectRaw('HOUR(payment_date) as hour, SUM(amount) as total')
                 ->whereBetween('payment_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
                 ->groupBy('hour')
                 ->orderBy('hour')
@@ -217,7 +222,8 @@ class IncomeController extends Controller
             ]);
         }
 
-        $rows = Payment::selectRaw('DATE(payment_date) as date, SUM(amount) as total')
+        $rows = Payment::active()
+            ->selectRaw('DATE(payment_date) as date, SUM(amount) as total')
             ->whereBetween('payment_date', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
             ->groupBy('date')
             ->orderBy('date')

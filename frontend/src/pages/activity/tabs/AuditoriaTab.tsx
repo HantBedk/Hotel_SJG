@@ -7,11 +7,13 @@ import type { ActivityLogEntry } from '@/types'
 import { SkeletonText } from '@/components/ui/Skeleton'
 
 const ACTION_COLORS: Record<string, { bg: string; color: string }> = {
-  'stay.checkin':          { bg: '#D1FAE5', color: '#065F46' },
-  'stay.checkout':         { bg: '#FEE2E2', color: '#991B1B' },
-  'stay.payment':          { bg: '#DBEAFE', color: '#1E40AF' },
-  'stay.service':          { bg: '#EDE9FE', color: '#5B21B6' },
-  'stay.transfer':         { bg: '#FEF3C7', color: '#92400E' },
+  'stay.checkin':            { bg: '#D1FAE5', color: '#065F46' },
+  'stay.checkout':           { bg: '#FEE2E2', color: '#991B1B' },
+  'stay.payment':            { bg: '#DBEAFE', color: '#1E40AF' },
+  'stay.payment_cancelled':  { bg: '#FEE2E2', color: '#991B1B' },
+  'stay.service':            { bg: '#EDE9FE', color: '#5B21B6' },
+  'stay.transfer':           { bg: '#FEF3C7', color: '#92400E' },
+  'stay.minibar_cancelled':  { bg: '#FEE2E2', color: '#991B1B' },
   'reservation.created':   { bg: '#D1FAE5', color: '#065F46' },
   'reservation.cancelled': { bg: '#FEE2E2', color: '#991B1B' },
   'login':                 { bg: '#E0F2FE', color: '#0369A1' },

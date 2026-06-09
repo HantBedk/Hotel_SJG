@@ -20,11 +20,14 @@ class ActivityLogController extends Controller
         'stay.checkin'           => 'Check-in',
         'stay.checkout'          => 'Check-out',
         'stay.payment'           => 'Pago registrado',
+        'stay.payment_cancelled' => 'Pago anulado',
         'stay.service'           => 'Servicio agregado',
         'stay.transfer'          => 'Transferencia de habitación',
         'stay.extended'          => 'Estadía extendida',
+        'stay.minibar_cancelled' => 'Consumo de minibar anulado',
         'reservation.created'    => 'Reserva creada',
         'reservation.cancelled'  => 'Reserva cancelada',
+        'reservation.payment_cancelled' => 'Pago de reserva anulado',
         'reservation.updated'    => 'Reserva actualizada',
         'reservation.group_created' => 'Reserva grupal creada',
         'reservation.checkin'    => 'Check-in desde reserva',
@@ -87,8 +90,16 @@ class ActivityLogController extends Controller
 
     public function payments(Request $request): JsonResponse
     {
-        $query = Payment::with(['stay.guest', 'receptionist'])
+        $query = Payment::with(['stay.guest', 'receptionist', 'cancelledBy:id,name'])
             ->orderByDesc('payment_date');
+
+        // Por defecto el historial muestra TODOS los pagos (anulados con badge).
+        // Filtro opcional: ?status=active|cancelled para acotar.
+        if (($status = $request->query('status')) === 'active') {
+            $query->whereNull('cancelled_at');
+        } elseif ($status === 'cancelled') {
+            $query->whereNotNull('cancelled_at');
+        }
 
         if ($from = $request->query('date_from')) {
             $query->whereDate('payment_date', '>=', $from);
@@ -113,16 +124,19 @@ class ActivityLogController extends Controller
         }
 
         $payments = $query->paginate($this->perPage($request, 50))->through(fn($p) => [
-            'id'             => $p->id,
-            'stay_id'        => $p->stay_id,
-            'guest_name'     => $p->stay?->guest?->full_name ?? '—',
-            'amount'         => $p->amount,
-            'payment_method' => $p->payment_method,
-            'payment_type'   => $p->payment_type,
-            'paid_by'        => $p->paid_by,
-            'receptionist'   => $p->receptionist?->name ?? '—',
-            'payment_date'   => $p->payment_date,
-            'notes'          => $p->notes,
+            'id'                  => $p->id,
+            'stay_id'             => $p->stay_id,
+            'guest_name'          => $p->stay?->guest?->full_name ?? '—',
+            'amount'              => $p->amount,
+            'payment_method'      => $p->payment_method,
+            'payment_type'        => $p->payment_type,
+            'paid_by'             => $p->paid_by,
+            'receptionist'        => $p->receptionist?->name ?? '—',
+            'payment_date'        => $p->payment_date,
+            'notes'               => $p->notes,
+            'cancelled_at'        => $p->cancelled_at,
+            'cancelled_by'        => $p->cancelledBy?->name,
+            'cancellation_reason' => $p->cancellation_reason,
         ]);
 
         return response()->json(['success' => true, 'data' => $payments]);

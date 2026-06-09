@@ -31,6 +31,7 @@ export interface PaymentFilters {
   method?: string
   receptionist_id?: string
   guest?: string
+  status?: 'active' | 'cancelled'
   page?: number
   per_page?: number
 }

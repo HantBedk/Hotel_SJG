@@ -464,11 +464,13 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
                         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
                       />
                       <input
-                        type="number" min={0} placeholder="Precio unit."
+                        type="number" placeholder="Precio unit."
                         value={item.unit_price || ''}
-                        onChange={(e) => updateManualRow(i, 'unit_price', parseFloat(e.target.value) || 0)}
-                        className="w-24 px-2 py-1.5 rounded-lg text-xs border outline-none"
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                        readOnly
+                        tabIndex={-1}
+                        title="El precio se toma del producto del catálogo y no puede modificarse aquí."
+                        className="w-24 px-2 py-1.5 rounded-lg text-xs border outline-none cursor-not-allowed"
+                        style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
                       />
                       <button onClick={() => removeManualRow(i)} className="p-1.5 rounded-lg hover:opacity-70"
                         style={{ color: 'var(--status-occupied)' }}>
@@ -745,24 +747,14 @@ export function CheckoutWizard({ stay, onClose, onSuccess }: Props) {
             <div className="flex-1" />
 
             {step === 'minibar' && (
-              <>
-                <button
-                  onClick={() => { setStep('cuenta'); refetchAccount() }}
-                  disabled={isBusy}
-                  className="px-4 py-2 rounded-xl text-sm border disabled:opacity-40 hover:opacity-80"
-                  style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-                >
-                  Omitir
-                </button>
-                <button
-                  onClick={handleMinibarNext}
-                  disabled={isBusy || (minibarItems.length === 0 && !minibarSubmitted)}
-                  className="px-5 py-2 rounded-xl text-sm font-medium disabled:opacity-40 hover:opacity-80"
-                  style={{ background: 'var(--color-primary)', color: '#fff' }}
-                >
-                  {minibarMutation.isPending ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Registrar y continuar'}
-                </button>
-              </>
+              <button
+                onClick={handleMinibarNext}
+                disabled={isBusy}
+                className="px-5 py-2 rounded-xl text-sm font-medium disabled:opacity-40 hover:opacity-80"
+                style={{ background: 'var(--color-primary)', color: '#fff' }}
+              >
+                {minibarMutation.isPending ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Continuar'}
+              </button>
             )}
 
             {step === 'cuenta' && (

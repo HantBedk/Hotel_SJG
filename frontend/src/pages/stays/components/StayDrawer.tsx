@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { X, User, Building2, BedDouble, CreditCard, LogOut, Plus, Loader2, ArrowLeftRight, Sparkles, Download, ExternalLink, CalendarClock, ShoppingCart } from 'lucide-react'
-import type { Stay, MinibarItem, MinibarConsumptionType } from '@/types'
-import { useStay, useExtraServices } from '@/hooks/useStays'
+import { X, User, Building2, BedDouble, CreditCard, LogOut, Plus, Loader2, ArrowLeftRight, Sparkles, Download, ExternalLink, CalendarClock, ShoppingCart, Trash2 } from 'lucide-react'
+import type { Stay, MinibarItem, MinibarConsumption, MinibarConsumptionType, Payment } from '@/types'
+import { useStay, useExtraServices, useStays } from '@/hooks/useStays'
+import { useAuth } from '@/hooks/useAuth'
 import { useRooms } from '@/hooks/useRooms'
 import { useMinibarProducts } from '@/hooks/useInventory'
 import { useHotelTimes } from '@/hooks/useHotelTimes'
 import { downloadStayReceiptApi, downloadCheckInReceiptApi } from '@/services/stays.service'
+import { CancelPaymentModal } from '@/components/payments/CancelPaymentModal'
+import { CancelMinibarConsumptionModal } from '@/components/minibar/CancelMinibarConsumptionModal'
 import toast from 'react-hot-toast'
 
 interface Props {
@@ -115,14 +118,60 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
   const [serviceForm, setServiceForm] = useState({ extra_service_id: '', quantity: '1' })
 
   const [showMinibarForm, setShowMinibarForm] = useState(false)
-  const [minibarForm, setMinibarForm] = useState({
+
+  interface MinibarRow {
+    id: string
+    minibar_product_id: string
+    query: string
+    showList: boolean
+    room_id: string
+    type: MinibarConsumptionType
+    quantity: string
+    unit_price: string
+  }
+  const blankMinibarRow = (): MinibarRow => ({
+    id:                 globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
     minibar_product_id: '',
+    query:              '',
+    showList:           false,
     room_id:            activeRooms[0]?.room_id ?? '',
-    type:               'consumed' as MinibarConsumptionType,
+    type:               'consumed',
     quantity:           '1',
     unit_price:         '',
   })
+  const [minibarRows, setMinibarRows] = useState<MinibarRow[]>([blankMinibarRow()])
   const [isSavingMinibar, setIsSavingMinibar] = useState(false)
+
+  const updateMinibarRow = (id: string, patch: Partial<MinibarRow>) =>
+    setMinibarRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  const removeMinibarRow = (id: string) =>
+    setMinibarRows((prev) => (prev.length === 1 ? prev : prev.filter((r) => r.id !== id)))
+  const addMinibarRow = () =>
+    setMinibarRows((prev) => [...prev, blankMinibarRow()])
+  const resetMinibarRows = () => setMinibarRows([blankMinibarRow()])
+
+  const filteredMinibarProductsFor = (query: string) => {
+    const q = query.trim().toLowerCase()
+    const active = minibarProducts.filter(p => p.active)
+    if (!q) return active.slice(0, 50)
+    return active
+      .filter(p => p.name.toLowerCase().includes(q) || (p.code ?? '').toLowerCase().includes(q))
+      .slice(0, 50)
+  }
+
+  const priceForProductType = (productId: string, type: MinibarConsumptionType): string => {
+    const product = minibarProducts.find(p => p.id === productId)
+    if (!product) return ''
+    const v = type === 'damaged' ? (product.damage_price ?? product.sale_price) : product.sale_price
+    return String(v ?? '')
+  }
+
+  const [cancelTarget, setCancelTarget] = useState<Payment | null>(null)
+  const [cancelMinibarTarget, setCancelMinibarTarget] = useState<MinibarConsumption | null>(null)
+  const { cancelPayment, isCancellingPayment, cancelMinibar, isCancellingMinibar } = useStays()
+  const { hasPermission } = useAuth()
+  const canCancelPayments = hasPermission('check_in') || hasPermission('check_out') || hasPermission('manage_reservations')
+  const canCancelMinibar  = stay.status !== 'checked_out' && canCancelPayments
 
   const [payForm, setPayForm] = useState<PaymentForm>({
     amount: '',
@@ -151,55 +200,36 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
     setServiceForm({ extra_service_id: '', quantity: '1' })
   }
 
+  const buildMinibarItems = (): MinibarItem[] => {
+    const items: MinibarItem[] = []
+    for (const row of minibarRows) {
+      const product = minibarProducts.find(p => p.id === row.minibar_product_id)
+      const qty     = parseInt(row.quantity, 10)
+      const unit    = parseFloat(row.unit_price)
+      if (!product || !row.room_id || !qty || qty < 1 || !(unit >= 0)) continue
+      items.push({
+        product_name: product.name,
+        room_id:      row.room_id,
+        type:         row.type,
+        quantity:     qty,
+        unit_price:   unit,
+      })
+    }
+    return items
+  }
+  const validMinibarItems = buildMinibarItems()
+
   const handleAddMinibar = async () => {
-    const product = minibarProducts.find(p => p.id === minibarForm.minibar_product_id)
-    const qty     = parseInt(minibarForm.quantity, 10)
-    const unit    = parseFloat(minibarForm.unit_price)
-    if (!product || !minibarForm.room_id || !qty || qty < 1 || !(unit >= 0)) return
+    const items = validMinibarItems
+    if (items.length === 0) return
     setIsSavingMinibar(true)
     try {
-      await onAddMinibar({
-        stayId,
-        items: [{
-          product_name: product.name,
-          room_id:      minibarForm.room_id,
-          type:         minibarForm.type,
-          quantity:     qty,
-          unit_price:   unit,
-        }],
-      })
+      await onAddMinibar({ stayId, items })
       setShowMinibarForm(false)
-      setMinibarForm({
-        minibar_product_id: '',
-        room_id:            activeRooms[0]?.room_id ?? '',
-        type:               'consumed',
-        quantity:           '1',
-        unit_price:         '',
-      })
+      resetMinibarRows()
     } finally {
       setIsSavingMinibar(false)
     }
-  }
-
-  // Auto-fill unit_price when product or type changes
-  const onMinibarProductChange = (productId: string) => {
-    const product = minibarProducts.find(p => p.id === productId)
-    const priceByType = product
-      ? minibarForm.type === 'damaged'
-        ? (product.damage_price ?? product.sale_price)
-        : product.sale_price
-      : ''
-    setMinibarForm(s => ({ ...s, minibar_product_id: productId, unit_price: String(priceByType ?? '') }))
-  }
-
-  const onMinibarTypeChange = (type: MinibarConsumptionType) => {
-    const product = minibarProducts.find(p => p.id === minibarForm.minibar_product_id)
-    const priceByType = product
-      ? type === 'damaged'
-        ? (product.damage_price ?? product.sale_price)
-        : product.sale_price
-      : minibarForm.unit_price
-    setMinibarForm(s => ({ ...s, type, unit_price: String(priceByType ?? '') }))
   }
 
   const handleAddPayment = () => {
@@ -291,11 +321,19 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
           className="flex items-center justify-between px-5 py-4 border-b flex-shrink-0"
           style={{ borderColor: 'var(--border-default)' }}
         >
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold" style={{ color: 'var(--text-primary)' }}>
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-base font-bold truncate" style={{ color: 'var(--text-primary)' }}>
               Detalle de estadía
             </h2>
-            {isLoading && <Loader2 size={14} className="animate-spin" style={{ color: 'var(--text-muted)' }} />}
+            {activeRooms.length > 0 && (
+              <span
+                className="text-sm font-semibold px-3 py-1 rounded-full shrink-0"
+                style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}
+              >
+                Hab. {activeRooms.map((sr) => sr.room?.number ?? '—').join(', ')}
+              </span>
+            )}
+            {isLoading && <Loader2 size={14} className="animate-spin shrink-0" style={{ color: 'var(--text-muted)' }} />}
           </div>
           <button
             onClick={onClose}
@@ -616,8 +654,8 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
               {stay.minibar_consumptions && stay.minibar_consumptions.length > 0 && (
                 <div className="space-y-1.5 mb-3">
                   {stay.minibar_consumptions.map((m) => (
-                    <div key={m.id} className="flex justify-between text-sm">
-                      <span style={{ color: 'var(--text-secondary)' }}>
+                    <div key={m.id} className="flex items-center justify-between text-sm gap-2">
+                      <span className="flex-1 min-w-0" style={{ color: 'var(--text-secondary)' }}>
                         {m.product_name} × {m.quantity}
                         {m.type !== 'consumed' && (
                           <span className="ml-1 text-xs" style={{ color: m.type === 'damaged' ? '#DC2626' : '#D97706' }}>
@@ -625,9 +663,20 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                           </span>
                         )}
                       </span>
-                      <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
+                      <span className="font-medium tabular-nums" style={{ color: 'var(--text-primary)' }}>
                         {formatCurrency(m.total)}
                       </span>
+                      {canCancelMinibar && (
+                        <button
+                          onClick={() => setCancelMinibarTarget(m)}
+                          title="Anular consumo"
+                          aria-label="Anular consumo"
+                          className="p-1 rounded-md hover:opacity-70"
+                          style={{ color: '#EF4444' }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -636,70 +685,127 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
               {showMinibarForm && (
                 <div className="rounded-xl p-4 space-y-3 border"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
-                  <select
-                    value={minibarForm.minibar_product_id}
-                    onChange={(e) => onMinibarProductChange(e.target.value)}
-                    className="w-full px-2 py-2 rounded-lg text-xs border outline-none"
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
-                    <option value="">Seleccionar producto…</option>
-                    {minibarProducts.filter(p => p.active).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} — {formatCurrency(p.sale_price)}
-                      </option>
-                    ))}
-                  </select>
+                  {minibarRows.map((row, idx) => {
+                    const filtered = filteredMinibarProductsFor(row.query)
+                    return (
+                      <div
+                        key={row.id}
+                        className="space-y-2 pb-3"
+                        style={idx < minibarRows.length - 1
+                          ? { borderBottom: '1px dashed var(--border-default)' }
+                          : undefined}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+                            Producto {idx + 1}
+                          </span>
+                          {minibarRows.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeMinibarRow(row.id)}
+                              className="p-1 rounded hover:bg-red-50 transition-colors"
+                              style={{ color: '#EF4444' }}
+                              title="Quitar producto"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    {activeRooms.length > 1 ? (
-                      <select
-                        value={minibarForm.room_id}
-                        onChange={(e) => setMinibarForm(s => ({ ...s, room_id: e.target.value }))}
-                        className="px-2 py-2 rounded-lg text-xs border outline-none"
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
-                        {activeRooms.map((sr) => (
-                          <option key={sr.room_id} value={sr.room_id}>Hab. {sr.room?.number}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <div className="px-2 py-2 rounded-lg text-xs border"
-                        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
-                        Hab. {activeRooms[0]?.room?.number ?? '—'}
+                        <MinibarProductPicker
+                          roomId={row.room_id}
+                          query={row.query}
+                          show={row.showList}
+                          selectedId={row.minibar_product_id}
+                          products={minibarProducts}
+                          onQueryChange={(q) => updateMinibarRow(row.id, {
+                            query: q,
+                            showList: true,
+                            ...(row.minibar_product_id ? { minibar_product_id: '', unit_price: '' } : {}),
+                          })}
+                          onFocus={() => updateMinibarRow(row.id, { showList: true })}
+                          onBlur={() => setTimeout(() => updateMinibarRow(row.id, { showList: false }), 150)}
+                          onSelect={(p) => updateMinibarRow(row.id, {
+                            minibar_product_id: p.id,
+                            query:              p.code ? `${p.code} · ${p.name}` : p.name,
+                            showList:           false,
+                            unit_price:         priceForProductType(p.id, row.type),
+                          })}
+                        />
+
+                        {activeRooms.length > 1 && (
+                          <select
+                            value={row.room_id}
+                            onChange={(e) => updateMinibarRow(row.id, { room_id: e.target.value })}
+                            className="w-full px-2 py-2 rounded-lg text-xs border outline-none"
+                            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                            {activeRooms.map((sr) => (
+                              <option key={sr.room_id} value={sr.room_id}>Hab. {sr.room?.number}</option>
+                            ))}
+                          </select>
+                        )}
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <select
+                            value={row.type}
+                            onChange={(e) => {
+                              const type = e.target.value as MinibarConsumptionType
+                              updateMinibarRow(row.id, {
+                                type,
+                                unit_price: row.minibar_product_id
+                                  ? priceForProductType(row.minibar_product_id, type)
+                                  : row.unit_price,
+                              })
+                            }}
+                            className="min-w-0 px-2 py-2 rounded-lg text-xs border outline-none"
+                            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
+                            <option value="consumed">Consumido</option>
+                            <option value="damaged">Dañado</option>
+                            <option value="missing">Faltante</option>
+                          </select>
+                          <input type="number" min={1} placeholder="Cant."
+                            value={row.quantity}
+                            onChange={(e) => updateMinibarRow(row.id, { quantity: e.target.value })}
+                            className="min-w-0 px-2 py-2 rounded-lg text-xs border outline-none"
+                            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                          />
+                          <input type="number" placeholder="Precio unit."
+                            value={row.unit_price}
+                            readOnly
+                            tabIndex={-1}
+                            title="El precio se toma del producto del catálogo y no puede modificarse aquí."
+                            className="min-w-0 px-2 py-2 rounded-lg text-xs border outline-none cursor-not-allowed"
+                            style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-default)', color: 'var(--text-muted)' }}
+                          />
+                        </div>
                       </div>
-                    )}
-                    <select
-                      value={minibarForm.type}
-                      onChange={(e) => onMinibarTypeChange(e.target.value as MinibarConsumptionType)}
-                      className="px-2 py-2 rounded-lg text-xs border outline-none"
-                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}>
-                      <option value="consumed">Consumido</option>
-                      <option value="damaged">Dañado</option>
-                      <option value="missing">Faltante</option>
-                    </select>
-                  </div>
+                    )
+                  })}
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="number" min={1} placeholder="Cant."
-                      value={minibarForm.quantity}
-                      onChange={(e) => setMinibarForm(s => ({ ...s, quantity: e.target.value }))}
-                      className="px-2 py-2 rounded-lg text-xs border outline-none"
-                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                    />
-                    <input type="number" min={0} step="any" placeholder="Precio unit."
-                      value={minibarForm.unit_price}
-                      onChange={(e) => setMinibarForm(s => ({ ...s, unit_price: e.target.value }))}
-                      className="px-2 py-2 rounded-lg text-xs border outline-none"
-                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                    />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={addMinibarRow}
+                    className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md hover:opacity-80"
+                    style={{ color: 'var(--color-primary)' }}
+                  >
+                    <Plus size={12} /> Agregar otro producto
+                  </button>
 
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 pt-1">
                     <button onClick={handleAddMinibar}
-                      disabled={!minibarForm.minibar_product_id || !minibarForm.room_id || isSavingMinibar}
+                      disabled={validMinibarItems.length === 0 || isSavingMinibar}
                       className="flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-40 hover:opacity-80"
                       style={{ background: 'var(--color-primary)', color: '#fff' }}>
-                      {isSavingMinibar ? <Loader2 size={14} className="animate-spin mx-auto" /> : 'Confirmar'}
+                      {isSavingMinibar
+                        ? <Loader2 size={14} className="animate-spin mx-auto" />
+                        : validMinibarItems.length > 1
+                          ? `Confirmar (${validMinibarItems.length})`
+                          : 'Confirmar'}
                     </button>
-                    <button onClick={() => setShowMinibarForm(false)}
+                    <button onClick={() => {
+                      setShowMinibarForm(false)
+                      resetMinibarRows()
+                    }}
                       className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
                       style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
                       Cancelar
@@ -728,16 +834,47 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
 
             {stay.payments && stay.payments.length > 0 && (
               <div className="space-y-1.5 mb-3">
-                {stay.payments.map((p) => (
-                  <div key={p.id} className="flex justify-between text-sm">
-                    <span style={{ color: 'var(--text-secondary)' }}>
-                      {PAYMENT_METHOD_LABELS[p.payment_method] ?? p.payment_method}
-                    </span>
-                    <span className="font-medium" style={{ color: 'var(--text-primary)' }}>
-                      {formatCurrency(p.amount)}
-                    </span>
-                  </div>
-                ))}
+                {stay.payments.map((p) => {
+                  const isCancelled = !!p.cancelled_at
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between text-sm"
+                      style={{ opacity: isCancelled ? 0.55 : 1 }}
+                    >
+                      <span style={{ color: 'var(--text-secondary)', textDecoration: isCancelled ? 'line-through' : undefined }}>
+                        {PAYMENT_METHOD_LABELS[p.payment_method] ?? p.payment_method}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {isCancelled && (
+                          <span
+                            className="px-1.5 py-0.5 rounded text-[9px] font-bold"
+                            style={{ background: '#FEE2E2', color: '#991B1B' }}
+                            title={p.cancellation_reason ?? undefined}
+                          >
+                            ANULADO
+                          </span>
+                        )}
+                        <span
+                          className="font-medium"
+                          style={{ color: 'var(--text-primary)', textDecoration: isCancelled ? 'line-through' : undefined }}
+                        >
+                          {formatCurrency(p.amount)}
+                        </span>
+                        {!isCancelled && canCancelPayments && stay.status === 'active' && (
+                          <button
+                            onClick={() => setCancelTarget(p)}
+                            title="Anular pago"
+                            className="p-0.5 rounded hover:bg-red-50"
+                            style={{ color: '#EF4444' }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
 
@@ -855,6 +992,34 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
           </div>
         )}
       </div>
+
+      <CancelPaymentModal
+        open={!!cancelTarget}
+        onClose={() => setCancelTarget(null)}
+        payment={cancelTarget && {
+          id: cancelTarget.id,
+          amount: cancelTarget.amount,
+          guest_name: stay.guest?.full_name,
+          payment_method: cancelTarget.payment_method,
+          payment_date: cancelTarget.payment_date,
+        }}
+        onConfirm={async (reason) => {
+          if (!cancelTarget) return
+          await cancelPayment({ stayId: stay.id, paymentId: cancelTarget.id, reason })
+        }}
+        isPending={isCancellingPayment}
+      />
+
+      <CancelMinibarConsumptionModal
+        open={!!cancelMinibarTarget}
+        onClose={() => setCancelMinibarTarget(null)}
+        consumption={cancelMinibarTarget}
+        onConfirm={async (reason) => {
+          if (!cancelMinibarTarget) return
+          await cancelMinibar({ stayId: stay.id, consumptionId: cancelMinibarTarget.id, reason })
+        }}
+        isPending={isCancellingMinibar}
+      />
     </>
   )
 }

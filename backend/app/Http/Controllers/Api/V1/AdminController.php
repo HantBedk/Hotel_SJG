@@ -289,7 +289,15 @@ class AdminController extends Controller
 
     public function getUsers(): JsonResponse
     {
-        $users = User::with('roles')->orderBy('name')->get()->map(fn($u) => [
+        // Los admin no deben ver perfiles de superadmin; solo otros superadmin pueden hacerlo.
+        $hideSuperadmins = ! auth()->user()?->hasRole('superadmin');
+
+        $query = User::with('roles')->orderBy('name');
+        if ($hideSuperadmins) {
+            $query->whereDoesntHave('roles', fn($q) => $q->where('name', 'superadmin'));
+        }
+
+        $users = $query->get()->map(fn($u) => [
             'id'              => $u->id,
             'name'            => $u->name,
             'document_number' => $u->document_number,
@@ -314,6 +322,13 @@ class AdminController extends Controller
             'role'            => 'required|string|exists:roles,name',
         ]);
 
+        // Solo un superadmin puede crear otro superadmin.
+        abort_if(
+            $data['role'] === 'superadmin' && ! $request->user()->hasRole('superadmin'),
+            403,
+            'No tienes permiso para asignar el rol superadmin.',
+        );
+
         $user = User::create([
             'name'            => $data['name'],
             'document_number' => $data['document_number'] ?? null,
@@ -334,6 +349,13 @@ class AdminController extends Controller
 
     public function updateUser(Request $request, User $user): JsonResponse
     {
+        // Solo un superadmin puede modificar a otro superadmin.
+        abort_if(
+            $user->hasRole('superadmin') && ! $request->user()->hasRole('superadmin'),
+            403,
+            'No tienes permiso para modificar a este usuario.',
+        );
+
         $data = $request->validate([
             'name'            => 'sometimes|string|max:100',
             'document_number' => 'nullable|string|max:30',
@@ -343,6 +365,13 @@ class AdminController extends Controller
             'role'            => 'sometimes|string|exists:roles,name',
             'is_active'       => 'sometimes|boolean',
         ]);
+
+        // Y nadie que no sea superadmin puede otorgar el rol superadmin.
+        abort_if(
+            isset($data['role']) && $data['role'] === 'superadmin' && ! $request->user()->hasRole('superadmin'),
+            403,
+            'No tienes permiso para asignar el rol superadmin.',
+        );
 
         $updateData = [];
         foreach (['name', 'document_number', 'phone', 'email', 'is_active'] as $field) {
@@ -366,6 +395,11 @@ class AdminController extends Controller
     public function destroyUser(Request $request, User $user): JsonResponse
     {
         abort_if($user->id === $request->user()->id, 409, 'No puedes eliminar tu propia cuenta.');
+        abort_if(
+            $user->hasRole('superadmin') && ! $request->user()->hasRole('superadmin'),
+            403,
+            'No tienes permiso para desactivar a este usuario.',
+        );
         abort_if($user->hasRole('superadmin'), 409, 'No se puede eliminar al superadmin.');
 
         $user->update(['is_active' => false]);

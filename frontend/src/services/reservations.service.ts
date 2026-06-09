@@ -84,3 +84,12 @@ export const addReservationPaymentApi = async (
   const res = await api.post(`/reservations/${id}/payments`, payload)
   return res.data.data
 }
+
+export const cancelReservationPaymentApi = async (
+  reservationId: string,
+  paymentId: string,
+  reason: string,
+): Promise<{ id: string; cancelled_at: string }> => {
+  const res = await api.patch(`/reservations/${reservationId}/payments/${paymentId}/cancel`, { reason })
+  return res.data.data
+}

@@ -58,13 +58,19 @@ export default function UsuariosTab() {
   const { data: users = [], isLoading } = useAdminUsers()
   const { create, update, remove }      = useAdminUserMutations()
   const { data: roles = [] }            = useAdminRoles()
-  const { user: me }                    = useAuth()
+  const { user: me, hasRole }           = useAuth()
 
   const [form, setForm]       = useState<UserForm>(EMPTY)
   const [editing, setEditing] = useState<AdminUser | null>(null)
   const [open, setOpen]       = useState(false)
 
-  const roleNames = roles.map(r => r.name).filter(r => r !== 'superadmin')
+  // Solo un superadmin puede ver/editar a otros superadmin.
+  const isSuperadmin = hasRole('superadmin')
+  const visibleUsers = isSuperadmin ? users : users.filter(u => u.role !== 'superadmin')
+
+  const roleNames = roles
+    .map(r => r.name)
+    .filter(r => isSuperadmin || r !== 'superadmin')
 
   const openCreate = () => { setEditing(null); setForm(EMPTY); setOpen(true) }
   const openEdit   = (u: AdminUser) => {
@@ -145,7 +151,7 @@ export default function UsuariosTab() {
             </tr>
           </thead>
           <tbody>
-            {users.map(u => (
+            {visibleUsers.map(u => (
               <tr key={u.id} style={{ borderBottom: '1px solid var(--border-default)' }}>
                 <td className="py-2" style={{ color: 'var(--text-primary)' }}>
                   {u.name}
@@ -176,7 +182,9 @@ export default function UsuariosTab() {
                 </td>
                 <td className="py-2">
                   <div className="flex gap-2 justify-end">
-                    <button onClick={() => openEdit(u)} style={{ color: 'var(--color-primary)' }}><Pencil size={13} /></button>
+                    {(u.role !== 'superadmin' || isSuperadmin) && (
+                      <button onClick={() => openEdit(u)} style={{ color: 'var(--color-primary)' }}><Pencil size={13} /></button>
+                    )}
                     {u.id !== me?.id && u.role !== 'superadmin' && (
                       <button onClick={() => deactivate(u)} title="Desactivar" style={{ color: '#EF4444' }}>
                         <UserX size={13} />

@@ -8,15 +8,19 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\ExtraService;
 use App\Models\Hotel;
+use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
 use App\Models\MinibarConsumption;
 use App\Models\MinibarProduct;
+use App\Models\Notification;
+use App\Models\Payment;
 use App\Models\Room;
 use App\Models\RoomMinibar;
 use App\Models\Setting;
 use App\Models\Stay;
 use App\Models\StayGuest;
 use App\Models\StayRoom;
+use App\Models\User;
 use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -196,36 +200,9 @@ class StayController extends Controller
                 $cleaningRooms->push($stayRoom->room);
             }
 
-            // Deduct consumed minibar items from room_minibars
-            $consumptions = $stay->minibarConsumptions()
-                ->whereIn('type', ['consumed', 'damaged'])
-                ->get();
-
-            foreach ($consumptions as $c) {
-                $product = MinibarProduct::where('name', $c->product_name)->first();
-                if (!$product) continue;
-
-                $minibar = RoomMinibar::where('room_id', $c->room_id)
-                    ->where('minibar_product_id', $product->id)
-                    ->first();
-
-                if ($minibar && $minibar->quantity > 0) {
-                    $minibar->decrement('quantity', min($c->quantity, $minibar->quantity));
-                }
-
-                // Create inventory_transaction if product has inventory item
-                if ($product->inventory_item_id) {
-                    InventoryTransaction::create([
-                        'inventory_item_id' => $product->inventory_item_id,
-                        'type'              => 'sale',
-                        'quantity'          => $c->quantity,
-                        'unit_price'        => $c->unit_price,
-                        'total_value'       => $c->total,
-                        'performed_by'      => $stay->created_by,
-                        'notes'             => "Checkout estadía #{$stay->id}",
-                    ]);
-                }
-            }
+            // El stock del minibar / catálogo ya se descontó al registrar cada
+            // consumo (ver minibarCharges()). Aquí no volvemos a descontar para
+            // evitar contar dos veces el mismo movimiento.
         });
 
         ActivityLog::record('stay.checkout', $request->user()->id, [
@@ -394,37 +371,214 @@ class StayController extends Controller
     {
         abort_if($stay->status === 'checked_out', 409, 'La estadía ya está cerrada.');
 
+        // unit_price NO se acepta del cliente: lo resolvemos desde el producto en
+        // la BD para que no pueda manipularse. consumed/missing → sale_price,
+        // damaged → damage_price (con fallback a sale_price si no está fijado).
         $data = $request->validate([
             'items'                => 'required|array|min:1',
             'items.*.product_name' => 'required|string|max:100',
             'items.*.room_id'      => 'required|uuid|exists:rooms,id',
             'items.*.type'         => 'required|in:consumed,damaged,missing',
             'items.*.quantity'     => 'required|integer|min:1',
-            'items.*.unit_price'   => 'required|numeric|min:0',
         ]);
 
         $records = DB::transaction(function () use ($stay, $data, $request) {
             $records    = [];
             $batchTotal = 0;
             foreach ($data['items'] as $item) {
-                $itemTotal   = $item['unit_price'] * $item['quantity'];
+                $product = MinibarProduct::where('name', $item['product_name'])->first();
+                abort_if(! $product, 422, "Producto de minibar no encontrado: {$item['product_name']}");
+
+                $unitPrice = $item['type'] === 'damaged'
+                    ? (float) ($product->damage_price ?? $product->sale_price)
+                    : (float) $product->sale_price;
+
+                $itemTotal   = $unitPrice * $item['quantity'];
                 $batchTotal += $itemTotal;
-                $records[] = $stay->minibarConsumptions()->create([
+                $consumption = $stay->minibarConsumptions()->create([
                     'room_id'       => $item['room_id'],
                     'product_name'  => $item['product_name'],
                     'quantity'      => $item['quantity'],
                     'type'          => $item['type'],
-                    'unit_price'    => $item['unit_price'],
+                    'unit_price'    => $unitPrice,
                     'total'         => $itemTotal,
                     'registered_at' => now(),
                     'registered_by' => $request->user()->id,
                 ]);
+
+                // Descontar stock al momento del registro (no en checkout):
+                //   1. RoomMinibar de la habitación si existe stock.
+                //   2. El resto sale del catálogo (MinibarProduct.stock_quantity
+                //      o InventoryItem.current_stock si el producto está vinculado).
+                $this->deductMinibarStock($product, $consumption, $request->user()->id);
+
+                $records[] = $consumption;
             }
             $stay->increment('total_amount', $batchTotal);
             return $records;
         });
 
         return response()->json(['success' => true, 'data' => $records, 'message' => 'Consumos registrados.'], 201);
+    }
+
+    /**
+     * Descuenta el stock asociado a un consumo de minibar.
+     * Primero del RoomMinibar (lo que estaba físicamente en la habitación) y
+     * el resto del catálogo o InventoryItem vinculado.
+     */
+    private function deductMinibarStock(MinibarProduct $product, MinibarConsumption $consumption, string $userId): void
+    {
+        $qty = (int) $consumption->quantity;
+        if ($qty <= 0) return;
+
+        $rm = RoomMinibar::lockForUpdate()
+            ->where('room_id', $consumption->room_id)
+            ->where('minibar_product_id', $product->id)
+            ->first();
+
+        $fromRoom = $rm ? min($qty, (int) $rm->quantity) : 0;
+        if ($fromRoom > 0) {
+            $rm->decrement('quantity', $fromRoom);
+        }
+
+        $fromCatalog = $qty - $fromRoom;
+        if ($fromCatalog > 0) {
+            if ($product->inventory_item_id) {
+                $item = InventoryItem::lockForUpdate()->find($product->inventory_item_id);
+                if ($item) {
+                    $item->decrement('current_stock', $fromCatalog);
+                    InventoryTransaction::create([
+                        'inventory_item_id' => $item->id,
+                        'type'              => 'sale',
+                        'quantity'          => $fromCatalog,
+                        'unit_price'        => $consumption->unit_price,
+                        'total_value'       => (float) $consumption->unit_price * $fromCatalog,
+                        'performed_by'      => $userId,
+                        'notes'             => "Consumo minibar registrado (estadía #{$consumption->stay_id})",
+                    ]);
+                }
+            } else {
+                $fresh = MinibarProduct::lockForUpdate()->find($product->id);
+                if ($fresh) {
+                    $fresh->decrement('stock_quantity', $fromCatalog);
+                }
+            }
+        }
+    }
+
+    /**
+     * Devuelve el stock de un consumo cancelado, simétricamente a deductMinibarStock.
+     */
+    private function restoreMinibarStock(MinibarConsumption $consumption, string $userId): void
+    {
+        $qty = (int) $consumption->quantity;
+        if ($qty <= 0) return;
+
+        $product = MinibarProduct::where('name', $consumption->product_name)->first();
+        if (! $product) return;
+
+        // Reponemos al RoomMinibar si existe entrada (ahí se descontó primero).
+        $rm = RoomMinibar::lockForUpdate()
+            ->where('room_id', $consumption->room_id)
+            ->where('minibar_product_id', $product->id)
+            ->first();
+
+        if ($rm) {
+            $rm->increment('quantity', $qty);
+        } else {
+            if ($product->inventory_item_id) {
+                $item = InventoryItem::lockForUpdate()->find($product->inventory_item_id);
+                if ($item) {
+                    $item->increment('current_stock', $qty);
+                    InventoryTransaction::create([
+                        'inventory_item_id' => $item->id,
+                        'type'              => 'adjustment',
+                        'quantity'          => $qty,
+                        'unit_price'        => $consumption->unit_price,
+                        'total_value'       => (float) $consumption->unit_price * $qty,
+                        'performed_by'      => $userId,
+                        'notes'             => "Reverso de consumo minibar anulado (estadía #{$consumption->stay_id})",
+                    ]);
+                }
+            } else {
+                $fresh = MinibarProduct::lockForUpdate()->find($product->id);
+                if ($fresh) {
+                    $fresh->increment('stock_quantity', $qty);
+                }
+            }
+        }
+    }
+
+    /**
+     * Anula un consumo de minibar registrado durante la estadía.
+     * - Solo aplica si la estadía aún está activa/extendida (no checked_out).
+     * - Resta el total del consumo del total_amount de la estadía.
+     * - Borra el registro (la "devolución" lógica al catálogo/minibar de habitación es
+     *   automática: como solo descontamos stock al hacer checkout, no hay nada que
+     *   restaurar mientras la estadía siga abierta).
+     * - Queda registro en ActivityLog y se notifica a los administradores.
+     */
+    public function cancelMinibarConsumption(Request $request, Stay $stay, MinibarConsumption $consumption): JsonResponse
+    {
+        abort_if($consumption->stay_id !== $stay->id, 404, 'Consumo no encontrado en esta estadía.');
+        abort_if($stay->status === 'checked_out', 409, 'La estadía ya está cerrada; no se puede anular el consumo.');
+
+        $data = $request->validate([
+            'reason' => 'required|string|min:5|max:500',
+        ]);
+
+        $user        = $request->user();
+        $amount      = (float) $consumption->total;
+        $productName = $consumption->product_name;
+        $quantity    = (int)   $consumption->quantity;
+        $roomId      = $consumption->room_id;
+
+        DB::transaction(function () use ($stay, $consumption, $amount, $user) {
+            // Devolver el stock al lugar de origen antes de borrar el registro.
+            $this->restoreMinibarStock($consumption, $user->id);
+            $stay->decrement('total_amount', $amount);
+            $consumption->delete();
+        });
+
+        ActivityLog::record('stay.minibar_cancelled', $user->id, [
+            'stay_id'      => $stay->id,
+            'room_id'      => $roomId,
+            'product_name' => $productName,
+            'quantity'     => $quantity,
+            'amount'       => $amount,
+            'reason'       => $data['reason'],
+        ]);
+
+        $this->notifyAdminsOfCancellation(
+            title:   'Consumo de minibar anulado',
+            message: sprintf(
+                '%s anuló un consumo de minibar (%s × %d, %s) en la estadía de %s. Motivo: %s',
+                $user->name,
+                $productName,
+                $quantity,
+                '$' . number_format($amount, 0, ',', '.'),
+                optional($stay->guest)->full_name ?? 'huésped',
+                $data['reason'],
+            ),
+            payload: [
+                'stay_id'      => $stay->id,
+                'room_id'      => $roomId,
+                'product_name' => $productName,
+                'quantity'     => $quantity,
+                'amount'       => $amount,
+                'reason'       => $data['reason'],
+                'by_user_id'   => $user->id,
+                'by_name'      => $user->name,
+            ],
+            actionUrl:    '/activity?tab=movimientos',
+            excludeUserId: $user->id,
+            type:         'minibar_cancelled',
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Consumo anulado. Queda registrado en el historial.',
+        ]);
     }
 
     public function receipt(Request $request, Stay $stay): mixed
@@ -582,7 +736,7 @@ class StayController extends Controller
     public function payments(Request $request, Stay $stay): JsonResponse
     {
         $payments = $stay->payments()
-            ->with('receptionist:id,name')
+            ->with(['receptionist:id,name', 'cancelledBy:id,name'])
             ->orderByDesc('payment_date')
             ->paginate($this->perPage($request, 50));
 
@@ -626,6 +780,93 @@ class StayController extends Controller
         ]);
 
         return response()->json(['success' => true, 'data' => $payment, 'message' => 'Pago registrado.'], 201);
+    }
+
+    public function cancelPayment(Request $request, Stay $stay, Payment $payment): JsonResponse
+    {
+        abort_if($payment->stay_id !== $stay->id, 404, 'Pago no encontrado en esta estadia.');
+        abort_if($payment->isCancelled(), 409, 'Este pago ya fue anulado.');
+
+        $data = $request->validate([
+            'reason' => 'required|string|min:5|max:500',
+        ]);
+
+        $user   = $request->user();
+        $amount = (float) $payment->amount;
+
+        DB::transaction(function () use ($payment, $stay, $data, $user, $amount) {
+            $payment->update([
+                'cancelled_at'        => now(),
+                'cancelled_by_id'     => $user->id,
+                'cancellation_reason' => $data['reason'],
+            ]);
+
+            $stay->decrement('paid_amount', $amount);
+        });
+
+        ActivityLog::record('stay.payment_cancelled', $user->id, [
+            'stay_id'    => $stay->id,
+            'payment_id' => $payment->id,
+            'amount'     => $amount,
+            'method'     => $payment->payment_method,
+            'reason'     => $data['reason'],
+        ]);
+
+        $this->notifyAdminsOfCancellation(
+            title:   'Pago anulado',
+            message: sprintf(
+                '%s anuló un pago de %s en la estadía de %s. Motivo: %s',
+                $user->name,
+                number_format($amount, 0, ',', '.'),
+                optional($stay->guest)->full_name ?? 'huésped',
+                $data['reason'],
+            ),
+            payload: [
+                'stay_id'    => $stay->id,
+                'payment_id' => $payment->id,
+                'amount'     => $amount,
+                'reason'     => $data['reason'],
+                'by_user_id' => $user->id,
+                'by_name'    => $user->name,
+            ],
+            actionUrl:    '/activity?tab=pagos',
+            excludeUserId: $user->id,
+        );
+
+        return response()->json([
+            'success' => true,
+            'data'    => $payment->fresh(['receptionist', 'cancelledBy']),
+            'message' => 'Pago anulado. Queda registrado en el historial.',
+        ]);
+    }
+
+    /**
+     * Crea una notificación para cada admin/superadmin (quienes tienen manage_users)
+     * excepto el usuario que ejecutó la acción.
+     */
+    private function notifyAdminsOfCancellation(
+        string $title,
+        string $message,
+        array $payload,
+        string $actionUrl,
+        string $excludeUserId,
+        string $type = 'payment_cancelled',
+    ): void {
+        $adminIds = User::permission('manage_users')
+            ->where('id', '!=', $excludeUserId)
+            ->pluck('id');
+
+        foreach ($adminIds as $userId) {
+            Notification::create([
+                'type'       => $type,
+                'title'      => $title,
+                'message'    => $message,
+                'severity'   => 'warning',
+                'payload'    => $payload,
+                'action_url' => $actionUrl,
+                'user_id'    => $userId,
+            ]);
+        }
     }
 
     public function addService(Request $request, Stay $stay): JsonResponse

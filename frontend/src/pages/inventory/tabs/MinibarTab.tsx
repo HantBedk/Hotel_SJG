@@ -10,7 +10,7 @@ import {
   useMinibarMutations,
   useInventoryItems,
 } from '@/hooks/useInventory'
-import { restockRoomMinibarApi, returnFromRoomMinibarApi } from '@/services/inventory.service'
+import { createMinibarApi, restockRoomMinibarApi, returnFromRoomMinibarApi } from '@/services/inventory.service'
 import { useRooms } from '@/hooks/useRooms'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonTable } from '@/components/ui/Skeleton'
@@ -296,11 +296,24 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
     setItems((prev) => (prev.length === 1 ? prev : prev.filter((it) => it.id !== id)))
   const addRow = () => setItems((prev) => [...prev, newRow()])
 
+  // Stock disponible: si el producto está enlazado a un ítem del catálogo,
+  // ese es el origen real; si no, es la bodega interna del minibar.
+  const availableStock = (p: MinibarProduct): number =>
+    p.inventory_item ? p.inventory_item.current_stock : p.stock_quantity
+
   const activeProducts = products.filter((p) => p.active)
 
   const validItems = items
     .map((it) => ({ ...it, qtyNum: Number(it.qty) }))
     .filter((it) => it.productId && it.qtyNum > 0)
+
+  // Fila inválida: producto sin stock o cantidad pedida > stock disponible.
+  const rowExceedsStock = (row: { productId: string; qtyNum: number }) => {
+    const p = activeProducts.find((x) => x.id === row.productId)
+    if (!p) return false
+    return row.qtyNum > availableStock(p)
+  }
+  const hasStockError = validItems.some(rowExceedsStock)
 
   // Productos ya seleccionados en otras filas — se ocultan del select.
   const selectedProductIds = (currentId: string) =>
@@ -331,9 +344,13 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
 
         <div className="p-6 space-y-3 overflow-y-auto">
           {items.map((it, idx) => {
-            const usedIds = selectedProductIds(it.id)
+            const usedIds      = selectedProductIds(it.id)
+            const selectedProd = activeProducts.find((p) => p.id === it.productId)
+            const stock        = selectedProd ? availableStock(selectedProd) : null
+            const qtyNum       = Number(it.qty) || 0
+            const overStock    = selectedProd != null && stock != null && qtyNum > stock
             return (
-              <div key={it.id} className="flex items-end gap-2">
+              <div key={it.id} className="flex flex-col gap-1"><div className="flex items-end gap-2">
                 <div className="flex-1 min-w-0">
                   {idx === 0 && (
                     <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
@@ -349,12 +366,16 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
                     <option value="">Seleccionar…</option>
                     {activeProducts
                       .filter((p) => !usedIds.has(p.id))
-                      .map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.code ? `[${p.code}] ` : ''}{p.name}
-                          {p.presentation ? ` · ${p.presentation}` : ''} — {formatCurrency(p.sale_price)}
-                        </option>
-                      ))}
+                      .map((p) => {
+                        const stock     = availableStock(p)
+                        const agotado   = stock <= 0
+                        const baseLabel = `${p.code ? `[${p.code}] ` : ''}${p.name}${p.presentation ? ` · ${p.presentation}` : ''} — ${formatCurrency(p.sale_price)}`
+                        return (
+                          <option key={p.id} value={p.id} disabled={agotado}>
+                            {baseLabel}{agotado ? ' — AGOTADO' : ` · stock ${stock}`}
+                          </option>
+                        )
+                      })}
                   </select>
                 </div>
                 <div className="w-24">
@@ -382,6 +403,12 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
                   <Trash2 size={14} />
                 </button>
               </div>
+              {overStock && (
+                <p className="text-[11px] pl-1" style={{ color: '#EF4444' }}>
+                  Solo hay {stock} disponible{stock === 1 ? '' : 's'} en el catálogo.
+                </p>
+              )}
+              </div>
             )
           })}
 
@@ -408,10 +435,11 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
             Cancelar
           </button>
           <button
-            disabled={saving || validItems.length === 0}
+            disabled={saving || validItems.length === 0 || hasStockError}
             onClick={handleSubmit}
             className="px-4 py-2 rounded-lg text-sm text-white font-medium disabled:opacity-40"
-            style={{ background: 'var(--color-primary)' }}>
+            style={{ background: 'var(--color-primary)' }}
+            title={hasStockError ? 'Hay productos sin stock suficiente' : undefined}>
             {saving ? 'Reponiendo…' : 'Reponer'}
           </button>
         </div>
@@ -728,14 +756,18 @@ function CatalogueSection() {
 interface NewMinibarModalProps {
   availableRooms: Room[]
   onSave: (data: { room_id: string; name: string | null; notes: string | null }) => void
+  onSaveAll: (notes: string | null) => void
   onClose: () => void
   saving: boolean
 }
 
-function NewMinibarModal({ availableRooms, onSave, onClose, saving }: NewMinibarModalProps) {
+function NewMinibarModal({ availableRooms, onSave, onSaveAll, onClose, saving }: NewMinibarModalProps) {
+  const [bulkMode, setBulkMode] = useState(false)
   const [roomId, setRoomId] = useState('')
   const [name, setName] = useState('')
   const [notes, setNotes] = useState('')
+
+  const canSubmit = bulkMode ? availableRooms.length > 0 : !!roomId
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }}>
@@ -747,38 +779,65 @@ function NewMinibarModal({ availableRooms, onSave, onClose, saving }: NewMinibar
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            onSave({ room_id: roomId, name: name.trim() || null, notes: notes.trim() || null })
+            if (bulkMode) {
+              onSaveAll(notes.trim() || null)
+            } else {
+              onSave({ room_id: roomId, name: name.trim() || null, notes: notes.trim() || null })
+            }
           }}
           className="p-6 space-y-4"
         >
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Habitación *</label>
-            <select
-              required value={roomId} onChange={(e) => setRoomId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border text-sm"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-            >
-              <option value="">Seleccionar habitación…</option>
-              {availableRooms.map((r) => (
-                <option key={r.id} value={r.id}>Hab. {r.number}</option>
-              ))}
-            </select>
-            {availableRooms.length === 0 && (
-              <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
-                Todas las habitaciones ya tienen un minibar asignado.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Nombre (opcional)</label>
+          <label
+            className="flex items-start gap-2 p-3 rounded-lg cursor-pointer"
+            style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
+          >
             <input
-              type="text" value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="Ej: Minibar suite 101"
-              className="w-full px-3 py-2 rounded-lg border text-sm"
-              style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+              type="checkbox"
+              checked={bulkMode}
+              onChange={(e) => setBulkMode(e.target.checked)}
+              disabled={availableRooms.length === 0}
+              className="mt-0.5"
             />
-          </div>
+            <span className="text-xs" style={{ color: 'var(--text-primary)' }}>
+              Crear para todas las habitaciones sin minibar
+              <span className="ml-1 font-semibold" style={{ color: 'var(--color-primary)' }}>
+                ({availableRooms.length})
+              </span>
+            </span>
+          </label>
+
+          {!bulkMode && (
+            <>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Habitación *</label>
+                <select
+                  required value={roomId} onChange={(e) => setRoomId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                >
+                  <option value="">Seleccionar habitación…</option>
+                  {availableRooms.map((r) => (
+                    <option key={r.id} value={r.id}>Hab. {r.number}</option>
+                  ))}
+                </select>
+                {availableRooms.length === 0 && (
+                  <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                    Todas las habitaciones ya tienen un minibar asignado.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Nombre (opcional)</label>
+                <input
+                  type="text" value={name} onChange={(e) => setName(e.target.value)}
+                  placeholder="Ej: Minibar suite 101"
+                  className="w-full px-3 py-2 rounded-lg border text-sm"
+                  style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                />
+              </div>
+            </>
+          )}
 
           <div>
             <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Notas (opcional)</label>
@@ -787,6 +846,11 @@ function NewMinibarModal({ availableRooms, onSave, onClose, saving }: NewMinibar
               className="w-full px-3 py-2 rounded-lg border text-sm"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
             />
+            {bulkMode && (
+              <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+                Se aplicarán las mismas notas a todos los minibares creados.
+              </p>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
@@ -794,9 +858,13 @@ function NewMinibarModal({ availableRooms, onSave, onClose, saving }: NewMinibar
               style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
               Cancelar
             </button>
-            <button type="submit" disabled={saving || !roomId} className="px-4 py-2 rounded-lg text-sm text-white font-medium disabled:opacity-40"
+            <button type="submit" disabled={saving || !canSubmit} className="px-4 py-2 rounded-lg text-sm text-white font-medium disabled:opacity-40"
               style={{ background: 'var(--color-primary)' }}>
-              {saving ? 'Creando…' : 'Crear'}
+              {saving
+                ? 'Creando…'
+                : bulkMode
+                  ? `Crear ${availableRooms.length}`
+                  : 'Crear'}
             </button>
           </div>
         </form>
@@ -843,6 +911,22 @@ function MinibarsSection() {
 
   const handleCreate = (data: { room_id: string; name: string | null; notes: string | null }) => {
     createMutation.mutate(data, { onSuccess: () => setShowNew(false) })
+  }
+
+  const [creatingBulk, setCreatingBulk] = useState(false)
+  const handleCreateAll = async (notes: string | null) => {
+    if (availableRooms.length === 0) return
+    setCreatingBulk(true)
+    const results = await Promise.allSettled(
+      availableRooms.map((r) => createMinibarApi({ room_id: r.id, name: null, notes })),
+    )
+    const ok      = results.filter((r) => r.status === 'fulfilled').length
+    const failed  = results.length - ok
+    if (ok > 0)     toast.success(`${ok} minibar${ok === 1 ? '' : 'es'} creado${ok === 1 ? '' : 's'}.`)
+    if (failed > 0) toast.error(`${failed} fallaron.`)
+    qc.invalidateQueries({ queryKey: ['minibars'] })
+    setCreatingBulk(false)
+    setShowNew(false)
   }
 
   const handleDelete = (m: Minibar) => {
@@ -1053,8 +1137,9 @@ function MinibarsSection() {
         <NewMinibarModal
           availableRooms={availableRooms}
           onSave={handleCreate}
+          onSaveAll={handleCreateAll}
           onClose={() => setShowNew(false)}
-          saving={createMutation.isPending}
+          saving={createMutation.isPending || creatingBulk}
         />
       )}
 

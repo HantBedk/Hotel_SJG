@@ -7,12 +7,14 @@ use App\Events\ReservationStatusChanged;
 use App\Events\RoomStatusChanged;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\Notification;
 use App\Models\Reservation;
 use App\Models\ReservationPayment;
 use App\Models\Room;
 use App\Models\Stay;
 use App\Models\StayGuest;
 use App\Models\StayRoom;
+use App\Models\User;
 use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -471,15 +473,9 @@ class ReservationController extends Controller
                 'notes'           => $data['notes'] ?? null,
             ]);
 
-            $totalPaid = $reservation->payments()->sum('amount') + $data['amount'];
-            $paymentStatus = match(true) {
-                $totalPaid >= $reservation->agreed_price => 'paid',
-                $totalPaid > 0                           => 'partial',
-                default                                  => 'pending',
-            };
-
+            $totalPaid = $reservation->payments()->active()->sum('amount') + $data['amount'];
             $reservation->update([
-                'payment_status' => $paymentStatus,
+                'payment_status' => $this->paymentStatusFor($totalPaid, (float) $reservation->agreed_price),
                 'deposit_amount' => $totalPaid,
             ]);
 
@@ -487,6 +483,84 @@ class ReservationController extends Controller
         });
 
         return response()->json(['success' => true, 'data' => $payment, 'message' => 'Pago registrado.'], 201);
+    }
+
+    public function cancelPayment(Request $request, Reservation $reservation, ReservationPayment $payment): JsonResponse
+    {
+        abort_if($payment->reservation_id !== $reservation->id, 404, 'Pago no encontrado en esta reserva.');
+        abort_if($payment->isCancelled(), 409, 'Este pago ya fue anulado.');
+
+        $data = $request->validate([
+            'reason' => 'required|string|min:5|max:500',
+        ]);
+
+        $user   = $request->user();
+        $amount = (float) $payment->amount;
+
+        DB::transaction(function () use ($payment, $reservation, $data, $user) {
+            $payment->update([
+                'cancelled_at'        => now(),
+                'cancelled_by_id'     => $user->id,
+                'cancellation_reason' => $data['reason'],
+            ]);
+
+            $totalPaid = $reservation->payments()->active()->sum('amount');
+            $reservation->update([
+                'payment_status' => $this->paymentStatusFor($totalPaid, (float) $reservation->agreed_price),
+                'deposit_amount' => $totalPaid,
+            ]);
+        });
+
+        ActivityLog::record('reservation.payment_cancelled', $user->id, [
+            'reservation_id' => $reservation->id,
+            'payment_id'     => $payment->id,
+            'amount'         => $amount,
+            'method'         => $payment->payment_method,
+            'reason'         => $data['reason'],
+        ]);
+
+        $adminIds = User::permission('manage_users')
+            ->where('id', '!=', $user->id)
+            ->pluck('id');
+
+        foreach ($adminIds as $adminId) {
+            Notification::create([
+                'type'       => 'payment_cancelled',
+                'title'      => 'Pago de reserva anulado',
+                'message'    => sprintf(
+                    '%s anuló un pago de %s en la reserva. Motivo: %s',
+                    $user->name,
+                    number_format($amount, 0, ',', '.'),
+                    $data['reason'],
+                ),
+                'severity'   => 'warning',
+                'payload'    => [
+                    'reservation_id' => $reservation->id,
+                    'payment_id'     => $payment->id,
+                    'amount'         => $amount,
+                    'reason'         => $data['reason'],
+                    'by_user_id'     => $user->id,
+                    'by_name'        => $user->name,
+                ],
+                'action_url' => '/activity?tab=pagos',
+                'user_id'    => $adminId,
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => $payment->fresh(['receptionist', 'cancelledBy']),
+            'message' => 'Pago anulado. Queda registrado en el historial.',
+        ]);
+    }
+
+    private function paymentStatusFor(float $totalPaid, float $agreedPrice): string
+    {
+        return match (true) {
+            $totalPaid >= $agreedPrice => 'paid',
+            $totalPaid > 0             => 'partial',
+            default                    => 'pending',
+        };
     }
 
     private function assertNoOverlap(string $roomId, string $startDate, string $endDate, ?string $excludeId = null): void

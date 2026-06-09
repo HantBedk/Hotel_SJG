@@ -56,6 +56,11 @@ echo.
 
 REM ---- 4. Levanta el contenedor --------------------------------------
 echo [4/5] Levantando contenedor...
+REM Limpia cualquier contenedor previo con el mismo nombre (de instalaciones anteriores).
+REM Los volumenes hotel_pgdata y hotel_storage NO se borran, asi que la BD y los
+REM datos persisten entre reinstalaciones.
+docker compose -f docker-compose.allinone.yml down >nul 2>&1
+docker rm -f hotel_all >nul 2>&1
 docker compose -f docker-compose.allinone.yml up -d
 if errorlevel 1 (
     echo [ERROR] Fallo al levantar el contenedor.

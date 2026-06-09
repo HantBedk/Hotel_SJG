@@ -10,9 +10,11 @@ import { useRooms, useHousekeepers } from '@/hooks/useRooms'
 import { useStays } from '@/hooks/useStays'
 import { useActivityLogs } from '@/hooks/useActivity'
 import { useNotifications } from '@/hooks/useNotifications'
+import { useAuth } from '@/hooks/useAuth'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import CheckInWizard from '@/pages/checkin/CheckInWizard'
 import { CheckoutWizard } from '@/pages/stays/components/CheckoutWizard'
+import { StayDrawer } from '@/pages/stays/components/StayDrawer'
 import CheckInFromReservationModal from '@/pages/reservations/components/CheckInFromReservationModal'
 import { DashboardChart } from './components/DashboardChart'
 import { DashboardRoomModal } from './components/DashboardRoomModal'
@@ -227,11 +229,13 @@ const ACTION_LABELS: Record<string, string> = {
   'stay.checkin':              'Check-in',
   'stay.checkout':             'Check-out',
   'stay.payment':              'Pago registrado',
+  'stay.payment_cancelled':    'Pago anulado',
   'stay.service':              'Servicio agregado',
   'stay.transfer':             'Transferencia de habitación',
   'stay.extended':             'Estadía extendida',
   'reservation.created':       'Reserva creada',
   'reservation.cancelled':     'Reserva cancelada',
+  'reservation.payment_cancelled': 'Pago de reserva anulado',
   'reservation.updated':       'Reserva actualizada',
   'reservation.group_created': 'Reserva grupal creada',
   'reservation.checkin':       'Check-in desde reserva',
@@ -253,6 +257,8 @@ export default function DashboardPage() {
   const { data: activityData } = useActivityLogs({ page: 1 })
   const { data: housekeepers = [] } = useHousekeepers()
   const { markRead: markNotificationRead } = useNotifications()
+  const { hasPermission } = useAuth()
+  const canCheckOut = hasPermission('check_out')
 
   const [checkingIn, setCheckingIn] = useState<Room[]>([])
   const [checkoutStay, setCheckoutStay] = useState<Stay | null>(null)
@@ -261,7 +267,14 @@ export default function DashboardPage() {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [checkInReservation, setCheckInReservation] = useState<Reservation | null>(null)
 
-  const { stays: activeStays, addPayment } = useStays({ status: 'active' })
+  const {
+    stays: activeStays,
+    addPayment,
+    addService,
+    addMinibar,
+    transfer,
+    extend,
+  } = useStays({ status: 'active' })
 
   const stayForSelectedRoom = selectedRoom
     ? (activeStays as Stay[]).find((s) =>
@@ -638,131 +651,28 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Modal saldo pendiente */}
-      {selectedBalanceStay && (() => {
-        const { stay, total: t, paid, balance } = selectedBalanceStay
-        const rooms = (stay.stay_rooms ?? []).filter((sr) => sr.is_active !== false)
-        const fmt = (v: number | string) => `$${Number(v).toLocaleString('es-CO')}`
-        return (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ background: 'rgba(0,0,0,0.5)' }}
-            onClick={() => setSelectedBalanceStay(null)}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div
-              className="w-full max-w-lg rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col"
-              style={{ background: 'var(--bg-surface)', maxHeight: '85vh' }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between px-5 py-4 border-b shrink-0" style={{ borderColor: 'var(--border-default)' }}>
-                <div className="flex items-center gap-2">
-                  <DollarSign size={16} style={{ color: '#EF4444' }} />
-                  <div>
-                    <h2 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                      {stay.guest?.full_name ?? '—'}
-                    </h2>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {rooms.map((sr) => `Hab. ${sr.room?.number}`).join(', ') || '—'}
-                    </p>
-                  </div>
-                </div>
-                <button onClick={() => setSelectedBalanceStay(null)} className="rounded-lg p-1 hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
-                  <X size={18} />
-                </button>
-              </div>
+      {/* Drawer estadía (saldo pendiente) — mismo del módulo de estadías */}
+      {selectedBalanceStay && (
+        <StayDrawer
+          stayId={selectedBalanceStay.stay.id}
+          initialStay={selectedBalanceStay.stay}
+          onClose={() => setSelectedBalanceStay(null)}
+          canCheckOut={canCheckOut}
+          onCheckOut={(id) => {
+            const stay = (activeStays as Stay[]).find((s) => s.id === id)
+            if (stay) {
+              setCheckoutStay(stay)
+              setSelectedBalanceStay(null)
+            }
+          }}
+          onAddPayment={addPayment}
+          onAddService={addService}
+          onAddMinibar={addMinibar}
+          onTransfer={transfer}
+          onExtend={extend}
+        />
+      )}
 
-              {/* Body */}
-              <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
-
-                {/* Resumen financiero */}
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Total', value: fmt(t), color: 'var(--text-primary)' },
-                    { label: 'Abono', value: fmt(paid), color: '#16a34a' },
-                    { label: 'Saldo', value: fmt(balance), color: '#EF4444' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="rounded-xl p-3 text-center" style={{ background: 'var(--bg-main)', border: '1px solid var(--border-default)' }}>
-                      <p className="text-[10px] uppercase font-medium mb-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
-                      <p className="text-sm font-bold tabular-nums" style={{ color }}>{value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Habitaciones */}
-                {rooms.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Habitaciones</p>
-                    <div className="space-y-1.5">
-                      {rooms.map((sr) => (
-                        <div key={sr.id} className="flex items-center justify-between px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--bg-main)', border: '1px solid var(--border-default)' }}>
-                          <span style={{ color: 'var(--text-primary)' }}>Hab. {sr.room?.number} · {sr.nights} noche{sr.nights !== 1 ? 's' : ''}</span>
-                          <span className="tabular-nums font-medium" style={{ color: 'var(--text-primary)' }}>{fmt(sr.subtotal)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Servicios extras */}
-                {(stay.services ?? []).length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Servicios adicionales</p>
-                    <div className="space-y-1.5">
-                      {(stay.services ?? []).map((sv) => (
-                        <div key={sv.id} className="flex items-center justify-between px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--bg-main)', border: '1px solid var(--border-default)' }}>
-                          <span style={{ color: 'var(--text-primary)' }}>{sv.extra_service?.name ?? '—'} × {sv.quantity}</span>
-                          <span className="tabular-nums font-medium" style={{ color: 'var(--text-primary)' }}>{fmt(sv.total)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Minibar */}
-                {(stay.minibar_consumptions ?? []).length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Consumo minibar</p>
-                    <div className="space-y-1.5">
-                      {(stay.minibar_consumptions ?? []).map((mc) => (
-                        <div key={mc.id} className="flex items-center justify-between px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--bg-main)', border: '1px solid var(--border-default)' }}>
-                          <span style={{ color: 'var(--text-primary)' }}>{mc.product_name} × {mc.quantity}</span>
-                          <span className="tabular-nums font-medium" style={{ color: 'var(--text-primary)' }}>{fmt(mc.total)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Pagos realizados */}
-                {(stay.payments ?? []).length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>Pagos realizados</p>
-                    <div className="space-y-1.5">
-                      {(stay.payments ?? []).map((p) => (
-                        <div key={p.id} className="flex items-center justify-between px-3 py-2 rounded-lg text-xs" style={{ background: 'var(--bg-main)', border: '1px solid var(--border-default)' }}>
-                          <span style={{ color: 'var(--text-primary)' }}>
-                            {new Date(p.payment_date).toLocaleDateString('es-CO')} · {p.payment_method}
-                          </span>
-                          <span className="tabular-nums font-medium" style={{ color: '#16a34a' }}>{fmt(p.amount)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer saldo */}
-              <div className="flex items-center justify-between px-5 py-3 border-t shrink-0" style={{ borderColor: 'var(--border-default)' }}>
-                <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Saldo pendiente</span>
-                <span className="text-base font-bold tabular-nums" style={{ color: '#EF4444' }}>{fmt(balance)}</span>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
 
       {/* Modal detalle de habitación */}
       <DashboardRoomModal

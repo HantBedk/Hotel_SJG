@@ -212,6 +212,9 @@ export interface Payment {
   payment_date: string
   notes: string | null
   created_at: string
+  cancelled_at: string | null
+  cancellation_reason: string | null
+  cancelled_by?: { id: string; name: string } | null
 }
 
 export interface Stay {
@@ -690,6 +693,9 @@ export interface PaymentHistoryEntry {
   receptionist: string
   payment_date: string
   notes: string | null
+  cancelled_at: string | null
+  cancelled_by: string | null
+  cancellation_reason: string | null
 }
 
 // ── Admin — Users ─────────────────────────────────────────────────────────────

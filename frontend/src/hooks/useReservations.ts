@@ -10,6 +10,7 @@ import {
   extendReservationApi,
   checkInFromReservationApi,
   addReservationPaymentApi,
+  cancelReservationPaymentApi,
   type ReservationFilters,
   type BulkReservationPayload,
 } from '@/services/reservations.service'
@@ -86,6 +87,19 @@ export function useReservations(filters: ReservationFilters = {}) {
     onError: () => toast.error('Error al registrar pago.'),
   })
 
+  const cancelPaymentMutation = useMutation({
+    mutationFn: ({ reservationId, paymentId, reason }: { reservationId: string; paymentId: string; reason: string }) =>
+      cancelReservationPaymentApi(reservationId, paymentId, reason),
+    onSuccess: () => {
+      toast.success('Pago anulado. Queda en el historial.')
+      invalidate()
+      queryClient.invalidateQueries({ queryKey: ['payments-history'] })
+      queryClient.invalidateQueries({ queryKey: ['income'] })
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e?.response?.data?.message ?? 'Error al anular el pago.'),
+  })
+
   return {
     reservations:  (data as { data: unknown[] })?.data ?? [],
     meta:          (data as { meta: unknown })?.meta,
@@ -98,8 +112,10 @@ export function useReservations(filters: ReservationFilters = {}) {
     extend:        extendMutation.mutate,
     checkIn:       (payload: Parameters<typeof checkInMutation.mutate>[0]) => checkInMutation.mutateAsync(payload),
     addPayment:    paymentMutation.mutate,
+    cancelPayment: cancelPaymentMutation.mutateAsync,
     isCreating:    createMutation.isPending,
     isCheckingIn:  checkInMutation.isPending,
+    isCancellingPayment: cancelPaymentMutation.isPending,
   }
 }
 
