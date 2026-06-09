@@ -1,0 +1,526 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import {
+  DollarSign, BedDouble, Sparkles, ShoppingCart, Wallet, ArrowRight,
+  CreditCard, Banknote, ArrowRightLeft, Calendar, ChevronLeft, ChevronRight,
+} from 'lucide-react'
+import { useIncomeDaily, useIncomeSummary } from '@/hooks/useIncome'
+import { formatCOP } from '@/lib/format'
+import { SkeletonCard } from '@/components/ui/Skeleton'
+import type { IncomeRangeParams } from '@/services/income.service'
+
+type Preset = 'today' | 'week' | 'month' | 'last_30' | 'custom'
+
+const PRESET_LABEL: Record<Preset, string> = {
+  today:   'Hoy',
+  week:    'Esta semana',
+  month:   'Este mes',
+  last_30: 'Últimos 30 días',
+  custom:  'Personalizado',
+}
+
+const METHOD_LABEL: Record<string, string> = {
+  cash:     'Efectivo',
+  transfer: 'Transferencia',
+  card:     'Tarjeta',
+  credito:  'Crédito',
+}
+
+const METHOD_ICON: Record<string, React.ElementType> = {
+  cash:     Banknote,
+  transfer: ArrowRightLeft,
+  card:     CreditCard,
+  credito:  Wallet,
+}
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+export default function IncomePage() {
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const initialPreset = (searchParams.get('preset') as Preset) ?? 'today'
+  const [preset, setPreset] = useState<Preset>(
+    ['today', 'week', 'month', 'last_30', 'custom'].includes(initialPreset) ? initialPreset : 'today',
+  )
+  const [from, setFrom] = useState<string>(searchParams.get('from') ?? todayIso())
+  const [to,   setTo]   = useState<string>(searchParams.get('to')   ?? todayIso())
+
+  const queryParams: IncomeRangeParams = useMemo(
+    () => preset === 'custom' ? { from, to } : { preset },
+    [preset, from, to],
+  )
+
+  const { summary, isLoading, isFetching } = useIncomeSummary(queryParams)
+  const { daily }                          = useIncomeDaily(queryParams)
+
+  const changePreset = (next: Preset) => {
+    setPreset(next)
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev)
+      sp.set('preset', next)
+      if (next !== 'custom') { sp.delete('from'); sp.delete('to') }
+      return sp
+    }, { replace: true })
+  }
+
+  const applyCustom = () => {
+    setPreset('custom')
+    setSearchParams((prev) => {
+      const sp = new URLSearchParams(prev)
+      sp.set('preset', 'custom')
+      sp.set('from', from)
+      sp.set('to', to)
+      return sp
+    }, { replace: true })
+  }
+
+  const tonight = summary?.tonight
+  const nights  = summary?.nights ?? []
+  const range   = summary?.range
+  const maxDaily = Math.max(1, ...(daily?.data.map((d) => d.total) ?? [1]))
+
+  // ── Navegación día a día dentro del rango ──────────────────────────────────
+  // Por defecto seleccionamos hoy si está dentro del rango; si no, el último día.
+  const [selectedNightIdx, setSelectedNightIdx] = useState(0)
+  useEffect(() => {
+    if (nights.length === 0) return
+    const today = todayIso()
+    const todayIdx = nights.findIndex((n) => n.date === today)
+    setSelectedNightIdx(todayIdx >= 0 ? todayIdx : nights.length - 1)
+  }, [summary?.period.from, summary?.period.to, nights.length])
+
+  const safeIdx        = Math.min(Math.max(selectedNightIdx, 0), Math.max(0, nights.length - 1))
+  const selectedNight  = nights[safeIdx]
+  const isToday        = selectedNight?.date === todayIso()
+  const nightLabel     = selectedNight
+    ? (isToday
+        ? 'hoy'
+        : new Date(selectedNight.date + 'T12:00:00').toLocaleDateString('es-CO', {
+            weekday: 'long', day: 'numeric', month: 'short',
+          }))
+    : '—'
+
+  return (
+    <div className="space-y-5">
+      {/* Header con presets */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          className="flex flex-wrap gap-1 p-1 rounded-xl"
+          style={{ background: 'var(--bg-input)' }}
+        >
+          {(['today', 'week', 'month', 'last_30', 'custom'] as Preset[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => changePreset(p)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+              style={
+                preset === p
+                  ? { background: 'var(--bg-surface)', color: 'var(--color-primary)', boxShadow: '0 1px 3px rgba(0,0,0,.1)' }
+                  : { color: 'var(--text-secondary)' }
+              }
+            >
+              {PRESET_LABEL[p]}
+            </button>
+          ))}
+        </div>
+
+        {preset === 'custom' && (
+          <div
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+          >
+            <Calendar size={14} style={{ color: 'var(--text-muted)' }} />
+            <input
+              type="date"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+              className="text-xs bg-transparent outline-none"
+              style={{ color: 'var(--text-primary)' }}
+            />
+            <span style={{ color: 'var(--text-muted)' }}>→</span>
+            <input
+              type="date"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className="text-xs bg-transparent outline-none"
+              style={{ color: 'var(--text-primary)' }}
+            />
+            <button
+              onClick={applyCustom}
+              className="text-xs font-medium px-2 py-0.5 rounded-md"
+              style={{ background: 'var(--color-primary)', color: '#fff' }}
+            >
+              Aplicar
+            </button>
+          </div>
+        )}
+
+        {isFetching && (
+          <span className="text-xs ml-auto" style={{ color: 'var(--text-muted)' }}>
+            Actualizando…
+          </span>
+        )}
+      </div>
+
+      {/* KPIs principales */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {isLoading ? (
+          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+        ) : (
+          <>
+            <KpiCard
+              label="Ingreso diario de habitaciones"
+              value={formatCOP(tonight?.room_revenue ?? 0)}
+              sub={`${tonight?.rooms_count ?? 0} habitaciones generando ingreso`}
+              icon={BedDouble}
+              color="#16A34A"
+              colorBg="#ECFDF5"
+            />
+            <KpiCard
+              label={`Pagos recibidos · ${PRESET_LABEL[preset]}`}
+              value={formatCOP(range?.payments_received ?? 0)}
+              sub={`${range?.payments_count ?? 0} pagos en el periodo`}
+              icon={Wallet}
+              color="var(--color-primary)"
+              colorBg="var(--color-primary-light)"
+            />
+            <KpiCard
+              label="Servicios cobrados"
+              value={formatCOP(range?.services_billed ?? 0)}
+              sub="Servicios extra aplicados"
+              icon={Sparkles}
+              color="#8B5CF6"
+              colorBg="#F5F3FF"
+            />
+            <KpiCard
+              label="Minibar"
+              value={formatCOP(range?.minibar_billed ?? 0)}
+              sub="Consumos registrados"
+              icon={ShoppingCart}
+              color="#F97316"
+              colorBg="#FFF7ED"
+            />
+          </>
+        )}
+      </div>
+
+      {/* Layout principal */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        {/* Col A: Habitaciones generando ingreso (navegable día a día) */}
+        <div
+          className="lg:col-span-5 rounded-xl p-4 flex flex-col"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <BedDouble size={16} style={{ color: '#16A34A' }} />
+            <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+              Detallado de ingreso diario de habitaciones
+            </h3>
+            {selectedNight?.rooms_count != null && (
+              <span
+                className="ml-auto text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                style={{ background: '#ECFDF5', color: '#16A34A' }}
+              >
+                {selectedNight.rooms_count}
+              </span>
+            )}
+          </div>
+
+          {/* Navegación día a día (solo si hay más de 1 noche en el rango) */}
+          {nights.length > 1 && (
+            <div
+              className="flex items-center justify-between gap-2 mb-3 px-2 py-1.5 rounded-lg"
+              style={{ background: 'var(--bg-input)' }}
+            >
+              <button
+                onClick={() => setSelectedNightIdx((i) => Math.max(0, i - 1))}
+                disabled={safeIdx === 0}
+                className="p-1 rounded-md disabled:opacity-30 hover:bg-black/5"
+                style={{ color: 'var(--text-secondary)' }}
+                aria-label="Día anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <div className="flex flex-col items-center text-center">
+                <span className="text-xs font-semibold capitalize" style={{ color: 'var(--text-primary)' }}>
+                  {nightLabel}
+                </span>
+                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  {safeIdx + 1} de {nights.length}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedNightIdx((i) => Math.min(nights.length - 1, i + 1))}
+                disabled={safeIdx >= nights.length - 1}
+                className="p-1 rounded-md disabled:opacity-30 hover:bg-black/5"
+                style={{ color: 'var(--text-secondary)' }}
+                aria-label="Día siguiente"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+
+          {(!selectedNight || selectedNight.rooms.length === 0) ? (
+            <p className="text-xs py-8 text-center" style={{ color: 'var(--text-muted)' }}>
+              No hay habitaciones ocupadas {nightLabel}.
+            </p>
+          ) : (
+            <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
+              {selectedNight.rooms.map((r) => (
+                <button
+                  key={r.stay_room_id}
+                  onClick={() => navigate(`/stays?id=${r.stay_id}`)}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left hover:opacity-80 transition-opacity"
+                  style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
+                >
+                  <span
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
+                    style={{ background: '#16A34A' }}
+                  >
+                    {r.room_number ?? '—'}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                      {r.guest_name ?? '—'}
+                    </p>
+                    {r.company_name && (
+                      <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
+                        {r.company_name}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-sm font-bold tabular-nums" style={{ color: '#16A34A' }}>
+                    {formatCOP(r.price)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div
+            className="mt-3 pt-3 flex items-center justify-between"
+            style={{ borderTop: '1px solid var(--border-default)' }}
+          >
+            <span className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+              Total devengado {nightLabel}
+            </span>
+            <span className="text-lg font-bold tabular-nums" style={{ color: '#16A34A' }}>
+              {formatCOP(selectedNight?.room_revenue ?? 0)}
+            </span>
+          </div>
+        </div>
+
+        {/* Col B: Gráfico diario + métodos */}
+        <div className="lg:col-span-7 flex flex-col gap-4">
+
+          {/* Daily bar chart */}
+          <div
+            className="rounded-xl p-4"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+                {daily?.granularity === 'hour' ? 'Pagos por hora' : 'Pagos por día'}
+              </h3>
+              <span className="text-[10px] uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>
+                {PRESET_LABEL[preset]}
+              </span>
+            </div>
+
+            {!daily || daily.data.length === 0 ? (
+              <p className="text-xs py-8 text-center" style={{ color: 'var(--text-muted)' }}>
+                Sin datos para el periodo seleccionado.
+              </p>
+            ) : (
+              <div className="flex items-end gap-1.5 h-40">
+                {daily.data.map((d) => {
+                  const h = Math.max(2, Math.round((d.total / maxDaily) * 100))
+                  return (
+                    <div key={d.date} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
+                      <div className="flex-1 w-full flex items-end">
+                        <div
+                          className="w-full rounded-t-md transition-all"
+                          style={{
+                            height: `${h}%`,
+                            background: d.total > 0 ? 'var(--color-primary)' : 'var(--border-default)',
+                            opacity: d.total > 0 ? 1 : 0.4,
+                          }}
+                          title={`${d.label}: ${formatCOP(d.total)}`}
+                        />
+                      </div>
+                      <span className="text-[9px] truncate w-full text-center" style={{ color: 'var(--text-muted)' }}>
+                        {d.label}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Métodos de pago */}
+          <div
+            className="rounded-xl p-4"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+          >
+            <h3 className="text-sm font-bold mb-3" style={{ color: 'var(--text-primary)' }}>
+              Por método de pago
+            </h3>
+            {!summary || summary.payments_by_method.length === 0 ? (
+              <p className="text-xs py-4 text-center" style={{ color: 'var(--text-muted)' }}>
+                Sin pagos en el periodo.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {summary.payments_by_method.map((m) => {
+                  const Icon = METHOD_ICON[m.method] ?? DollarSign
+                  return (
+                    <div
+                      key={m.method}
+                      className="rounded-lg p-3"
+                      style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon size={14} style={{ color: 'var(--color-primary)' }} />
+                        <span className="text-xs font-semibold" style={{ color: 'var(--text-primary)' }}>
+                          {METHOD_LABEL[m.method] ?? m.method}
+                        </span>
+                        <span className="ml-auto text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          {m.count}
+                        </span>
+                      </div>
+                      <p className="text-lg font-bold tabular-nums mt-1" style={{ color: 'var(--text-primary)' }}>
+                        {formatCOP(m.total)}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Pagos recientes */}
+      <div
+        className="rounded-xl p-4"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+      >
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+            Pagos recientes
+          </h3>
+          <button
+            onClick={() => navigate('/activity?tab=pagos')}
+            className="text-[11px] font-semibold inline-flex items-center gap-1"
+            style={{ color: 'var(--color-primary)' }}
+          >
+            Ver histórico completo <ArrowRight size={11} />
+          </button>
+        </div>
+
+        {!summary || summary.recent_payments.length === 0 ? (
+          <p className="text-xs py-8 text-center" style={{ color: 'var(--text-muted)' }}>
+            No hay pagos registrados en el periodo seleccionado.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ color: 'var(--text-muted)' }}>
+                  <th className="text-left font-semibold py-2 px-2">Fecha</th>
+                  <th className="text-left font-semibold py-2 px-2">Huésped / Empresa</th>
+                  <th className="text-left font-semibold py-2 px-2">Recepción</th>
+                  <th className="text-left font-semibold py-2 px-2">Método</th>
+                  <th className="text-right font-semibold py-2 px-2">Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.recent_payments.map((p) => (
+                  <tr
+                    key={p.id}
+                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                    style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                    onClick={() => navigate(`/stays?id=${p.stay_id}`)}
+                  >
+                    <td className="py-2 px-2 whitespace-nowrap">
+                      {new Date(p.payment_date).toLocaleString('es-CO', {
+                        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                      })}
+                    </td>
+                    <td className="py-2 px-2">
+                      <span className="font-medium">{p.guest_name ?? '—'}</span>
+                      {p.company_name && (
+                        <span className="block text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                          {p.company_name}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 px-2" style={{ color: 'var(--text-secondary)' }}>
+                      {p.receptionist ?? '—'}
+                    </td>
+                    <td className="py-2 px-2">
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                        style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
+                      >
+                        {METHOD_LABEL[p.payment_method] ?? p.payment_method}
+                      </span>
+                    </td>
+                    <td className="py-2 px-2 text-right font-bold tabular-nums" style={{ color: '#16A34A' }}>
+                      {formatCOP(p.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+interface KpiCardProps {
+  label: string
+  value: string
+  sub: string
+  icon: React.ElementType
+  color: string
+  colorBg: string
+}
+
+function KpiCard({ label, value, sub, icon: Icon, color, colorBg }: KpiCardProps) {
+  return (
+    <div
+      className="rounded-xl p-3 flex flex-col justify-between"
+      style={{
+        background:  'var(--bg-surface)',
+        border:      '1px solid var(--border-default)',
+        boxShadow:   'var(--shadow-sm)',
+        minHeight:   '84px',
+      }}
+    >
+      <p className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>{label}</p>
+      <div className="flex items-end justify-between mt-1.5">
+        <div className="min-w-0">
+          <p className="text-xl font-bold tracking-tight leading-tight tabular-nums truncate" style={{ color: 'var(--text-primary)' }}>
+            {value}
+          </p>
+          <p className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-muted)' }}>{sub}</p>
+        </div>
+        <div
+          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ml-2"
+          style={{ background: colorBg }}
+        >
+          <Icon size={18} style={{ color }} />
+        </div>
+      </div>
+    </div>
+  )
+}

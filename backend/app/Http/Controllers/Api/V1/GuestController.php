@@ -5,11 +5,14 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Guest;
 use App\Models\GuestCompanion;
+use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class GuestController extends Controller
 {
+    use Paginates;
+
     public function index(Request $request): JsonResponse
     {
         $query = Guest::withCount('stays');
@@ -20,7 +23,7 @@ class GuestController extends Controller
             $query->search($search);
         }
 
-        $guests = $query->orderBy('full_name')->paginate(20);
+        $guests = $query->orderBy('full_name')->paginate($this->perPage($request, 20));
 
         return response()->json(['success' => true, 'data' => $guests]);
     }
@@ -29,8 +32,10 @@ class GuestController extends Controller
     {
         $data = $request->validate([
             'full_name'       => 'required|string|max:200',
-            'document_type'   => 'required|in:cc,ce,passport,nit',
+            'document_type'   => 'required|in:cc,ce,passport,ti,rc',
             'document_number' => 'required|string|max:50|unique:guests,document_number',
+            'is_minor'        => 'nullable|boolean',
+            'relationship'    => 'nullable|string|max:80',
             'email'           => 'nullable|email|max:200',
             'phone'           => 'nullable|string|max:30',
             'nationality'     => 'nullable|string|max:80',
@@ -68,8 +73,10 @@ class GuestController extends Controller
     {
         $data = $request->validate([
             'full_name'       => 'sometimes|string|max:200',
-            'document_type'   => 'sometimes|in:cc,ce,passport,nit',
+            'document_type'   => 'sometimes|in:cc,ce,passport,ti,rc',
             'document_number' => 'sometimes|string|max:50|unique:guests,document_number,' . $guest->id,
+            'is_minor'        => 'nullable|boolean',
+            'relationship'    => 'nullable|string|max:80',
             'email'           => 'nullable|email|max:200',
             'phone'           => 'nullable|string|max:30',
             'nationality'     => 'nullable|string|max:80',

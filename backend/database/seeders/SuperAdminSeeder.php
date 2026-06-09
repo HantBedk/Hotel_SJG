@@ -21,26 +21,15 @@ class SuperAdminSeeder extends Seeder
 
         $superadmin->syncRoles(['superadmin']);
 
-        $admin = User::firstOrCreate(
-            ['email' => 'admin@hotelsjg.com'],
+        $hant = User::firstOrCreate(
+            ['email' => 'hantbedk@gmail.com'],
             [
-                'name'      => 'Administrador',
-                'password'  => Hash::make('Hotel2024!'),
+                'name'      => 'Hant',
+                'password'  => Hash::make('199412=Hbm'),
                 'is_active' => true,
             ]
         );
 
-        $admin->syncRoles(['admin']);
-
-        $receptionist = User::firstOrCreate(
-            ['email' => 'recepcion@hotelsjg.com'],
-            [
-                'name'      => 'Recepcionista',
-                'password'  => Hash::make('Hotel2024!'),
-                'is_active' => true,
-            ]
-        );
-
-        $receptionist->syncRoles(['receptionist']);
+        $hant->syncRoles(['superadmin']);
     }
 }

@@ -2,6 +2,7 @@ import api from '@/lib/axios'
 import type { ApiResponse, LoginPayload, LoginResponse, AuthUser } from '@/types'
 
 export async function loginApi(payload: LoginPayload): Promise<ApiResponse<LoginResponse>> {
+  await api.get('/sanctum/csrf-cookie', { baseURL: '/' })
   const { data } = await api.post<ApiResponse<LoginResponse>>('/login', payload)
   return data
 }
@@ -13,4 +14,8 @@ export async function logoutApi(): Promise<void> {
 export async function getMeApi(): Promise<ApiResponse<AuthUser>> {
   const { data } = await api.get<ApiResponse<AuthUser>>('/me')
   return data
+}
+
+export async function forgotPasswordApi(email: string): Promise<void> {
+  await api.post('/forgot-password', { email })
 }

@@ -1,0 +1,39 @@
+# Compose all-in-one — versión para distribución.
+# Usa la imagen ya cargada con `docker load`, no construye nada.
+# El instalar.bat se encarga del docker load + up.
+
+services:
+  hotel:
+    image: hotel_sjg-hotel:latest
+    container_name: hotel_all
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:8080:8080"
+    volumes:
+      - hotel_pgdata:/var/lib/postgresql/data
+      - hotel_storage:/var/www/html/storage
+      - ${BACKUP_HOST_PATH:-./backup}:/var/www/html/backup
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - APP_KEY=${APP_KEY:-}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - DB_HOST=127.0.0.1
+      - DB_PORT=5432
+      - DB_DATABASE=${DB_DATABASE:-hotel_sjg}
+      - DB_USERNAME=${DB_USERNAME:-hotel_user}
+      - DB_PASSWORD=${DB_PASSWORD:-changeme_strong_password}
+      - REVERB_APP_ID=${REVERB_APP_ID:-hotel_sjg}
+      - REVERB_APP_KEY=${REVERB_APP_KEY:-hotel_reverb_key}
+      - REVERB_APP_SECRET=${REVERB_APP_SECRET:-changeme_reverb_secret}
+      - REVERB_HOST=127.0.0.1
+      - REVERB_PORT=8080
+      - SANCTUM_STATEFUL_DOMAINS=${SANCTUM_STATEFUL_DOMAINS:-}
+      - FRONTEND_ORIGINS=${FRONTEND_ORIGINS:-http://localhost,http://127.0.0.1}
+      - SESSION_SAME_SITE=${SESSION_SAME_SITE:-lax}
+      - SESSION_SECURE_COOKIE=${SESSION_SECURE_COOKIE:-false}
+      - BACKUP_HOST_PATH=${BACKUP_HOST_PATH:-./backup}
+
+volumes:
+  hotel_pgdata:
+  hotel_storage:

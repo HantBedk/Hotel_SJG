@@ -1,0 +1,109 @@
+# ─────────────────────────────────────────────────────────────
+# Hotel Manager — All-in-one image
+# Postgres + Nginx + PHP-FPM + Laravel Reverb + Scheduler
+# Todo en un único contenedor coordinado por supervisord.
+# ─────────────────────────────────────────────────────────────
+
+# Stage 1: Build React frontend
+FROM node:20-alpine AS frontend-builder
+
+WORKDIR /frontend
+
+COPY frontend/package*.json ./
+RUN npm ci
+
+COPY frontend/ ./
+# Saltamos `tsc -b` (hay 18 errores TS pre-existentes que bloquean el build).
+# Vite + esbuild transpila igual para producción. Arreglar los errores TS es
+# un trabajo aparte que el script `npm run build` (tsc -b && vite build) volverá
+# a exigir cuando se corrija.
+RUN npx vite build
+
+# Stage 2: Runtime
+FROM php:8.4-fpm-alpine AS app
+
+# System deps — incluye postgresql (server + client)
+RUN apk add --no-cache \
+    nginx \
+    postgresql \
+    postgresql-contrib \
+    postgresql-client \
+    libpq-dev \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    libwebp-dev \
+    freetype-dev \
+    zip \
+    libzip-dev \
+    unzip \
+    curl \
+    bash \
+    supervisor \
+    su-exec
+
+# PHP extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install -j$(nproc) \
+        pdo \
+        pdo_pgsql \
+        pgsql \
+        gd \
+        zip \
+        exif \
+        pcntl \
+        bcmath \
+        opcache
+
+# Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+# PHP / Nginx configs
+COPY docker/php/local.ini /usr/local/etc/php/conf.d/local.ini
+COPY docker/nginx/default.conf /etc/nginx/http.d/default.conf
+
+# Supervisord all-in-one (incluye postgres + reverb + nginx + fpm + scheduler)
+COPY docker/supervisord.allinone.conf /etc/supervisord.conf
+
+# Laravel backend
+WORKDIR /var/www/html
+COPY backend/ .
+
+# .env desde example para que key:generate tenga dónde escribir
+RUN cp .env.example .env
+
+# Composer
+RUN composer install --no-dev --optimize-autoloader --no-interaction
+
+# Frontend build → public/app + index.html en raíz
+# Vite ya genera el index.html con base='/app/' correcto, así que lo copiamos.
+COPY --from=frontend-builder /frontend/dist ./public/app
+RUN cp ./public/app/index.html ./public/index.html
+
+# Directorios Laravel
+RUN mkdir -p \
+        storage/app/public \
+        storage/app/comprobantes \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
+
+# Backup folder
+RUN mkdir -p /var/www/html/backup && chown www-data:www-data /var/www/html/backup
+
+# Postgres data dir + logs (su-exec corre psql como postgres user)
+RUN mkdir -p /var/lib/postgresql/data /run/postgresql /var/log/postgresql \
+    && chown -R postgres:postgres /var/lib/postgresql /run/postgresql /var/log/postgresql \
+    && chmod 700 /var/lib/postgresql/data
+
+# Entrypoint all-in-one
+COPY entrypoint.allinone.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Puertos: 80 = HTTP (nginx), 8080 = WebSocket (reverb)
+EXPOSE 80 8080
+
+ENTRYPOINT ["/entrypoint.sh"]

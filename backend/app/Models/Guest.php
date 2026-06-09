@@ -15,6 +15,8 @@ class Guest extends Model
         'full_name',
         'document_type',
         'document_number',
+        'is_minor',
+        'relationship',
         'email',
         'phone',
         'nationality',
@@ -26,6 +28,7 @@ class Guest extends Model
     {
         return [
             'birth_date' => 'date',
+            'is_minor'   => 'boolean',
         ];
     }
 

@@ -1,5 +1,11 @@
 <?php
 
+use App\Console\Commands\CheckInventoryAlerts;
+use App\Console\Commands\CheckReservationAlerts;
+use App\Console\Commands\CheckRoomConsistency;
+use App\Console\Commands\CreateAutoBackup;
+use App\Console\Commands\GenerateSuggestions;
+use App\Console\Commands\SendAdminAlertSummary;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -14,7 +20,29 @@ return Application::configure(basePath: dirname(__DIR__))
         channels:    __DIR__ . '/../routes/channels.php',
         health:      '/up',
     )
+    ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
+        $schedule->command(CheckReservationAlerts::class)->hourly();
+        $schedule->command(CheckRoomConsistency::class)->hourly();
+        $schedule->command(CheckInventoryAlerts::class)->dailyAt('08:00');
+        $schedule->command(GenerateSuggestions::class)->dailyAt('06:00');
+        // Resumen admin: corre cada hora; el comando filtra contra hotel.admin_alert_hours
+        $schedule->command(SendAdminAlertSummary::class)->hourly();
+        // Auto-backup: hora configurable desde ajustes
+        try {
+            if (\App\Models\Setting::get('backup.auto_backup', true)) {
+                $time = \App\Models\Setting::get('backup.auto_backup_time', '23:59');
+                $schedule->command(CreateAutoBackup::class)->dailyAt($time);
+            }
+        } catch (\Throwable) {
+            // DB no disponible en instalación inicial
+        }
+    })
     ->withMiddleware(function (Middleware $middleware) {
+        // Sanctum SPA mode: enables session-based auth on /api/* requests
+        // when the origin matches SANCTUM_STATEFUL_DOMAINS. Bearer tokens
+        // still work for non-stateful requests (cron, external clients).
+        $middleware->statefulApi();
+
         $middleware->alias([
             'auth.sanctum'       => \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             'role'               => \Spatie\Permission\Middleware\RoleMiddleware::class,

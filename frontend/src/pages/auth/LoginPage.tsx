@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { BedDouble, Mail, Lock, Eye, EyeOff, ShieldCheck, Key, Bell, UserCircle, ArrowRight, Shield } from 'lucide-react'
+import { BedDouble, Mail, Lock, Eye, EyeOff, ShieldCheck, Key, Bell, UserCircle, ArrowRight, Shield, X, CheckCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLoginForm } from '@/hooks/useLoginForm'
+import { forgotPasswordApi } from '@/services/auth.service'
 import { cn } from '@/lib/cn'
 
 const features = [
@@ -19,8 +20,30 @@ const phrases = [
 
 export default function LoginPage() {
   const { register, handleSubmit, errors, isSubmitting } = useLoginForm()
-  const [showPass, setShowPass] = useState(false)
+  const [showPass, setShowPass]         = useState(false)
   const [currentPhrase, setCurrentPhrase] = useState(0)
+
+  // Forgot password modal
+  const [showForgot, setShowForgot]     = useState(false)
+  const [forgotEmail, setForgotEmail]   = useState('')
+  const [forgotStatus, setForgotStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setForgotStatus('sending')
+    try {
+      await forgotPasswordApi(forgotEmail)
+      setForgotStatus('sent')
+    } catch {
+      setForgotStatus('error')
+    }
+  }
+
+  const closeForgot = () => {
+    setShowForgot(false)
+    setForgotEmail('')
+    setForgotStatus('idle')
+  }
 
   useEffect(() => {
     const id = setInterval(() => setCurrentPhrase(p => (p + 1) % phrases.length), 7000)
@@ -203,7 +226,94 @@ export default function LoginPage() {
                 </>
               )}
             </button>
+
+            {/* Forgot password link */}
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => setShowForgot(true)}
+                className="text-xs text-slate-400 hover:text-blue-600 transition-colors underline-offset-2 hover:underline"
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
           </form>
+
+          {/* Forgot password modal */}
+          {showForgot && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6"
+              >
+                <div className="flex items-center justify-between mb-5">
+                  <h3 className="font-bold text-slate-900 text-base">Olvidé mi contraseña</h3>
+                  <button onClick={closeForgot} className="text-slate-400 hover:text-slate-600 transition-colors">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {forgotStatus === 'sent' ? (
+                  <div className="flex flex-col items-center gap-3 py-4 text-center">
+                    <CheckCircle className="w-12 h-12 text-emerald-500" />
+                    <p className="text-sm text-slate-700 font-medium">Solicitud enviada</p>
+                    <p className="text-xs text-slate-500">
+                      Tu solicitud fue notificada al administrador. Espera que te asignen una nueva contraseña.
+                    </p>
+                    <button
+                      onClick={closeForgot}
+                      className="mt-2 px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                    >
+                      Entendido
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleForgot} className="space-y-4">
+                    <p className="text-xs text-slate-500">
+                      Ingresa tu correo y se le notificará al administrador para que restablezca tu contraseña.
+                    </p>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1 uppercase tracking-wide">
+                        Correo electrónico
+                      </label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <input
+                          type="email"
+                          required
+                          autoFocus
+                          value={forgotEmail}
+                          onChange={e => setForgotEmail(e.target.value)}
+                          placeholder="tu@correo.com"
+                          className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                    {forgotStatus === 'error' && (
+                      <p className="text-xs text-red-500">Error al enviar la solicitud. Intenta de nuevo.</p>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={closeForgot}
+                        className="flex-1 py-2.5 rounded-xl text-sm border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={forgotStatus === 'sending'}
+                        className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-60"
+                      >
+                        {forgotStatus === 'sending' ? 'Enviando...' : 'Enviar solicitud'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </motion.div>
+            </div>
+          )}
 
           <div className="mt-10 pt-6 border-t border-slate-100 flex items-center justify-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-500" />

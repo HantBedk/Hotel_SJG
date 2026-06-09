@@ -1,12 +1,24 @@
 @import "tailwindcss";
 
+/* Tailwind v4: dark variant must match the app's [data-theme="dark"] selector,
+   NOT the OS prefers-color-scheme. Without this, dark: classes fire based on
+   the user's OS setting, causing black hover backgrounds in light mode. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 /* ── Design Tokens ─────────────────────────────────────────────────────────── */
 :root {
   /* Backgrounds */
   --bg-base:       #F8FAFC;
   --bg-surface:    #FFFFFF;
   --bg-elevated:   #F1F5F9;
+  --bg-input:      #F1F5F9;
+  --bg-muted:      #F1F5F9;
   --bg-overlay:    rgba(15, 23, 42, 0.5);
+
+  /* Soft status tints (background tints) */
+  --status-available-soft: #ECFDF5;
+  --status-occupied-soft:  #FEF2F2;
+  --status-warning-soft:   #FFFBEB;
 
   /* Primario — Azul marino */
   --color-primary:         #1E40AF;
@@ -76,7 +88,14 @@
   --bg-base:       #0B1120;
   --bg-surface:    #0F172A;
   --bg-elevated:   #1E293B;
+  --bg-input:      #1E293B;
+  --bg-muted:      #1E293B;
   --bg-overlay:    rgba(0, 0, 0, 0.7);
+
+  /* Soft status tints — translucent so text-primary (light) stays legible */
+  --status-available-soft: rgba(16, 185, 129, 0.16);
+  --status-occupied-soft:  rgba(248, 113, 113, 0.16);
+  --status-warning-soft:   rgba(251, 191, 36, 0.16);
 
   --color-primary:        #3B82F6;
   --color-primary-hover:  #2563EB;
@@ -103,12 +122,31 @@
   box-sizing: border-box;
 }
 
+/* color-scheme indica al browser qué paleta usar para controles nativos:
+   dropdowns de <select>, calendarios de <input type="date">, scrollbars,
+   form autofill, etc. Sin esto el dropdown del select aparece blanco
+   en modo oscuro y rompe contraste con el resto de la UI. */
+:root              { color-scheme: light; }
+[data-theme="dark"] { color-scheme: dark; }
+
 html {
   font-family: var(--font-sans);
   color: var(--text-primary);
   background-color: var(--bg-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Los <option> heredan estilos del browser, no del <select>. Forzamos que
+   respeten el tema actual para que el desplegable tenga el mismo contraste. */
+option {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
+option:checked,
+option:hover {
+  background-color: var(--color-primary-light);
+  color: var(--text-primary);
 }
 
 body {
@@ -161,6 +199,18 @@ button.icon-sm, a.icon-sm {
   background-color: var(--bg-elevated);
   border-radius: var(--radius-md);
   animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* ── Touch targets (A11y) — mínimo 44×44px en móvil ────────────────────── */
+@media (pointer: coarse) {
+  button, [role="button"], a, input[type="checkbox"], input[type="radio"], select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  input[type="text"], input[type="email"], input[type="password"],
+  input[type="number"], input[type="date"], input[type="search"], textarea {
+    min-height: 44px;
+  }
 }
 
 /* ── prefers-reduced-motion (A11y) ──────────────────────────────────────── */

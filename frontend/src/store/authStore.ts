@@ -1,36 +1,56 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { AuthUser } from '@/types'
 
 interface AuthState {
-  token: string | null
   user: AuthUser | null
+  token: string | null
   isAuthenticated: boolean
-  setAuth: (token: string, user: AuthUser) => void
+  isBootstrapping: boolean
+  setAuth: (user: AuthUser, token: string) => void
+  setUser: (user: AuthUser) => void
   clearAuth: () => void
+  setBootstrapping: (value: boolean) => void
   hasPermission: (permission: string) => boolean
   hasRole: (role: string) => boolean
 }
 
-// Token lives ONLY in Zustand memory — never localStorage, never sessionStorage
-export const useAuthStore = create<AuthState>((set, get) => ({
-  token: null,
-  user: null,
-  isAuthenticated: false,
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      isBootstrapping: true,
 
-  setAuth: (token, user) => set({ token, user, isAuthenticated: true }),
+      setAuth: (user, token) => set({ user, token, isAuthenticated: true }),
 
-  clearAuth: () => set({ token: null, user: null, isAuthenticated: false }),
+      setUser: (user) => set({ user, isAuthenticated: true }),
 
-  hasPermission: (permission) => {
-    const { user } = get()
-    if (!user) return false
-    if (user.roles.includes('superadmin')) return true
-    return user.permissions.includes(permission)
-  },
+      clearAuth: () => set({ user: null, token: null, isAuthenticated: false }),
 
-  hasRole: (role) => {
-    const { user } = get()
-    if (!user) return false
-    return user.roles.includes(role)
-  },
-}))
+      setBootstrapping: (value) => set({ isBootstrapping: value }),
+
+      hasPermission: (permission) => {
+        const { user } = get()
+        if (!user) return false
+        if (user.roles.includes('superadmin')) return true
+        return user.permissions.includes(permission)
+      },
+
+      hasRole: (role) => {
+        const { user } = get()
+        if (!user) return false
+        return user.roles.includes(role)
+      },
+    }),
+    {
+      name: 'hotel-sjg-auth',
+      partialize: (state) => ({
+        token: state.token,
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    }
+  )
+)

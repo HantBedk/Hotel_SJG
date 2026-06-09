@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import {
   getRoomsApi, getRoomTypesApi, createRoomApi,
   updateRoomApi, updateRoomStatusApi, deleteRoomApi,
+  getHousekeepersApi,
 } from '@/services/rooms.service'
 import type { Room, RoomStatus } from '@/types'
 
@@ -73,14 +74,23 @@ export function useRooms(statusFilter?: RoomStatus) {
     rooms,
     roomTypes,
     isLoading,
-    createRoom:   createMutation.mutate,
-    updateRoom:   updateMutation.mutate,
-    changeStatus: statusMutation.mutate,
-    deleteRoom:   deleteMutation.mutate,
-    isCreating:   createMutation.isPending,
-    isUpdating:   updateMutation.isPending,
-    isChanging:   statusMutation.isPending,
-    isDeleting:   deleteMutation.isPending,
+    createRoom:        createMutation.mutate,
+    updateRoom:        updateMutation.mutate,
+    changeStatus:      statusMutation.mutate,
+    changeStatusAsync: statusMutation.mutateAsync,
+    deleteRoom:        deleteMutation.mutate,
+    isCreating:        createMutation.isPending,
+    isUpdating:        updateMutation.isPending,
+    isChanging:        statusMutation.isPending,
+    isDeleting:        deleteMutation.isPending,
     syncRoomStatus,
   }
+}
+
+export function useHousekeepers() {
+  return useQuery({
+    queryKey: ['housekeepers'],
+    queryFn:  getHousekeepersApi,
+    staleTime: 5 * 60 * 1000,
+  })
 }

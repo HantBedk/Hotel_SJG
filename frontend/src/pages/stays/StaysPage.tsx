@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
-import { useStays } from '@/hooks/useStays'
+import { useSearchParams } from 'react-router-dom'
+import { Search } from 'lucide-react'
+import { useStays, useStay } from '@/hooks/useStays'
 import { useAuth } from '@/hooks/useAuth'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { StayDrawer } from './components/StayDrawer'
+import { CheckoutWizard } from './components/CheckoutWizard'
 import type { Stay } from '@/types'
 
 const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  active:      { label: 'Activa',   color: 'var(--status-occupied)',  bg: '#FFF1F2' },
-  extended:    { label: 'Extendida', color: 'var(--status-reserved)', bg: '#FFFBEB' },
+  active:      { label: 'Activa',    color: 'var(--status-occupied)',  bg: '#FFF1F2' },
+  extended:    { label: 'Extendida', color: 'var(--status-reserved)',  bg: '#FFFBEB' },
   checked_out: { label: 'Cerrada',   color: 'var(--text-muted)',       bg: 'var(--bg-input)' },
 }
 
@@ -29,25 +32,62 @@ export default function StaysPage() {
   const { hasPermission } = useAuth()
   const canCheckOut = hasPermission('check_out')
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const deepLinkId     = searchParams.get('id')
+  const deepLinkAction = searchParams.get('action')
+
   const [statusFilter, setStatusFilter] = useState<string>('active')
+  const [guestSearch, setGuestSearch]   = useState('')
   const [selected, setSelected] = useState<Stay | null>(null)
+  const [checkoutStay, setCheckoutStay] = useState<Stay | null>(null)
 
-  const { stays, isLoading, checkOut, transfer, addPayment, addService, isCheckingOut } = useStays(statusFilter)
+  const { stays: rawStays, isLoading, transfer, addPayment, addService, addMinibar, extend } = useStays({ status: statusFilter })
 
-  // Sync selected when the list refetches after mutations
+  // Deep-link: cargar la estadía pedida en la URL aunque no esté en el filtro actual
+  const { data: deepLinkStay } = useStay(deepLinkId ?? '')
+
+  // Client-side filter by guest/company name
+  const stays = guestSearch.trim()
+    ? (rawStays as Stay[]).filter((s) =>
+        s.guest?.full_name?.toLowerCase().includes(guestSearch.toLowerCase()) ||
+        s.company?.name?.toLowerCase().includes(guestSearch.toLowerCase())
+      )
+    : (rawStays as Stay[])
+
   useEffect(() => {
     if (selected) {
-      const updated = (stays as Stay[]).find((s) => s.id === selected.id)
+      const updated = (rawStays as Stay[])?.find((s) => s.id === selected.id)
       if (updated) setSelected(updated)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stays])
+  }, [rawStays])
+
+  // Aplicar deep-link cuando la estadía esté disponible
+  useEffect(() => {
+    if (!deepLinkId || !deepLinkStay) return
+    setSelected(deepLinkStay)
+    if (deepLinkAction === 'checkout' && deepLinkStay.status === 'active') {
+      setCheckoutStay(deepLinkStay)
+    }
+    // Limpiar query-params para evitar reapertura al refrescar
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('id')
+      next.delete('action')
+      return next
+    }, { replace: true })
+  }, [deepLinkId, deepLinkStay, deepLinkAction, setSearchParams])
+
+  const handleCheckoutSuccess = () => {
+    setCheckoutStay(null)
+    setSelected(null)
+  }
 
   return (
     <div className="space-y-5">
 
-      {/* Filter */}
-      <div className="flex gap-2">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map(({ key, label }) => (
           <button
             key={key}
@@ -62,6 +102,20 @@ export default function StaysPage() {
             {label}
           </button>
         ))}
+        {/* Search by guest / company */}
+        <div
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border ml-auto"
+          style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
+        >
+          <Search size={13} style={{ color: 'var(--text-muted)' }} />
+          <input
+            value={guestSearch}
+            onChange={(e) => setGuestSearch(e.target.value)}
+            placeholder="Buscar huésped o empresa…"
+            className="bg-transparent text-xs outline-none w-44"
+            style={{ color: 'var(--text-primary)' }}
+          />
+        </div>
       </div>
 
       {/* Table */}
@@ -131,10 +185,9 @@ export default function StaysPage() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
-                            checkOut({ id: stay.id })
+                            setCheckoutStay(stay)
                           }}
-                          disabled={isCheckingOut}
-                          className="px-3 py-1 rounded-lg text-xs border hover:opacity-80 disabled:opacity-40"
+                          className="px-3 py-1 rounded-lg text-xs border hover:opacity-80"
                           style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
                         >
                           Checkout
@@ -157,12 +210,23 @@ export default function StaysPage() {
           onClose={() => setSelected(null)}
           canCheckOut={canCheckOut}
           onCheckOut={(id: string) => {
-            checkOut({ id })
-            setSelected(null)
+            const stay = (stays as Stay[]).find((s) => s.id === id)
+            if (stay) setCheckoutStay(stay)
           }}
           onAddPayment={addPayment}
           onAddService={addService}
+          onAddMinibar={addMinibar}
           onTransfer={transfer}
+          onExtend={extend}
+        />
+      )}
+
+      {/* Checkout wizard */}
+      {checkoutStay && (
+        <CheckoutWizard
+          stay={checkoutStay}
+          onClose={() => setCheckoutStay(null)}
+          onSuccess={handleCheckoutSuccess}
         />
       )}
     </div>

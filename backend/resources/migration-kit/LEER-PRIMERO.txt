@@ -1,0 +1,93 @@
+════════════════════════════════════════════════════════════════════
+  HOTEL MANAGER — KIT PARA CAMBIAR LA CARPETA DE BACKUPS
+════════════════════════════════════════════════════════════════════
+
+ESTE KIT CONTIENE
+─────────────────
+  • cambiar-carpeta-backups.bat  → el script que hace todo el trabajo
+  • LEER-PRIMERO.txt             → este archivo
+
+
+¿QUÉ HACE EL SCRIPT?
+────────────────────
+Configura en qué carpeta de tu PC se guardan los .zip de los backups
+automáticos del sistema. Es útil cuando:
+
+  • Acabás de mudar el proyecto a otra computadora.
+  • Querés cambiar el disco/carpeta donde se guardan los respaldos.
+  • Conectaste un disco externo y querés que los backups vayan ahí.
+
+
+PASOS (la primera vez en el PC nuevo)
+─────────────────────────────────────
+
+1) Copiá este archivo (cambiar-carpeta-backups.bat) a la carpeta raíz
+   del proyecto Hotel Manager. Es la carpeta donde está docker-compose.yml.
+
+   Ejemplo: C:\Proyectos\Hotel_SJG\cambiar-carpeta-backups.bat
+
+2) Asegurate que Docker Desktop esté abierto y corriendo.
+
+3) Doble click en cambiar-carpeta-backups.bat
+   (o desde PowerShell:  .\cambiar-carpeta-backups.bat)
+
+4) El script te va a preguntar:
+      Nueva carpeta (ej. D:\Hotel\backups):
+
+   Escribí la ruta completa de la carpeta donde querés que aparezcan
+   los .zip. Si la carpeta no existe, el script la crea sola.
+
+   Ejemplos:
+      C:\Users\Recepcion\Documents\Backups Hotel
+      D:\Hotel\backups
+      E:\Disco-Externo\hotel-backups
+
+5) El script:
+      ✓ Crea la carpeta si no existe
+      ✓ Actualiza el archivo .env del proyecto
+      ✓ Reinicia el container de Docker
+      ✓ Genera UN BACKUP DE PRUEBA para verificar
+      ✓ Te avisa si todo salió bien
+
+6) Verificá manualmente: abrí la carpeta que elegiste — debe aparecer
+   un archivo backup_YYYY-MM-DD_HH-mm-ss.zip recién creado.
+
+   ¡Listo! Los backups automáticos diarios (a las 23:59, o la hora que
+   tengas configurada en Settings) ahora van a guardarse ahí.
+
+
+PROBLEMAS COMUNES
+─────────────────
+
+✗ "Docker no está corriendo"
+  → Abrí Docker Desktop y esperá que termine de cargar (ícono verde).
+
+✗ "No se encuentra el archivo .env"
+  → Estás corriendo el script desde una carpeta equivocada.
+    Movelo a la carpeta del proyecto (la que tiene docker-compose.yml).
+
+✗ El .zip de prueba NO apareció en la carpeta
+  → 1. Verificá que la unidad esté autorizada en Docker Desktop:
+       Settings → Resources → File Sharing → agregás la unidad (ej. D:)
+       → Apply & Restart.
+    2. Verificá que tu usuario de Windows tenga permiso de escritura
+       sobre esa carpeta (click derecho → Propiedades → Seguridad).
+
+✗ "Fallo composer install" o errores parecidos al levantar el proyecto
+  → Eso no es de este script. Mirá el README principal del proyecto
+    o ejecutá setup.bat primero.
+
+
+CAMBIAR LA CARPETA OTRA VEZ
+───────────────────────────
+Podés correr cambiar-carpeta-backups.bat las veces que quieras. Cada
+vez te muestra la carpeta actual y te pregunta una nueva. No borra los
+.zip viejos — quedan en la carpeta anterior.
+
+
+CONTACTO / SOPORTE
+──────────────────
+Este script es parte del proyecto Hotel Manager. Para reportar
+problemas o pedir mejoras, hablá con el responsable del sistema.
+
+════════════════════════════════════════════════════════════════════

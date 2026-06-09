@@ -2,16 +2,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   getStaysApi, getStayApi, createStayApi, checkoutStayApi,
-  transferRoomApi, addPaymentApi, addServiceApi, getExtraServicesApi,
+  transferRoomApi, addPaymentApi, cancelStayPaymentApi,
+  addServiceApi, getExtraServicesApi,
+  extendStayApi, addMinibarChargesApi, cancelMinibarConsumptionApi,
 } from '@/services/stays.service'
-import type { CheckInPayload } from '@/types'
+import type { CheckInPayload, MinibarItem } from '@/types'
 
-export function useStays(status?: string) {
+export function useStays(filters?: { status?: string; company_id?: string } | string) {
   const queryClient = useQueryClient()
 
+  const normalizedFilters = typeof filters === 'string' ? { status: filters } : (filters ?? {})
+
   const { data, isLoading } = useQuery({
-    queryKey: ['stays', status],
-    queryFn:  () => getStaysApi(status),
+    queryKey: ['stays', normalizedFilters],
+    queryFn:  () => getStaysApi(normalizedFilters),
   })
 
   const invalidate = () => {
@@ -35,6 +39,26 @@ export function useStays(status?: string) {
       toast.error(e?.response?.data?.message ?? 'Error al realizar checkout.'),
   })
 
+  const extendMutation = useMutation({
+    mutationFn: ({ id, check_out_datetime }: { id: string; check_out_datetime: string }) =>
+      extendStayApi(id, { check_out_datetime }),
+    onSuccess: () => { toast.success('Estadía extendida.'); invalidate() },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e?.response?.data?.message ?? 'Error al extender estadía.'),
+  })
+
+  const minibarMutation = useMutation({
+    mutationFn: ({ stayId, items }: { stayId: string; items: MinibarItem[] }) =>
+      addMinibarChargesApi(stayId, { items }),
+    onSuccess: () => {
+      toast.success('Consumos de minibar registrados.')
+      queryClient.invalidateQueries({ queryKey: ['stays'] })
+      queryClient.invalidateQueries({ queryKey: ['room-minibars'] })
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e?.response?.data?.message ?? 'Error al registrar consumos.'),
+  })
+
   const transferMutation = useMutation({
     mutationFn: ({ stayId, ...payload }: { stayId: string; from_room_id: string; to_room_id: string; reason?: string }) =>
       transferRoomApi(stayId, payload),
@@ -50,6 +74,33 @@ export function useStays(status?: string) {
     onError: () => toast.error('Error al registrar pago.'),
   })
 
+  const cancelPaymentMutation = useMutation({
+    mutationFn: ({ stayId, paymentId, reason }: { stayId: string; paymentId: string; reason: string }) =>
+      cancelStayPaymentApi(stayId, paymentId, reason),
+    onSuccess: () => {
+      toast.success('Pago anulado. Queda en el historial.')
+      queryClient.invalidateQueries({ queryKey: ['stays'] })
+      queryClient.invalidateQueries({ queryKey: ['stay-payments'] })
+      queryClient.invalidateQueries({ queryKey: ['payments-history'] })
+      queryClient.invalidateQueries({ queryKey: ['income'] })
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e?.response?.data?.message ?? 'Error al anular el pago.'),
+  })
+
+  const cancelMinibarMutation = useMutation({
+    mutationFn: ({ stayId, consumptionId, reason }: { stayId: string; consumptionId: string; reason: string }) =>
+      cancelMinibarConsumptionApi(stayId, consumptionId, reason),
+    onSuccess: () => {
+      toast.success('Consumo anulado. Queda en el historial.')
+      queryClient.invalidateQueries({ queryKey: ['stays'] })
+      queryClient.invalidateQueries({ queryKey: ['room-minibars'] })
+      queryClient.invalidateQueries({ queryKey: ['income'] })
+    },
+    onError: (e: { response?: { data?: { message?: string } } }) =>
+      toast.error(e?.response?.data?.message ?? 'Error al anular el consumo.'),
+  })
+
   const serviceMutation = useMutation({
     mutationFn: ({ stayId, ...payload }: { stayId: string; extra_service_id: string; quantity: number }) =>
       addServiceApi(stayId, payload),
@@ -62,11 +113,18 @@ export function useStays(status?: string) {
     isLoading,
     checkIn:      (payload: CheckInPayload) => checkInMutation.mutateAsync(payload),
     checkOut:     checkOutMutation.mutate,
+    extend:       extendMutation.mutateAsync,
+    addMinibar:   minibarMutation.mutateAsync,
     transfer:     transferMutation.mutate,
     addPayment:   paymentMutation.mutate,
+    cancelPayment: cancelPaymentMutation.mutateAsync,
+    cancelMinibar: cancelMinibarMutation.mutateAsync,
     addService:   serviceMutation.mutate,
-    isCheckingIn: checkInMutation.isPending,
+    isCheckingIn:  checkInMutation.isPending,
     isCheckingOut: checkOutMutation.isPending,
+    isExtending:   extendMutation.isPending,
+    isCancellingPayment: cancelPaymentMutation.isPending,
+    isCancellingMinibar: cancelMinibarMutation.isPending,
   }
 }
 

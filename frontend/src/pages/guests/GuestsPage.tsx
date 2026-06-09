@@ -7,7 +7,7 @@ import { SkeletonCard } from '@/components/ui/Skeleton'
 import type { Guest } from '@/types'
 
 const DOC_LABELS: Record<string, string> = {
-  cc: 'CC', ce: 'CE', passport: 'Pasaporte', nit: 'NIT',
+  cc: 'CC', ce: 'CE', passport: 'Pasaporte',
 }
 
 export default function GuestsPage() {
