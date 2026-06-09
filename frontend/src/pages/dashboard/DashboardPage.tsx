@@ -235,6 +235,7 @@ const ACTION_LABELS: Record<string, string> = {
   'stay.checkout':             'Check-out',
   'stay.payment':              'Pago registrado',
   'stay.payment_cancelled':    'Pago anulado',
+  'stay.minibar_cancelled':    'Consumo de minibar anulado',
   'stay.service':              'Servicio agregado',
   'stay.transfer':             'Transferencia de habitación',
   'stay.extended':             'Estadía extendida',
