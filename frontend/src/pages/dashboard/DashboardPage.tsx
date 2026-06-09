@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Building2, BedDouble, Users, CalendarCheck, DollarSign,
@@ -19,22 +19,27 @@ import CheckInFromReservationModal from '@/pages/reservations/components/CheckIn
 import { DashboardChart } from './components/DashboardChart'
 import { DashboardRoomModal } from './components/DashboardRoomModal'
 import { formatCOP } from '@/lib/format'
-import type { AppNotification, Reservation, Room, RoomStatus, Stay } from '@/types'
+import type { ActivityLogEntry, AppNotification, Reservation, Room, RoomStatus, Stay } from '@/types'
 
 function resolveCta(n: AppNotification): string {
   if (n.type === 'room_inconsistency') return 'Resolver habitación'
   if (/low_stock|expir/i.test(n.type))  return 'Ir al inventario'
   if (/maintenance/i.test(n.type))      return 'Ver mantenimiento'
   if (/asset|repair/i.test(n.type))     return 'Ver reparación'
-  return 'Resolver'
+  if (/daily_summary/i.test(n.type))    return 'Ver resumen'
+  if (/payment|cancelled/i.test(n.type)) return 'Ver pagos'
+  return 'Ver detalle'
 }
 
 function AlertsWidget({ onResolve }: { onResolve: (n: AppNotification) => void }) {
   const { notifications, unreadCount, markRead } = useNotifications()
   const recent = notifications
     .filter((n) => !n.is_read)
-    .filter((n) => /inventory|stock|expir|maintenance|asset|repair|room_inconsistency/i.test(n.type))
-    .slice(0, 5)
+    .filter((n) =>
+      n.is_modal ||
+      /inventory|stock|expir|maintenance|asset|repair|room_inconsistency|payment_cancelled|minibar_cancelled|daily_summary/i.test(n.type)
+    )
+    .slice(0, 8)
 
   return (
     <div
@@ -250,6 +255,224 @@ const ACTION_LABELS: Record<string, string> = {
   'inventory.adjust':          'Ajuste de inventario',
 }
 
+const PAYLOAD_LABELS: Record<string, string> = {
+  stay_id: 'ID Estadía',
+  guest_name: 'Huésped',
+  rooms: 'Habitaciones',
+  total_amount: 'Total',
+  total: 'Total',
+  amount: 'Monto',
+  method: 'Método de pago',
+  type: 'Tipo',
+  reason: 'Motivo',
+  payment_id: 'ID Pago',
+  from_room_id: 'Desde (ID hab.)',
+  to_room_id: 'Hacia (ID hab.)',
+  room_id: 'ID Habitación',
+  room_number: 'Habitación',
+  old_status: 'Estado anterior',
+  new_status: 'Nuevo estado',
+  new_check_out: 'Nueva salida',
+  new_nights: 'Nuevas noches',
+  service_name: 'Servicio',
+  quantity: 'Cantidad',
+  ip: 'Dirección IP',
+  email: 'Email',
+  product_name: 'Producto',
+  guest_id: 'ID Huésped',
+  company_name: 'Empresa',
+  reservation_id: 'ID Reserva',
+  room_count: 'Habitaciones',
+  by_name: 'Realizado por',
+}
+
+const METHOD_LABELS: Record<string, string> = {
+  cash: 'Efectivo',
+  transfer: 'Transferencia',
+  card: 'Tarjeta',
+  credito: 'Crédito',
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  available: 'Disponible',
+  occupied: 'Ocupada',
+  reserved: 'Reservada',
+  cleaning: 'Limpieza',
+  maintenance: 'Mantenimiento',
+  blocked: 'Bloqueada',
+  deposit: 'Depósito',
+  partial: 'Parcial',
+  final: 'Final',
+}
+
+function formatPayloadValue(key: string, value: unknown): string {
+  if (value === null || value === undefined) return '—'
+  if (Array.isArray(value)) return value.join(', ')
+  if (key === 'method') return METHOD_LABELS[String(value)] ?? String(value)
+  if (key === 'type') return STATUS_LABELS[String(value)] ?? String(value)
+  if (key === 'old_status' || key === 'new_status') return STATUS_LABELS[String(value)] ?? String(value)
+  if ((key === 'amount' || key === 'total' || key === 'total_amount') && typeof value === 'number')
+    return `$${value.toLocaleString('es-CO')}`
+  return String(value)
+}
+
+function ActivityDetailModal({ log, onClose }: { log: ActivityLogEntry; onClose: () => void }) {
+  const label = ACTION_LABELS[log.action] ?? log.action_label ?? log.action
+
+  const payloadEntries = useMemo(() => {
+    if (!log.payload || Object.keys(log.payload).length === 0) return []
+    return Object.entries(log.payload)
+      .filter(([k]) => !k.endsWith('_id') || k === 'room_id' || k === 'payment_id' || k === 'stay_id')
+      .map(([k, v]) => ({
+        key: k,
+        label: PAYLOAD_LABELS[k] ?? k.replace(/_/g, ' ').replace(/^\w/, c => c.toUpperCase()),
+        value: formatPayloadValue(k, v),
+      }))
+  }, [log.payload])
+
+  const actionColor = useMemo(() => {
+    if (/cancelled|failed/i.test(log.action)) return '#EF4444'
+    if (/checkin|payment(?!.*cancel)|created/i.test(log.action)) return 'var(--color-primary)'
+    if (/checkout/i.test(log.action)) return '#F59E0B'
+    if (/transfer|extend/i.test(log.action)) return '#8B5CF6'
+    if (/cleaning|maintenance/i.test(log.action)) return '#3B82F6'
+    return 'var(--text-secondary)'
+  }, [log.action])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.5)' }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="w-full max-w-md rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        style={{ background: 'var(--bg-surface)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-4 border-b"
+          style={{ borderColor: 'var(--border-default)' }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+              style={{ background: actionColor + '18' }}
+            >
+              <Activity size={15} style={{ color: actionColor }} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                {label}
+              </h2>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                {log.action}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 transition-colors hover:opacity-70 shrink-0"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="px-5 py-4 space-y-4">
+          {/* Meta info */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: 'var(--text-muted)' }}>
+                Usuario
+              </p>
+              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                {log.user_name}
+              </p>
+              {log.user_role && (
+                <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  {log.user_role}
+                </p>
+              )}
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: 'var(--text-muted)' }}>
+                Fecha y hora
+              </p>
+              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                {new Date(log.created_at).toLocaleDateString('es-CO', { dateStyle: 'medium' })}
+              </p>
+              <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                {new Date(log.created_at).toLocaleTimeString('es-CO', { timeStyle: 'medium' })}
+              </p>
+            </div>
+          </div>
+
+          {/* Payload details */}
+          {payloadEntries.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--text-muted)' }}>
+                Detalles
+              </p>
+              <div
+                className="rounded-xl divide-y overflow-hidden"
+                style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}
+              >
+                {payloadEntries.map(({ key, label: fieldLabel, value }) => (
+                  <div
+                    key={key}
+                    className="flex items-start justify-between gap-3 px-3.5 py-2.5"
+                    style={{ borderColor: 'var(--border-default)' }}
+                  >
+                    <span className="text-xs shrink-0" style={{ color: 'var(--text-muted)' }}>
+                      {fieldLabel}
+                    </span>
+                    <span
+                      className="text-xs text-right font-medium break-all"
+                      style={{ color: 'var(--text-primary)' }}
+                    >
+                      {value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {payloadEntries.length === 0 && (
+            <div
+              className="rounded-xl p-4 text-center"
+              style={{ background: 'var(--bg-input)' }}
+            >
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                No hay detalles adicionales para esta actividad.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          className="px-5 py-3 border-t flex justify-end"
+          style={{ borderColor: 'var(--border-default)' }}
+        >
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg text-xs font-medium hover:opacity-80 transition-opacity"
+            style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { stats, isLoading } = useDashboard()
@@ -266,6 +489,7 @@ export default function DashboardPage() {
   const [selectedBalanceStay, setSelectedBalanceStay] = useState<PendingBalanceRow | null>(null)
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [checkInReservation, setCheckInReservation] = useState<Reservation | null>(null)
+  const [selectedActivity, setSelectedActivity] = useState<ActivityLogEntry | null>(null)
 
   const {
     stays: activeStays,
@@ -530,8 +754,13 @@ export default function DashboardPage() {
               {(activityData?.data ?? []).slice(0, 12).map(log => (
                 <div
                   key={log.id}
-                  className="flex items-center justify-between py-1 border-b"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedActivity(log)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedActivity(log) } }}
+                  className="flex items-center justify-between py-1 border-b cursor-pointer rounded px-1 transition-colors hover:opacity-80"
                   style={{ borderColor: 'var(--border-default)' }}
+                  title="Click para ver detalles"
                 >
                   <div className="min-w-0">
                     <p className="text-[11px] font-medium truncate" style={{ color: 'var(--text-primary)' }}>
@@ -698,6 +927,14 @@ export default function DashboardPage() {
       )}
 
       {/* Check-in desde reserva existente (asignada desde modal de habitación) */}
+      {/* Modal detalle de actividad */}
+      {selectedActivity && (
+        <ActivityDetailModal
+          log={selectedActivity}
+          onClose={() => setSelectedActivity(null)}
+        />
+      )}
+
       {checkInReservation && (
         <CheckInFromReservationModal
           reservation={checkInReservation}
