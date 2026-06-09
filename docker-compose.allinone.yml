@@ -21,6 +21,17 @@ services:
       - hotel_storage:/var/www/html/storage
       # Backups visibles desde el host
       - ${BACKUP_HOST_PATH:-./backup}:/var/www/html/backup
+      # ── Código del backend (bind mounts para desarrollo) ─────────────────
+      # Permite que cualquier cambio local en backend/ se refleje al instante
+      # en el contenedor, sin tener que reconstruir la imagen ni hacer docker cp.
+      # En producción real podés quitar estos 6 mounts y trabajar con el código
+      # que viene "cocinado" en la imagen (más estable, menos sorpresas).
+      - ./backend/app:/var/www/html/app
+      - ./backend/routes:/var/www/html/routes
+      - ./backend/config:/var/www/html/config
+      - ./backend/database:/var/www/html/database
+      - ./backend/resources:/var/www/html/resources
+      - ./backend/bootstrap/cache:/var/www/html/bootstrap/cache
     environment:
       - APP_ENV=${APP_ENV:-production}
       - APP_KEY=${APP_KEY:-}

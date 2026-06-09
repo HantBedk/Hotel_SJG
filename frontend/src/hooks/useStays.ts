@@ -54,6 +54,9 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
       toast.success('Consumos de minibar registrados.')
       queryClient.invalidateQueries({ queryKey: ['stays'] })
       queryClient.invalidateQueries({ queryKey: ['room-minibars'] })
+      queryClient.invalidateQueries({ queryKey: ['minibar-products'] })
+      queryClient.invalidateQueries({ queryKey: ['minibars'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory-items'] })
     },
     onError: (e: { response?: { data?: { message?: string } } }) =>
       toast.error(e?.response?.data?.message ?? 'Error al registrar consumos.'),
@@ -95,6 +98,9 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
       toast.success('Consumo anulado. Queda en el historial.')
       queryClient.invalidateQueries({ queryKey: ['stays'] })
       queryClient.invalidateQueries({ queryKey: ['room-minibars'] })
+      queryClient.invalidateQueries({ queryKey: ['minibar-products'] })
+      queryClient.invalidateQueries({ queryKey: ['minibars'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory-items'] })
       queryClient.invalidateQueries({ queryKey: ['income'] })
     },
     onError: (e: { response?: { data?: { message?: string } } }) =>

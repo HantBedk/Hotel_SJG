@@ -683,6 +683,10 @@ function CatalogueSection() {
             <tbody>
               {products.map((p) => {
                 const expired = p.expiration_date && new Date(p.expiration_date) < new Date()
+                // Mostramos el stock total disponible (bodega + lo que está en las
+                // habitaciones) para que el número baje al consumir desde cualquier hab.
+                const warehouseStock = p.inventory_item ? p.inventory_item.current_stock : p.stock_quantity
+                const realStock = p.total_stock ?? warehouseStock
                 return (
                 <tr key={p.id}
                   className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -700,9 +704,12 @@ function CatalogueSection() {
                   <td className="px-3 py-3" style={{ color: 'var(--text-secondary)' }}>{formatCurrency(p.cost_price)}</td>
                   <td className="px-3 py-3" style={{ color: 'var(--text-primary)' }}>{formatCurrency(p.sale_price)}</td>
                   <td className="px-3 py-3">
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                      style={{ background: p.stock_quantity > 0 ? '#F0FDF4' : '#FEF2F2', color: p.stock_quantity > 0 ? '#16A34A' : '#DC2626' }}>
-                      {p.stock_quantity}
+                    <span
+                      className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background: realStock > 0 ? '#F0FDF4' : '#FEF2F2', color: realStock > 0 ? '#16A34A' : '#DC2626' }}
+                      title={`Stock total disponible (bodega: ${warehouseStock} + en habitaciones: ${realStock - warehouseStock})`}
+                    >
+                      {realStock}
                     </span>
                   </td>
                   <td className="px-3 py-3 text-xs" style={{ color: expired ? '#DC2626' : 'var(--text-secondary)' }}>
@@ -1050,88 +1057,87 @@ function MinibarsSection() {
                     <ChevronRight size={16}
                       style={{ color: 'var(--text-muted)', transform: active ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }} />
                   </div>
+
+                  {active && (
+                    <div style={{ background: 'var(--bg-input)', borderTop: '1px solid var(--border-default)' }}>
+                      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
+                        <span className="font-medium text-xs uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                          Productos del minibar — Hab. {selectedRoomNumber}
+                        </span>
+                        {canManage && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setReturning(true)}
+                              disabled={roomMinibars.length === 0}
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border disabled:opacity-40 disabled:cursor-not-allowed"
+                              style={{ borderColor: '#F97316', color: '#F97316', background: 'var(--bg-surface)' }}>
+                              <Undo2 size={13} />Devolver al catálogo
+                            </button>
+                            <button onClick={() => setRestocking(true)}
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-white font-medium"
+                              style={{ background: 'var(--color-primary)' }}>
+                              <RefreshCw size={13} />Agregar / Reponer
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {loadingItems ? (
+                        <div className="py-4"><SkeletonTable rows={3} cols={4} /></div>
+                      ) : roomMinibars.length === 0 ? (
+                        <div className="text-center py-8 text-sm" style={{ color: 'var(--text-muted)' }}>
+                          Aún no se han agregado productos a este minibar.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full min-w-[680px] text-sm">
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
+                                {['Producto', 'Cantidad', 'Precio venta', 'Última reposición', 'Por'].map((h) => (
+                                  <th key={h} className="px-4 py-2 text-left font-medium">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {roomMinibars.map((rm) => (
+                                <tr key={rm.id}
+                                  className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                                  style={{ borderBottom: '1px solid var(--border-default)' }}>
+                                  <td className="px-4 py-2.5 font-medium" style={{ color: 'var(--text-primary)' }}>
+                                    {rm.product?.name ?? '—'}
+                                  </td>
+                                  <td className="px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>
+                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                                      style={{ background: rm.quantity > 0 ? '#F0FDF4' : '#FEF2F2', color: rm.quantity > 0 ? '#16A34A' : '#DC2626' }}>
+                                      {rm.quantity}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2.5" style={{ color: 'var(--text-secondary)' }}>
+                                    {formatCurrency(rm.product?.sale_price ?? null)}
+                                  </td>
+                                  <td className="px-4 py-2.5" style={{ color: 'var(--text-secondary)' }}>
+                                    <span className="inline-flex items-center gap-1">
+                                      <Clock size={11} style={{ color: 'var(--text-muted)' }} />
+                                      {formatDateTime(rm.last_restocked_at)}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-2.5" style={{ color: 'var(--text-muted)' }}>
+                                    {rm.restocked_by_user?.name ?? '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </li>
               )
             })}
           </ul>
         )}
       </div>
-
-      {/* Detalle del minibar seleccionado */}
-      {selectedMinibar && (
-        <div className="rounded-xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
-          <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
-            <span className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
-              Productos del minibar — Hab. {selectedRoomNumber}
-            </span>
-            {canManage && (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setReturning(true)}
-                  disabled={roomMinibars.length === 0}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ borderColor: '#F97316', color: '#F97316' }}>
-                  <Undo2 size={14} />Devolver al catálogo
-                </button>
-                <button onClick={() => setRestocking(true)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white font-medium"
-                  style={{ background: 'var(--color-primary)' }}>
-                  <RefreshCw size={14} />Agregar / Reponer
-                </button>
-              </div>
-            )}
-          </div>
-
-          {loadingItems ? (
-            <div className="py-4"><SkeletonTable rows={3} cols={4} /></div>
-          ) : roomMinibars.length === 0 ? (
-            <div className="text-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>
-              Aún no se han agregado productos a este minibar.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] text-sm">
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
-                    {['Producto', 'Cantidad', 'Precio venta', 'Última reposición', 'Por'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {roomMinibars.map((rm) => (
-                    <tr key={rm.id}
-                      className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
-                      style={{ borderBottom: '1px solid var(--border-default)' }}>
-                      <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>
-                        {rm.product?.name ?? '—'}
-                      </td>
-                      <td className="px-4 py-3" style={{ color: 'var(--text-primary)' }}>
-                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                          style={{ background: rm.quantity > 0 ? '#F0FDF4' : '#FEF2F2', color: rm.quantity > 0 ? '#16A34A' : '#DC2626' }}>
-                          {rm.quantity}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
-                        {formatCurrency(rm.product?.sale_price ?? null)}
-                      </td>
-                      <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
-                        <span className="inline-flex items-center gap-1">
-                          <Clock size={11} style={{ color: 'var(--text-muted)' }} />
-                          {formatDateTime(rm.last_restocked_at)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3" style={{ color: 'var(--text-muted)' }}>
-                        {rm.restocked_by_user?.name ?? '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
 
       {showNew && (
         <NewMinibarModal

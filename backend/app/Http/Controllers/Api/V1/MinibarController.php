@@ -21,7 +21,24 @@ class MinibarController extends Controller
 
     public function productsIndex(): JsonResponse
     {
-        $products = MinibarProduct::with('inventoryItem')->where('active', true)->orderBy('name')->get();
+        // total_stock = stock en bodega (catalogo) + lo que esté físicamente en
+        // todas las habitaciones. Lo calculamos aquí para que la UI muestre un
+        // único "stock disponible" que baja con cada consumo, sin que el usuario
+        // tenga que pensar en la separación bodega/habitación.
+        $products = MinibarProduct::with('inventoryItem')
+            ->withSum('roomMinibars as room_minibar_total', 'quantity')
+            ->where('active', true)
+            ->orderBy('name')
+            ->get()
+            ->map(function (MinibarProduct $p) {
+                $catalogStock = $p->inventoryItem
+                    ? (int) $p->inventoryItem->current_stock
+                    : (int) $p->stock_quantity;
+                $inRooms = (int) ($p->room_minibar_total ?? 0);
+                $p->total_stock = $catalogStock + $inRooms;
+                return $p;
+            });
+
         return response()->json(['success' => true, 'data' => $products]);
     }
 

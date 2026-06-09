@@ -546,6 +546,7 @@ export interface MinibarProduct {
   description: string | null
   active: boolean
   inventory_item?: InventoryItem | null
+  total_stock?: number
   created_at: string
   updated_at: string
 }
