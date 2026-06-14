@@ -46,6 +46,13 @@ class ActivityLogController extends Controller
         $query = ActivityLog::with('user.roles')
             ->orderByDesc('created_at');
 
+        // Si el usuario actual es recepcionista (sin escalar a admin/superadmin),
+        // solo puede ver actividades de OTROS recepcionistas.
+        $current = $request->user();
+        if ($current && $current->hasRole('receptionist') && ! $current->hasAnyRole(['admin', 'superadmin'])) {
+            $query->whereHas('user.roles', fn($q) => $q->where('name', 'receptionist'));
+        }
+
         if ($action = $request->query('action')) {
             $query->where('action', $action);
         }

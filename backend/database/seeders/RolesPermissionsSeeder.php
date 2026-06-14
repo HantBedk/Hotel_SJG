@@ -52,6 +52,7 @@ class RolesPermissionsSeeder extends Seeder
             'manage_reservations',
             'check_in', 'check_out',
             'view_inventory',
+            'view_activity_log',
         ],
         'housekeeping' => [],
         'maintenance'  => [],
