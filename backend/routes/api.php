@@ -381,6 +381,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/backups/migration-kit',               [BackupController::class, 'downloadMigrationKit'])
                  ->withoutMiddleware('permission:manage_settings')
                  ->middleware('permission:trigger_backup');
+
+            // Borrar la base de datos completa (migrate:fresh + seed). Solo superadmin.
+            Route::post('/database/wipe',                     [BackupController::class, 'wipeDatabase'])
+                 ->withoutMiddleware('permission:manage_settings')
+                 ->middleware('role:superadmin');
         });
     });
 });

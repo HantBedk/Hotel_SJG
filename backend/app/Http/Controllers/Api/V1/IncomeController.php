@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Hotel;
 use App\Models\MinibarConsumption;
 use App\Models\Payment;
+use App\Models\RoomTransfer;
 use App\Models\Setting;
+use App\Models\Stay;
 use App\Models\StayRoom;
 use App\Models\StayService;
 use App\Traits\ApiResponse;
@@ -246,12 +249,12 @@ class IncomeController extends Controller
     }
 
     /**
-     * Devuelve un HTML imprimible con el detalle de pagos del rango (activos +
-     * anulados), agrupados por método. Pensado como reporte de cierre / cuadre.
-     * El navegador lo abre en pestaña nueva y dispara Ctrl+P automáticamente,
-     * para que el usuario lo guarde como PDF desde el diálogo de impresión.
-     * Se prefiere HTML sobre una librería PDF para no requerir dependencias
-     * externas (DomPDF) que pueden no estar instaladas en el contenedor.
+     * Devuelve un HTML imprimible con TODOS los movimientos del rango,
+     * agrupados día por día: pagos recibidos, pagos anulados, consumos de
+     * minibar (registrados y anulados), servicios extra, check-ins,
+     * check-outs y transferencias de habitación. Cada día se renderiza en
+     * una página (page-break-before) para que al imprimir/guardar como PDF
+     * cada fecha quede en su propia hoja.
      */
     public function report(Request $request): \Illuminate\Http\Response
     {
@@ -260,7 +263,8 @@ class IncomeController extends Controller
         $start = $from->copy()->startOfDay();
         $end   = $to->copy()->endOfDay();
 
-        $activePayments = Payment::active()
+        // ── Recolectamos todos los movimientos del rango ────────────────────
+        $payments = Payment::active()
             ->with(['stay.guest:id,full_name', 'stay.company:id,name', 'receptionist:id,name'])
             ->whereBetween('payment_date', [$start, $end])
             ->orderBy('payment_date')
@@ -277,43 +281,200 @@ class IncomeController extends Controller
             ->orderBy('cancelled_at')
             ->get();
 
-        $byMethod = $activePayments->groupBy('payment_method')->map(function ($group, $method) {
+        // Los consumos vivos: todos los que existen en la tabla. Los anulados
+        // ya no están aquí (se borran físicamente), viven solo en activity_logs.
+        $minibarActive = MinibarConsumption::query()
+            ->with([
+                'stay.guest:id,full_name',
+                'stay.company:id,name',
+                'room:id,number',
+                'registeredBy:id,name',
+            ])
+            ->whereBetween('registered_at', [$start, $end])
+            ->orderBy('registered_at')
+            ->get();
+
+        // Los consumos anulados se borran físicamente; la única huella queda
+        // en activity_logs. Leemos esa acción concreta para reconstruirlos.
+        $minibarCancelled = ActivityLog::query()
+            ->with('user:id,name')
+            ->where('action', 'stay.minibar_cancelled')
+            ->whereBetween('created_at', [$start, $end])
+            ->orderBy('created_at')
+            ->get();
+
+        $services = StayService::query()
+            ->with([
+                'stay.guest:id,full_name',
+                'stay.company:id,name',
+                'extraService:id,name',
+                'appliedBy:id,name',
+            ])
+            ->whereBetween('applied_at', [$start, $end])
+            ->orderBy('applied_at')
+            ->get();
+
+        $checkIns = Stay::query()
+            ->with([
+                'guest:id,full_name',
+                'company:id,name',
+                'stayRooms.room:id,number',
+                'createdBy:id,name',
+            ])
+            ->whereBetween('check_in_datetime', [$start, $end])
+            ->orderBy('check_in_datetime')
+            ->get();
+
+        $checkOuts = Stay::query()
+            ->with([
+                'guest:id,full_name',
+                'company:id,name',
+                'stayRooms.room:id,number',
+            ])
+            ->where('status', 'checked_out')
+            ->whereBetween('actual_check_out_datetime', [$start, $end])
+            ->orderBy('actual_check_out_datetime')
+            ->get();
+
+        $transfers = RoomTransfer::query()
+            ->with([
+                'stay.guest:id,full_name',
+                'fromRoom:id,number',
+                'toRoom:id,number',
+                'transferredBy:id,name',
+            ])
+            ->whereBetween('transferred_at', [$start, $end])
+            ->orderBy('transferred_at')
+            ->get();
+
+        // ── Agrupamos por día ───────────────────────────────────────────────
+        $dayKey = fn($dt) => Carbon::parse($dt)->toDateString();
+
+        $byDay = [];
+        for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+            $key = $d->toDateString();
+            $byDay[$key] = [
+                'date'              => $key,
+                'carbon'            => $d->copy(),
+                'payments'          => collect(),
+                'cancelledPayments' => collect(),
+                'minibar'           => collect(),
+                'minibarCancelled'  => collect(),
+                'services'          => collect(),
+                'checkIns'          => collect(),
+                'checkOuts'         => collect(),
+                'transfers'         => collect(),
+            ];
+        }
+
+        foreach ($payments as $p) {
+            $k = $dayKey($p->payment_date);
+            if (isset($byDay[$k])) $byDay[$k]['payments']->push($p);
+        }
+        foreach ($cancelledPayments as $p) {
+            $k = $dayKey($p->cancelled_at);
+            if (isset($byDay[$k])) $byDay[$k]['cancelledPayments']->push($p);
+        }
+        foreach ($minibarActive as $m) {
+            $k = $dayKey($m->registered_at);
+            if (isset($byDay[$k])) $byDay[$k]['minibar']->push($m);
+        }
+        foreach ($minibarCancelled as $log) {
+            $k = $dayKey($log->created_at);
+            if (isset($byDay[$k])) $byDay[$k]['minibarCancelled']->push($log);
+        }
+        foreach ($services as $s) {
+            $k = $dayKey($s->applied_at);
+            if (isset($byDay[$k])) $byDay[$k]['services']->push($s);
+        }
+        foreach ($checkIns as $s) {
+            $k = $dayKey($s->check_in_datetime);
+            if (isset($byDay[$k])) $byDay[$k]['checkIns']->push($s);
+        }
+        foreach ($checkOuts as $s) {
+            $k = $dayKey($s->actual_check_out_datetime);
+            if (isset($byDay[$k])) $byDay[$k]['checkOuts']->push($s);
+        }
+        foreach ($transfers as $t) {
+            $k = $dayKey($t->transferred_at);
+            if (isset($byDay[$k])) $byDay[$k]['transfers']->push($t);
+        }
+
+        // ── Totales por día ─────────────────────────────────────────────────
+        foreach ($byDay as &$d) {
+            $d['paymentsTotal']  = (float) $d['payments']->sum('amount');
+            $d['paymentsCount']  = $d['payments']->count();
+            $d['minibarTotal']   = (float) $d['minibar']->sum('total');
+            $d['servicesTotal']  = (float) $d['services']->sum('total');
+            $d['cancelledTotal'] = (float) $d['cancelledPayments']->sum('amount');
+            $d['totalMovements'] = $d['payments']->count()
+                + $d['cancelledPayments']->count()
+                + $d['minibar']->count()
+                + $d['minibarCancelled']->count()
+                + $d['services']->count()
+                + $d['checkIns']->count()
+                + $d['checkOuts']->count()
+                + $d['transfers']->count();
+        }
+        unset($d);
+        $days = array_values($byDay);
+
+        // ── Totales generales del rango ─────────────────────────────────────
+        $grand = [
+            'paymentsTotal'           => (float) $payments->sum('amount'),
+            'paymentsCount'           => $payments->count(),
+            'minibarTotal'            => (float) $minibarActive->sum('total'),
+            'minibarCount'            => $minibarActive->count(),
+            'servicesTotal'           => (float) $services->sum('total'),
+            'servicesCount'           => $services->count(),
+            'cancelledTotal'          => (float) $cancelledPayments->sum('amount'),
+            'cancelledCount'          => $cancelledPayments->count(),
+            'minibarCancelledCount'   => $minibarCancelled->count(),
+            'checkInsCount'           => $checkIns->count(),
+            'checkOutsCount'          => $checkOuts->count(),
+            'transfersCount'          => $transfers->count(),
+        ];
+
+        // Pagos por método (totales del rango)
+        $byMethod = $payments->groupBy('payment_method')->map(function ($g, $method) {
             return [
                 'method' => $method,
-                'count'  => $group->count(),
-                'total'  => (float) $group->sum('amount'),
-                'items'  => $group,
+                'count'  => $g->count(),
+                'total'  => (float) $g->sum('amount'),
             ];
         })->values();
-
-        $totalActive    = (float) $activePayments->sum('amount');
-        $totalCancelled = (float) $cancelledPayments->sum('amount');
 
         $hotel      = Hotel::first();
         $hotelName  = $hotel?->name    ?? Setting::get('hotel_name', 'Hotel');
         $hotelPhone = $hotel?->phone   ?? Setting::get('hotel_phone', '');
         $hotelAddr  = $hotel?->address ?? Setting::get('hotel_address', '');
 
+        $preset = $request->query('preset');
+        $presetLabels = [
+            'today'   => 'Hoy',
+            'week'    => 'Últimos 7 días',
+            'month'   => 'Mes en curso',
+            'last_30' => 'Últimos 30 días',
+        ];
         $rangeLabel = $from->isSameDay($to)
             ? $from->translatedFormat('l, d \d\e F \d\e Y')
             : $from->translatedFormat('d/m/Y') . ' — ' . $to->translatedFormat('d/m/Y');
+        $presetLabel = $presetLabels[$preset] ?? 'Personalizado';
 
         $generatedBy = $request->user()?->name ?? '—';
 
         $html = view('pdf.income-report', [
-            'hotelName'         => $hotelName,
-            'hotelPhone'        => $hotelPhone,
-            'hotelAddr'         => $hotelAddr,
-            'rangeLabel'        => $rangeLabel,
-            'from'              => $from,
-            'to'                => $to,
-            'generatedBy'       => $generatedBy,
-            'byMethod'          => $byMethod,
-            'cancelledPayments' => $cancelledPayments,
-            'totalActive'       => $totalActive,
-            'totalCancelled'    => $totalCancelled,
-            'activeCount'       => $activePayments->count(),
-            'cancelledCount'    => $cancelledPayments->count(),
+            'hotelName'   => $hotelName,
+            'hotelPhone'  => $hotelPhone,
+            'hotelAddr'   => $hotelAddr,
+            'rangeLabel'  => $rangeLabel,
+            'presetLabel' => $presetLabel,
+            'from'        => $from,
+            'to'          => $to,
+            'generatedBy' => $generatedBy,
+            'days'        => $days,
+            'grand'       => $grand,
+            'byMethod'    => $byMethod,
         ])->render();
 
         return response($html, 200, ['Content-Type' => 'text/html; charset=utf-8']);

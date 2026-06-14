@@ -14,6 +14,8 @@ use App\Models\Stay;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use ZipArchive;
@@ -343,5 +345,76 @@ class BackupController extends Controller
         }
 
         return response()->json(['success' => true, 'message' => 'Base de datos restaurada exitosamente.']);
+    }
+
+    public function wipeDatabase(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'confirm'    => 'required|string|in:BORRAR',
+            'keep_users' => 'sometimes|boolean',
+        ]);
+
+        $keepUsers = (bool) ($data['keep_users'] ?? false);
+
+        try {
+            // 1) Snapshot SIEMPRE de los superadmins (nunca se borran).
+            //    Si keep_users=true, además captura el resto de usuarios.
+            $userQuery = User::query()->with(['roles:id,name', 'permissions:id,name']);
+            if (! $keepUsers) {
+                $userQuery->whereHas('roles', fn ($q) => $q->where('name', 'superadmin'));
+            }
+            $preserved = $userQuery->get()->map(fn ($u) => [
+                'id'                => $u->id,
+                'name'              => $u->name,
+                'email'             => $u->email,
+                'email_verified_at' => $u->email_verified_at,
+                'password'          => $u->password,
+                'remember_token'    => $u->remember_token,
+                'is_active'         => $u->is_active,
+                'created_at'        => $u->created_at,
+                'updated_at'        => $u->updated_at,
+                '_roles'            => $u->roles->pluck('name')->all(),
+                '_permissions'      => $u->permissions->pluck('name')->all(),
+            ])->all();
+
+            // 2) Drop + recreate estructura.
+            Artisan::call('migrate:fresh', ['--force' => true]);
+
+            // 3) Reseed: roles/permisos + datos base. NO SuperAdminSeeder
+            //    porque restauramos los superadmins reales desde el snapshot.
+            Artisan::call('db:seed', ['--class' => 'RolesPermissionsSeeder', '--force' => true]);
+            Artisan::call('db:seed', ['--class' => 'HotelSeeder',            '--force' => true]);
+            Artisan::call('db:seed', ['--class' => 'SettingsSeeder',         '--force' => true]);
+
+            // 4) Restaurar usuarios preservados con sus IDs y roles originales.
+            //    Inserción directa para preservar UUIDs y evitar re-hash de password.
+            foreach ($preserved as $row) {
+                $roles       = $row['_roles'];
+                $permissions = $row['_permissions'];
+                unset($row['_roles'], $row['_permissions']);
+
+                DB::table('users')->insert($row);
+
+                $user = User::find($row['id']);
+                if (! $user) continue;
+                if (! empty($roles))       $user->syncRoles($roles);
+                if (! empty($permissions)) $user->syncPermissions($permissions);
+            }
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al borrar la base de datos: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        $preservedCount = count($preserved);
+        return response()->json([
+            'success'        => true,
+            'keep_users'     => $keepUsers,
+            'preserved_users'=> $preservedCount,
+            'message'        => $keepUsers
+                ? "Datos borrados. Se conservaron {$preservedCount} usuario(s) — podés seguir trabajando."
+                : "Datos y usuarios borrados. Se conservaron {$preservedCount} superadmin(s) — podés seguir trabajando.",
+        ]);
     }
 }

@@ -38,6 +38,7 @@ import {
   updateRoomTypeApi,
   updateSeasonApi,
   uploadLogoApi,
+  wipeDatabaseApi,
 } from '../services/admin.service'
 import type { AdminUserPayload, ExtraService, House, Room, RoomType, Season } from '../types'
 
@@ -239,6 +240,14 @@ export function useBackupMutations() {
 
 export function useBackupSettings() {
   return useQuery({ queryKey: ['admin', 'backup-settings'], queryFn: getBackupSettingsApi })
+}
+
+export function useWipeDatabase() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: wipeDatabaseApi,
+    onSuccess: () => qc.clear(),
+  })
 }
 
 export function useSaveBackupSettings() {

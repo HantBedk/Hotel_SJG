@@ -155,6 +155,12 @@ export const createBackupApi = () =>
 export const deleteAllBackupsApi = () =>
   api.delete('/admin/backups').then(r => r.data.data as { deleted: number })
 
+export const wipeDatabaseApi = (opts: { keepUsers: boolean }) =>
+  api.post('/admin/database/wipe', {
+    confirm: 'BORRAR',
+    keep_users: opts.keepUsers,
+  }).then(r => r.data as { success: boolean; keep_users: boolean; message: string })
+
 export const downloadBackupApi = async (filename: string): Promise<void> => {
   const res = await api.get(
     `/admin/backups/${encodeURIComponent(filename)}/download`,

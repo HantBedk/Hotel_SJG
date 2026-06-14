@@ -151,14 +151,6 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
     setMinibarRows((prev) => [...prev, blankMinibarRow()])
   const resetMinibarRows = () => setMinibarRows([blankMinibarRow()])
 
-  const filteredMinibarProductsFor = (query: string) => {
-    const q = query.trim().toLowerCase()
-    const active = minibarProducts.filter(p => p.active)
-    if (!q) return active.slice(0, 50)
-    return active
-      .filter(p => p.name.toLowerCase().includes(q) || (p.code ?? '').toLowerCase().includes(q))
-      .slice(0, 50)
-  }
 
   const priceForProductType = (productId: string, type: MinibarConsumptionType): string => {
     const product = minibarProducts.find(p => p.id === productId)
@@ -687,7 +679,6 @@ export function StayDrawer({ stayId, initialStay, onClose, canCheckOut, onCheckO
                 <div className="rounded-xl p-4 space-y-3 border"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)' }}>
                   {minibarRows.map((row, idx) => {
-                    const filtered = filteredMinibarProductsFor(row.query)
                     return (
                       <div
                         key={row.id}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, Download, Upload, Database, Archive, AlertTriangle, CheckCircle, XCircle, RefreshCw, FolderOpen, Clock, Save, ChevronDown, RotateCcw, Trash2, Package, HelpCircle } from 'lucide-react'
-import { useBackups, useBackupMutations, useBackupPreview, useBackupSettings, useSaveBackupSettings } from '@/hooks/useAdmin'
+import { Plus, Download, Upload, Database, Archive, AlertTriangle, CheckCircle, XCircle, RefreshCw, FolderOpen, Clock, Save, ChevronDown, RotateCcw, Trash2, Package, HelpCircle, Skull } from 'lucide-react'
+import { useBackups, useBackupMutations, useBackupPreview, useBackupSettings, useSaveBackupSettings, useWipeDatabase } from '@/hooks/useAdmin'
 import { downloadBackupApi, validateBackupFolderApi, downloadMigrationKitApi } from '@/services/admin.service'
 import type { BackupSettings, BackupFolderCheck } from '@/services/admin.service'
 import { useAuth } from '@/hooks/useAuth'
@@ -37,9 +37,13 @@ export default function BackupsTab() {
 
   const { data: backups = [], isLoading }    = useBackups()
   const { create, restore, deleteAll }       = useBackupMutations()
+  const wipeDb                                = useWipeDatabase()
 
   const [showCreate, setShowCreate]     = useState(false)
   const [showDeleteAll, setShowDeleteAll] = useState(false)
+  const [showWipeDb, setShowWipeDb]     = useState(false)
+  const [wipeConfirmText, setWipeConfirmText] = useState('')
+  const [wipeKeepUsers, setWipeKeepUsers] = useState(true)
   const { data: preview, isLoading: previewLoading } = useBackupPreview(showCreate)
 
   const fileRef = useRef<HTMLInputElement>(null)
@@ -134,6 +138,19 @@ export default function BackupsTab() {
       setResult({ ok: true, msg: `Se eliminaron ${deleted} backup${deleted === 1 ? '' : 's'}.` })
     } catch {
       setResult({ ok: false, msg: 'Error al eliminar los backups.' })
+    }
+  }
+
+  const confirmWipeDb = async () => {
+    try {
+      const res = await wipeDb.mutateAsync({ keepUsers: wipeKeepUsers })
+      setShowWipeDb(false)
+      setWipeConfirmText('')
+      setResult({ ok: true, msg: res.message })
+    } catch {
+      setResult({ ok: false, msg: 'Error al borrar la base de datos. Revisá los logs del servidor.' })
+      setShowWipeDb(false)
+      setWipeConfirmText('')
     }
   }
 
@@ -322,6 +339,102 @@ export default function BackupsTab() {
               className="flex-1 px-4 py-2 rounded-lg text-sm text-white font-medium bg-red-500 hover:bg-red-600 disabled:opacity-60"
             >
               {deleteAll.isPending ? 'Eliminando…' : 'Sí, eliminar todos'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Modal: Confirmar borrar BD completa ─────────────────── */}
+      <Modal open={showWipeDb} onClose={() => { setShowWipeDb(false); setWipeConfirmText('') }} size="sm" ariaLabel="Borrar base de datos">
+        <div className="p-6 flex flex-col items-center gap-4 text-center">
+          <div className="w-14 h-14 rounded-full flex items-center justify-center bg-red-100">
+            <Skull size={28} className="text-red-600" />
+          </div>
+
+          <div className="space-y-1">
+            <h3 className="text-base font-semibold" style={{ color: 'var(--text-primary)' }}>
+              Borrar base de datos
+            </h3>
+            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+              Se eliminarán los datos operativos del sistema (huéspedes, reservas, estadías,
+              pagos, inventario, etc.).
+            </p>
+          </div>
+
+          {/* Toggle: conservar todos los usuarios o solo superadmins */}
+          <div
+            className="w-full rounded-lg px-4 py-3 text-left flex items-start justify-between gap-3"
+            style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-default)' }}
+          >
+            <div className="min-w-0">
+              <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                Conservar todos los usuarios
+              </p>
+              <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                {wipeKeepUsers
+                  ? 'Se mantienen todos los usuarios con sus roles y contraseñas.'
+                  : 'Se borran los usuarios no-superadmin. Los superadmins SIEMPRE se conservan.'}
+              </p>
+            </div>
+            <label className="flex-shrink-0" style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={wipeKeepUsers}
+                onChange={e => setWipeKeepUsers(e.target.checked)}
+                style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+              />
+              <span style={{
+                position: 'absolute', inset: 0, borderRadius: 11,
+                background: wipeKeepUsers ? '#22c55e' : '#94a3b8',
+                transition: 'background 0.2s',
+              }} />
+              <span style={{
+                position: 'absolute', top: 3,
+                left: wipeKeepUsers ? 21 : 3,
+                width: 16, height: 16, borderRadius: '50%',
+                background: '#fff',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.22)',
+                transition: 'left 0.2s',
+              }} />
+            </label>
+          </div>
+
+          <div className="w-full rounded-lg px-4 py-3 text-xs text-left bg-red-50 text-red-700 border border-red-200">
+            <strong>⚠ Esta acción es irreversible.</strong>{' '}
+            {wipeKeepUsers
+              ? 'Los datos operativos se perderán; los usuarios y roles se mantendrán.'
+              : 'Se borran los datos y los usuarios no-superadmin. Los superadmins se conservan.'}
+            {' '}Escribí <code className="font-mono font-bold">BORRAR</code> para confirmar.
+          </div>
+
+          <input
+            type="text"
+            value={wipeConfirmText}
+            onChange={e => setWipeConfirmText(e.target.value)}
+            placeholder="Escribí BORRAR"
+            autoFocus
+            className="w-full px-3 py-2 rounded-lg text-sm border font-mono text-center"
+            style={{
+              background: 'var(--bg-input, var(--bg-elevated))',
+              borderColor: wipeConfirmText === 'BORRAR' ? '#ef4444' : 'var(--border-default)',
+              color: 'var(--text-primary)',
+            }}
+          />
+
+          <div className="flex gap-3 w-full pt-1">
+            <button
+              onClick={() => { setShowWipeDb(false); setWipeConfirmText('') }}
+              className="flex-1 px-4 py-2 rounded-lg text-sm border"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={confirmWipeDb}
+              disabled={wipeConfirmText !== 'BORRAR' || wipeDb.isPending}
+              className="flex-1 px-4 py-2 rounded-lg text-sm text-white font-medium bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {wipeDb.isPending ? 'Borrando…' : 'Sí, borrar todo'}
             </button>
           </div>
         </div>
@@ -742,6 +855,39 @@ export default function BackupsTab() {
           </table>
         )}
       </div>
+
+      {/* ── Zona peligrosa: solo superadmin ───────────────────────── */}
+      {canDeleteAll && (
+        <div
+          className="rounded-xl p-5 mt-4 space-y-3"
+          style={{ background: 'var(--bg-surface)', border: '1px solid #fecaca' }}
+        >
+          <div className="flex items-center gap-2">
+            <Skull size={16} className="text-red-600" />
+            <h2 className="text-sm font-semibold text-red-700">Zona peligrosa</h2>
+          </div>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>
+                Borrar base de datos completa
+              </p>
+              <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                Elimina todos los datos del sistema y recrea la estructura vacía con los superadmins por defecto.
+                Esta acción es irreversible — hacé un backup antes.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowWipeDb(true)}
+              disabled={wipeDb.isPending}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-white font-medium bg-red-600 hover:bg-red-700 disabled:opacity-50 whitespace-nowrap"
+              title="Borra todos los datos y reinicializa la BD (solo superadmin)"
+            >
+              <Skull size={12} />
+              Borrar BD
+            </button>
+          </div>
+        </div>
+      )}
     </>
   )
 }

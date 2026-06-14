@@ -7,9 +7,11 @@ import {
   FileText, X, Printer,
 } from 'lucide-react'
 import { useIncomeDaily, useIncomeSummary } from '@/hooks/useIncome'
+import { usePaymentsHistory } from '@/hooks/useActivity'
 import { formatCOP } from '@/lib/format'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { fetchIncomeReportHtml, type IncomeRangeParams } from '@/services/income.service'
+import type { PaymentFilters } from '@/services/activity.service'
 
 type Preset = 'today' | 'week' | 'month' | 'last_30' | 'custom'
 
@@ -57,6 +59,37 @@ export default function IncomePage() {
 
   const { summary, isLoading, isFetching } = useIncomeSummary(queryParams)
   const { daily }                          = useIncomeDaily(queryParams)
+
+  // Filtros independientes para la tabla de pagos recientes (histórico).
+  // El rango se deriva del preset/from/to actuales para que respete lo que
+  // está viendo el usuario arriba, pero se pueden añadir filtros por método
+  // y estado (activo/anulado) que no existen en los KPIs.
+  const [paymentsMethod, setPaymentsMethod] = useState<string>('')
+  const [paymentsStatus, setPaymentsStatus] = useState<'' | 'active' | 'cancelled'>('')
+
+  const effectiveRange = useMemo<{ from: string; to: string }>(() => {
+    const t = new Date()
+    const fmt = (d: Date) => d.toISOString().slice(0, 10)
+    const today = fmt(t)
+    switch (preset) {
+      case 'today':   return { from: today, to: today }
+      case 'week':    return { from: fmt(new Date(t.getTime() - 6 * 86400_000)),  to: today }
+      case 'month':   return { from: fmt(new Date(t.getFullYear(), t.getMonth(), 1)), to: today }
+      case 'last_30': return { from: fmt(new Date(t.getTime() - 29 * 86400_000)), to: today }
+      default:        return { from, to }
+    }
+  }, [preset, from, to])
+
+  const paymentsFilters = useMemo<PaymentFilters>(() => ({
+    date_from: effectiveRange.from,
+    date_to:   effectiveRange.to,
+    per_page:  50,
+    ...(paymentsMethod ? { method: paymentsMethod } : {}),
+    ...(paymentsStatus ? { status: paymentsStatus } : {}),
+  }), [effectiveRange.from, effectiveRange.to, paymentsMethod, paymentsStatus])
+
+  const { data: paymentsHistory, isLoading: loadingPayments } = usePaymentsHistory(paymentsFilters)
+  const paymentsRows = paymentsHistory?.data ?? []
 
   const [openingPdf, setOpeningPdf] = useState(false)
   const [reportHtml, setReportHtml] = useState<string | null>(null)
@@ -454,27 +487,61 @@ export default function IncomePage() {
         </div>
       </div>
 
-      {/* Pagos recientes */}
+      {/* Pagos del periodo (histórico, filtrable) */}
       <div
         className="rounded-xl p-4"
         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
       >
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-            Pagos recientes
-          </h3>
-          <button
-            onClick={() => navigate('/activity?tab=pagos')}
-            className="text-[11px] font-semibold inline-flex items-center gap-1"
-            style={{ color: 'var(--color-primary)' }}
-          >
-            Ver histórico completo <ArrowRight size={11} />
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-3">
+            <h3 className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
+              Pagos del periodo
+            </h3>
+            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              {paymentsHistory?.total ?? 0} resultado(s)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={paymentsMethod}
+              onChange={(e) => setPaymentsMethod(e.target.value)}
+              className="text-xs px-2 py-1.5 rounded-md border bg-transparent"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            >
+              <option value="">Todos los métodos</option>
+              <option value="cash">Efectivo</option>
+              <option value="transfer">Transferencia</option>
+              <option value="card">Tarjeta</option>
+              <option value="credito">Crédito</option>
+            </select>
+
+            <select
+              value={paymentsStatus}
+              onChange={(e) => setPaymentsStatus(e.target.value as '' | 'active' | 'cancelled')}
+              className="text-xs px-2 py-1.5 rounded-md border bg-transparent"
+              style={{ borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+            >
+              <option value="">Activos y anulados</option>
+              <option value="active">Solo activos</option>
+              <option value="cancelled">Solo anulados</option>
+            </select>
+
+            <button
+              onClick={() => navigate('/activity?tab=pagos')}
+              className="text-[11px] font-semibold inline-flex items-center gap-1"
+              style={{ color: 'var(--color-primary)' }}
+            >
+              Ver más <ArrowRight size={11} />
+            </button>
+          </div>
         </div>
 
-        {!summary || summary.recent_payments.length === 0 ? (
+        {loadingPayments ? (
+          <p className="text-xs py-8 text-center" style={{ color: 'var(--text-muted)' }}>Cargando…</p>
+        ) : paymentsRows.length === 0 ? (
           <p className="text-xs py-8 text-center" style={{ color: 'var(--text-muted)' }}>
-            No hay pagos registrados en el periodo seleccionado.
+            No hay pagos que coincidan con los filtros.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -482,49 +549,72 @@ export default function IncomePage() {
               <thead>
                 <tr style={{ color: 'var(--text-muted)' }}>
                   <th className="text-left font-semibold py-2 px-2">Fecha</th>
-                  <th className="text-left font-semibold py-2 px-2">Huésped / Empresa</th>
+                  <th className="text-left font-semibold py-2 px-2">Huésped</th>
                   <th className="text-left font-semibold py-2 px-2">Recepción</th>
                   <th className="text-left font-semibold py-2 px-2">Método</th>
+                  <th className="text-left font-semibold py-2 px-2">Estado</th>
                   <th className="text-right font-semibold py-2 px-2">Monto</th>
                 </tr>
               </thead>
               <tbody>
-                {summary.recent_payments.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="cursor-pointer hover:opacity-80 transition-opacity"
-                    style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                    onClick={() => navigate(`/stays?id=${p.stay_id}`)}
-                  >
-                    <td className="py-2 px-2 whitespace-nowrap">
-                      {new Date(p.payment_date).toLocaleString('es-CO', {
-                        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-                      })}
-                    </td>
-                    <td className="py-2 px-2">
-                      <span className="font-medium">{p.guest_name ?? '—'}</span>
-                      {p.company_name && (
-                        <span className="block text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                          {p.company_name}
+                {paymentsRows.map((p) => {
+                  const cancelled = !!p.cancelled_at
+                  return (
+                    <tr
+                      key={p.id}
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                      style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                      onClick={() => navigate(`/stays?id=${p.stay_id}`)}
+                    >
+                      <td className="py-2 px-2 whitespace-nowrap">
+                        {new Date(p.payment_date).toLocaleString('es-CO', {
+                          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                        })}
+                      </td>
+                      <td className="py-2 px-2">
+                        <span className="font-medium">{p.guest_name ?? '—'}</span>
+                      </td>
+                      <td className="py-2 px-2" style={{ color: 'var(--text-secondary)' }}>
+                        {p.receptionist ?? '—'}
+                      </td>
+                      <td className="py-2 px-2">
+                        <span
+                          className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                          style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
+                        >
+                          {METHOD_LABEL[p.payment_method] ?? p.payment_method}
                         </span>
-                      )}
-                    </td>
-                    <td className="py-2 px-2" style={{ color: 'var(--text-secondary)' }}>
-                      {p.receptionist ?? '—'}
-                    </td>
-                    <td className="py-2 px-2">
-                      <span
-                        className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                        style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
+                      </td>
+                      <td className="py-2 px-2">
+                        {cancelled ? (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                            style={{ background: '#FEF2F2', color: '#DC2626' }}
+                            title={p.cancellation_reason ?? 'Anulado'}
+                          >
+                            Anulado
+                          </span>
+                        ) : (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                            style={{ background: '#F0FDF4', color: '#16A34A' }}
+                          >
+                            Activo
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className="py-2 px-2 text-right font-bold tabular-nums"
+                        style={{
+                          color: cancelled ? '#9CA3AF' : '#16A34A',
+                          textDecoration: cancelled ? 'line-through' : undefined,
+                        }}
                       >
-                        {METHOD_LABEL[p.payment_method] ?? p.payment_method}
-                      </span>
-                    </td>
-                    <td className="py-2 px-2 text-right font-bold tabular-nums" style={{ color: '#16A34A' }}>
-                      {formatCOP(p.amount)}
-                    </td>
-                  </tr>
-                ))}
+                        {formatCOP(Number(p.amount))}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

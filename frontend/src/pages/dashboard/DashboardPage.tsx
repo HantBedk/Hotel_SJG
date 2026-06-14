@@ -688,7 +688,16 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-8 gap-2">
-                  {rooms.map((room) => {
+                  {[...rooms].sort((a, b) => {
+                    const na = parseInt(String(a.number), 10)
+                    const nb = parseInt(String(b.number), 10)
+                    const aIsNum = !Number.isNaN(na)
+                    const bIsNum = !Number.isNaN(nb)
+                    if (aIsNum && bIsNum) return na - nb
+                    if (aIsNum) return -1
+                    if (bIsNum) return 1
+                    return String(a.number).localeCompare(String(b.number))
+                  }).map((room) => {
                     const bg = ROOM_COLOR[room.status] ?? '#94A3B8'
                     const StatusIcon =
                       room.status === 'cleaning'    ? Sparkles  :

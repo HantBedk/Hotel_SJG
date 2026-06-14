@@ -11,6 +11,11 @@ const FOCUSABLE = [
 
 export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(active: boolean, onEscape?: () => void) {
   const ref = useRef<T | null>(null)
+  const onEscapeRef = useRef(onEscape)
+
+  useEffect(() => {
+    onEscapeRef.current = onEscape
+  })
 
   useEffect(() => {
     if (!active) return
@@ -19,13 +24,17 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(active: boo
 
     const previouslyFocused = document.activeElement as HTMLElement | null
     const focusables = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE))
-    const first = focusables[0]
-    if (first) first.focus()
+    // Si ya hay un elemento del modal con autoFocus que tomó el foco (ej. un input),
+    // respetalo; si no, focuseá el primer focusable.
+    if (!previouslyFocused || !root.contains(previouslyFocused)) {
+      const first = focusables[0]
+      if (first) first.focus()
+    }
 
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && onEscape) {
+      if (e.key === 'Escape' && onEscapeRef.current) {
         e.stopPropagation()
-        onEscape()
+        onEscapeRef.current()
         return
       }
       if (e.key !== 'Tab') return
@@ -49,7 +58,7 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(active: boo
       document.removeEventListener('keydown', handleKey)
       if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus()
     }
-  }, [active, onEscape])
+  }, [active])
 
   return ref
 }
