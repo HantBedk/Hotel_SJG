@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
 import { loginApi, logoutApi, getMeApi } from '@/services/auth.service'
 import { disconnectEcho } from '@/hooks/useReverb'
@@ -6,6 +7,7 @@ import type { LoginPayload } from '@/types'
 
 export function useAuth() {
   const { setAuth, clearAuth, isAuthenticated, user, hasPermission, hasRole } = useAuthStore()
+  const queryClient = useQueryClient()
 
   const login = async (payload: LoginPayload) => {
     const res = await loginApi(payload)
@@ -21,6 +23,11 @@ export function useAuth() {
     } finally {
       disconnectEcho()
       clearAuth()
+      // El cache de React Query guarda datos del usuario anterior (logs,
+      // dashboard, etc.). Si no se limpia, al iniciar sesión otro rol los
+      // componentes pueden mostrar/refetchear datos a los que el nuevo rol
+      // no tiene permiso y disparar 403/CORS innecesarios.
+      queryClient.clear()
     }
   }
 

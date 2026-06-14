@@ -431,7 +431,7 @@ class AdminController extends Controller
         abort_if($role->name === 'superadmin', 403, 'No se pueden modificar los permisos del superadmin.');
 
         $data = $request->validate([
-            'permissions'   => 'required|array',
+            'permissions'   => 'present|array',
             'permissions.*' => 'string|exists:permissions,name',
         ]);
 

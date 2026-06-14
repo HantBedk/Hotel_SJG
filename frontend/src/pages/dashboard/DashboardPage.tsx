@@ -478,10 +478,11 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const { stats, isLoading } = useDashboard()
   const { rooms, isLoading: loadingRooms, changeStatus, isChanging } = useRooms()
-  const { data: activityData } = useActivityLogs({ page: 1 })
-  const { data: housekeepers = [] } = useHousekeepers()
   const { markRead: markNotificationRead } = useNotifications()
   const { hasPermission } = useAuth()
+  const canViewActivity = hasPermission('view_activity_log')
+  const { data: activityData } = useActivityLogs({ page: 1 }, { enabled: canViewActivity })
+  const { data: housekeepers = [] } = useHousekeepers()
   const canCheckOut = hasPermission('check_out')
 
   const [checkingIn, setCheckingIn] = useState<Room[]>([])
@@ -749,7 +750,8 @@ export default function DashboardPage() {
         {/* ── Col B (col-span-3): Actividad + En limpieza ──────────────────── */}
         <div className="lg:col-span-3 flex flex-col gap-3 min-h-0">
 
-          {/* Actividad reciente */}
+          {/* Actividad reciente — solo para roles con permiso view_activity_log */}
+          {canViewActivity && (
           <div
             className="rounded-xl p-3 flex flex-col flex-1 min-h-0"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
@@ -792,6 +794,7 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+          )}
 
 
         </div>

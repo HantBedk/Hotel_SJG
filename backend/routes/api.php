@@ -176,6 +176,14 @@ Route::prefix('v1')->group(function () {
         Route::get('/calendar', [CalendarController::class, 'index'])
              ->middleware('permission:view_reservations|manage_reservations|view_rooms');
 
+        // Catálogo de productos del minibar y stock por habitación — lecturas
+        // accesibles al staff que hace check-in/out para cargar consumos desde
+        // la estadía, aunque no tenga permiso para ver el módulo de Inventario.
+        Route::get('/inventory/minibar/products', [MinibarController::class, 'productsIndex'])
+             ->middleware('permission:view_inventory|manage_inventory|check_in|check_out');
+        Route::get('/inventory/minibar/room-minibars', [MinibarController::class, 'roomMinibars'])
+             ->middleware('permission:view_inventory|manage_inventory|check_in|check_out');
+
         // ── Inventario ────────────────────────────────────────────────────────
         Route::prefix('inventory')->middleware('permission:view_inventory|manage_inventory')->group(function () {
             // Categorías
@@ -208,15 +216,15 @@ Route::prefix('v1')->group(function () {
             Route::post('/low-stock-threshold', [InventoryController::class, 'setLowStockThreshold'])
                  ->middleware('permission:manage_inventory');
 
-            // Minibar — productos
-            Route::get('/minibar/products',               [MinibarController::class, 'productsIndex']);
+            // Minibar — productos (GET está fuera del grupo para que el staff
+            // de check-in/out pueda buscarlos sin permiso view_inventory).
             Route::post('/minibar/products',              [MinibarController::class, 'productsStore'])
                  ->middleware('permission:manage_inventory');
             Route::put('/minibar/products/{minibarProduct}',    [MinibarController::class, 'productsUpdate'])
                  ->middleware('permission:manage_inventory');
             Route::delete('/minibar/products/{minibarProduct}', [MinibarController::class, 'productsDestroy'])
                  ->middleware('permission:manage_inventory');
-            Route::get('/minibar/room-minibars', [MinibarController::class, 'roomMinibars']);
+            // GET /minibar/room-minibars está fuera del grupo (ver arriba).
             Route::post('/minibar/restock-room', [MinibarController::class, 'restockRoom'])
                  ->middleware('permission:manage_inventory');
             Route::post('/minibar/return-from-room', [MinibarController::class, 'returnFromRoom'])
@@ -297,11 +305,14 @@ Route::prefix('v1')->group(function () {
             Route::post('/suggestions/{suggestion}/dismiss',  [SuggestionsController::class, 'dismiss']);
         });
 
+        // Info pública del hotel (logo, nombre, etc.) — usada por el Sidebar
+        // para mostrar branding a cualquier usuario autenticado, no solo admin.
+        Route::get('/admin/hotel', [AdminController::class, 'getHotelInfo']);
+
         // ── Admin ─────────────────────────────────────────────────────────────
         Route::prefix('admin')->middleware('permission:manage_settings')->group(function () {
 
             // Hotel
-            Route::get('/hotel',       [AdminController::class, 'getHotelInfo']);
             Route::put('/hotel',       [AdminController::class, 'updateHotelInfo']);
             Route::post('/hotel/logo', [AdminController::class, 'uploadLogo']);
 

@@ -9,11 +9,15 @@ import {
   type PaymentFilters,
 } from '../services/activity.service'
 
-export function useActivityLogs(filters: ActivityFilters = {}) {
+export function useActivityLogs(
+  filters: ActivityFilters = {},
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: ['activity-logs', filters],
     queryFn: () => getActivityLogsApi(filters),
     placeholderData: prev => prev,
+    enabled: options.enabled ?? true,
   })
 }
 
