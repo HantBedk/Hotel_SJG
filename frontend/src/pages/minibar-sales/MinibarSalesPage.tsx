@@ -692,13 +692,14 @@ function HistorySection({ onPay, onCancel, onView }: HistoryProps) {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
                 <th className="px-3 py-2 text-left font-medium">N°</th>
                 <th className="px-3 py-2 text-left font-medium">Fecha</th>
                 <th className="px-3 py-2 text-left font-medium">Cliente</th>
-                <th className="px-3 py-2 text-left font-medium">Items</th>
+                <th className="px-3 py-2 text-left font-medium">Productos</th>
+                <th className="px-3 py-2 text-left font-medium">Vendedor</th>
                 <th className="px-3 py-2 text-right font-medium">Total</th>
                 <th className="px-3 py-2 text-left font-medium">Estado</th>
                 <th className="px-3 py-2"></th>
@@ -707,6 +708,9 @@ function HistorySection({ onPay, onCancel, onView }: HistoryProps) {
             <tbody>
               {rows.map((s) => {
                 const color = STATUS_COLOR[s.status]
+                const items = s.items ?? []
+                const firstItem = items[0]
+                const extraCount = items.length - 1
                 return (
                   <tr
                     key={s.id}
@@ -727,8 +731,29 @@ function HistorySection({ onPay, onCancel, onView }: HistoryProps) {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      {s.items?.length ?? 0}
+                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-primary)' }}>
+                      {firstItem ? (
+                        <>
+                          <span>
+                            {firstItem.product_name}
+                            {firstItem.quantity > 1 && (
+                              <span style={{ color: 'var(--text-muted)' }}> ×{firstItem.quantity}</span>
+                            )}
+                          </span>
+                          {extraCount > 0 && (
+                            <span className="text-[11px] block" style={{ color: 'var(--text-muted)' }}>
+                              y {extraCount} más
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-primary)' }}>
+                      {typeof s.registered_by === 'object' && s.registered_by?.name
+                        ? s.registered_by.name
+                        : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-primary)' }}>
                       {formatCOP(Number(s.total))}

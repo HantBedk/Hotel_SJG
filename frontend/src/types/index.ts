@@ -606,11 +606,11 @@ export interface MinibarSale {
   cancelled_at: string | null
   cancellation_reason: string | null
   notes: string | null
-  registered_by: string
-  cancelled_by_id: string | null
+  // Cuando la relación está cargada, el backend envía el objeto en `registered_by`
+  // (sobreescribe el UUID). Cuando no, viene como string.
+  registered_by: string | { id: string; name: string } | null
+  cancelled_by_id: string | { id: string; name: string } | null
   items?: MinibarSaleItem[]
-  registered_by_user?: { id: string; name: string } | null
-  cancelled_by?: { id: string; name: string } | null
   created_at: string
   updated_at: string
 }
