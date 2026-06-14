@@ -2,7 +2,7 @@
 .env
 .env.*
 !.env.example
-!.env.production
+!config/env.vps.example
 
 # Dependencies
 backend/vendor/
@@ -21,6 +21,10 @@ frontend/dist/
 
 # Docker volumes
 postgres_data/
+
+# Logs de build locales
+build.log
+scripts/debug/
 
 # Planning docs (never committed)
 Planes/

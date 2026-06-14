@@ -9,6 +9,15 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /frontend
 
+ARG VITE_REVERB_HOST=
+ARG VITE_REVERB_PORT=0
+ARG VITE_REVERB_SCHEME=
+ARG VITE_REVERB_APP_KEY=hotel_reverb_key
+ENV VITE_REVERB_HOST=$VITE_REVERB_HOST
+ENV VITE_REVERB_PORT=$VITE_REVERB_PORT
+ENV VITE_REVERB_SCHEME=$VITE_REVERB_SCHEME
+ENV VITE_REVERB_APP_KEY=$VITE_REVERB_APP_KEY
+
 COPY frontend/package*.json ./
 RUN npm ci
 
@@ -22,7 +31,7 @@ RUN npx vite build
 # Stage 2: Runtime
 FROM php:8.4-fpm-alpine AS app
 
-# System deps — incluye postgresql (server + client)
+# System deps + PHP extensions (una sola capa)
 RUN apk add --no-cache \
     nginx \
     postgresql \
@@ -39,10 +48,8 @@ RUN apk add --no-cache \
     curl \
     bash \
     supervisor \
-    su-exec
-
-# PHP extensions
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    su-exec \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) \
         pdo \
         pdo_pgsql \
@@ -59,7 +66,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # PHP / Nginx configs
 COPY docker/php/local.ini /usr/local/etc/php/conf.d/local.ini
-COPY docker/nginx/default.conf /etc/nginx/http.d/default.conf
+COPY docker/nginx/default.conf /etc/nginx/templates/default.conf
 
 # Supervisord all-in-one (incluye postgres + reverb + nginx + fpm + scheduler)
 COPY docker/supervisord.allinone.conf /etc/supervisord.conf
@@ -68,19 +75,16 @@ COPY docker/supervisord.allinone.conf /etc/supervisord.conf
 WORKDIR /var/www/html
 COPY backend/ .
 
-# .env desde example para que key:generate tenga dónde escribir
-RUN cp .env.example .env
-
-# Composer
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# .env + dependencias PHP
+RUN cp .env.example .env \
+    && composer install --no-dev --optimize-autoloader --no-interaction
 
 # Frontend build → public/app + index.html en raíz
-# Vite ya genera el index.html con base='/app/' correcto, así que lo copiamos.
 COPY --from=frontend-builder /frontend/dist ./public/app
-RUN cp ./public/app/index.html ./public/index.html
 
-# Directorios Laravel
-RUN mkdir -p \
+# Directorios Laravel, backups y Postgres
+RUN cp ./public/app/index.html ./public/index.html \
+    && mkdir -p \
         storage/app/public \
         storage/app/comprobantes \
         storage/framework/cache/data \
@@ -88,20 +92,17 @@ RUN mkdir -p \
         storage/framework/views \
         storage/logs \
         bootstrap/cache \
-    && chown -R www-data:www-data storage bootstrap/cache \
-    && chmod -R 775 storage bootstrap/cache
-
-# Backup folder
-RUN mkdir -p /var/www/html/backup && chown www-data:www-data /var/www/html/backup
-
-# Postgres data dir + logs (su-exec corre psql como postgres user)
-RUN mkdir -p /var/lib/postgresql/data /run/postgresql /var/log/postgresql \
+        /var/www/html/backup \
+        /var/lib/postgresql/data \
+        /run/postgresql \
+        /var/log/postgresql \
+    && chown -R www-data:www-data storage bootstrap/cache /var/www/html/backup \
+    && chmod -R 775 storage bootstrap/cache \
     && chown -R postgres:postgres /var/lib/postgresql /run/postgresql /var/log/postgresql \
     && chmod 700 /var/lib/postgresql/data
 
 # Entrypoint all-in-one
-COPY entrypoint.allinone.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY --chmod=+x docker/entrypoint.allinone.sh /entrypoint.sh
 
 # Puertos: 80 = HTTP (nginx), 8080 = WebSocket (reverb)
 EXPOSE 80 8080

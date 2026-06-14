@@ -75,7 +75,7 @@ PROBLEMAS COMUNES
 
 ✗ "Fallo composer install" o errores parecidos al levantar el proyecto
   → Eso no es de este script. Mirá el README principal del proyecto
-    o ejecutá setup.bat primero.
+    o ejecutá scripts\windows\setup.bat primero.
 
 
 CAMBIAR LA CARPETA OTRA VEZ

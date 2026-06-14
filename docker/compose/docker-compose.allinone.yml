@@ -1,6 +1,6 @@
 # Compose all-in-one: un solo contenedor con Postgres + Nginx + PHP-FPM + Reverb + Scheduler.
-# Uso:
-#   docker compose -f docker-compose.allinone.yml up -d --build
+# Uso (desde la raíz del proyecto):
+#   docker compose --project-directory . -f docker/compose/docker-compose.allinone.yml up -d --build
 # Frontend en http://localhost · WebSocket en ws://localhost:8080
 # Data de Postgres y backups persisten en volúmenes.
 
@@ -8,12 +8,17 @@ services:
   hotel:
     build:
       context: .
-      dockerfile: Dockerfile.allinone
+      dockerfile: docker/Dockerfile.allinone
+      args:
+        VITE_REVERB_HOST: ${VITE_REVERB_HOST:-}
+        VITE_REVERB_PORT: ${VITE_REVERB_PORT:-0}
+        VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-}
+        VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-hotel_reverb_key}
     container_name: hotel_all
     restart: unless-stopped
     ports:
-      - "0.0.0.0:80:80"
-      - "0.0.0.0:8080:8080"
+      - "${HTTP_BIND:-0.0.0.0}:${HTTP_PORT:-80}:80"
+      - "${REVERB_BIND:-0.0.0.0}:${REVERB_HOST_PORT:-8080}:8080"
     volumes:
       # Persistencia de Postgres (¡no borrar este volumen o pierdes la BD!)
       - hotel_pgdata:/var/lib/postgresql/data
@@ -48,6 +53,7 @@ services:
       - REVERB_APP_SECRET=${REVERB_APP_SECRET:-changeme_reverb_secret}
       - REVERB_HOST=127.0.0.1
       - REVERB_PORT=8080
+      - REVERB_UPSTREAM=127.0.0.1:8080
       # Vacío a propósito: forzamos Bearer token (sin sesión/CSRF) para evitar
       # 419 CSRF mismatch desde el navegador. Si vuelves a SPA cookies, lista
       # aquí los hosts permitidos.

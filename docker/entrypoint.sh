@@ -46,6 +46,11 @@ else
     echo "Seeders ya ejecutados — omitiendo."
 fi
 
+# Nginx: upstream de Reverb (sustituido por entrypoint; ver default.conf)
+REVERB_UPSTREAM="${REVERB_UPSTREAM:-reverb:8080}"
+sed "s|__REVERB_UPSTREAM__|${REVERB_UPSTREAM}|g" \
+    /etc/nginx/templates/default.conf > /etc/nginx/http.d/default.conf
+
 echo "=== Sistema listo ==="
 
 exec /usr/bin/supervisord -c /etc/supervisord.conf

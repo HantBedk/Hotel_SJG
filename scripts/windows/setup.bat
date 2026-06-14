@@ -1,16 +1,17 @@
 @echo off
+REM Hotel Manager — setup inicial (Windows)
+REM Uso: scripts\windows\setup.bat
 setlocal enabledelayedexpansion
+cd /d "%~dp0..\.."
 echo === Hotel Manager — Setup Inicial ===
 echo.
 
-REM Verificar que Docker este corriendo
 docker info >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Docker no esta corriendo. Inicia Docker Desktop y vuelve a intentar.
     exit /b 1
 )
 
-REM ── 1. Laravel: instalar dependencias ───────────────────────────────────────
 echo [1/3] Instalando dependencias Laravel (composer install)...
 docker run --rm -v "%CD%\backend":/app -w /app composer:2 ^
     install --no-interaction --no-progress --optimize-autoloader
@@ -20,7 +21,6 @@ if errorlevel 1 (
 )
 echo [OK] Dependencias Laravel instaladas.
 
-REM ── 2. React: instalar dependencias ─────────────────────────────────────────
 echo [2/3] Instalando dependencias React (npm install)...
 docker run --rm -v "%CD%\frontend":/app -w /app node:20-alpine ^
     npm install
@@ -30,7 +30,6 @@ if errorlevel 1 (
 )
 echo [OK] Dependencias React instaladas.
 
-REM ── 3. Copiar .env si no existe ─────────────────────────────────────────────
 echo [3/3] Configurando .env...
 if not exist .env (
     copy .env.example .env >nul
@@ -56,5 +55,5 @@ echo === Setup completo ===
 echo.
 echo Proximos pasos:
 echo   1. Edita .env y backend/.env con tus credenciales
-echo   2. Ejecuta: docker-compose up --build
+echo   2. Ejecuta: docker compose up --build
 echo.

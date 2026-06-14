@@ -1,0 +1,27 @@
+# Override de producción para VPS (puertos 80/443 ya ocupados en el host).
+#
+# Uso (desde la raíz del proyecto):
+#   docker compose -f docker-compose.yml -f docker/compose/docker-compose.prod.yml up -d --build
+#   bash scripts/deploy.sh
+#
+# El contenedor app escucha solo en localhost (HTTP_PORT, default 8081).
+# El host nginx/Caddy termina TLS y hace proxy_pass a ese puerto.
+# Reverb NO se expone al host: WebSocket entra por /app vía nginx del contenedor.
+
+services:
+  app:
+    build:
+      args:
+        # 0 = mismo origen del navegador (80/443 del dominio público)
+        VITE_REVERB_PORT: ${VITE_REVERB_PORT:-0}
+        VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-}
+        VITE_REVERB_HOST: ${VITE_REVERB_HOST:-}
+    ports: !override
+      - "127.0.0.1:${HTTP_PORT:-8081}:80"
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - SESSION_SECURE_COOKIE=${SESSION_SECURE_COOKIE:-true}
+
+  reverb:
+    ports: !reset []

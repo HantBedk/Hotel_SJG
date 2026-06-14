@@ -94,5 +94,9 @@ find storage bootstrap/cache -type f -exec chmod 664 {} \;
 echo "[postgres] Deteniendo para entregar control a supervisord..."
 su-exec postgres pg_ctl -D "$PGDATA" -m fast -w stop
 
+REVERB_UPSTREAM="${REVERB_UPSTREAM:-127.0.0.1:8080}"
+sed "s|__REVERB_UPSTREAM__|${REVERB_UPSTREAM}|g" \
+    /etc/nginx/templates/default.conf > /etc/nginx/http.d/default.conf
+
 echo "=== Sistema listo — entregando a supervisord ==="
 exec /usr/bin/supervisord -c /etc/supervisord.conf

@@ -8,15 +8,15 @@ Modo alternativo que mete **todo** (Postgres + Nginx + PHP-FPM + Laravel Reverb 
 
 | Archivo | Función |
 |---------|---------|
-| `Dockerfile.allinone` | Imagen única con Postgres + Nginx + PHP-FPM + Reverb |
+| `docker/Dockerfile.allinone` | Imagen única con Postgres + Nginx + PHP-FPM + Reverb |
 | `docker/supervisord.allinone.conf` | Coordina los 5 procesos dentro del contenedor |
-| `entrypoint.allinone.sh` | Inicializa Postgres en el primer arranque, corre migraciones/seeders |
-| `docker-compose.allinone.yml` | Compose con un único servicio |
+| `docker/entrypoint.allinone.sh` | Inicializa Postgres en el primer arranque, corre migraciones/seeders |
+| `docker/compose/docker-compose.allinone.yml` | Compose con un único servicio |
 
 ## Cómo correrlo
 
 ```powershell
-docker compose -f docker-compose.allinone.yml up -d --build
+docker compose --project-directory . -f docker/compose/docker-compose.allinone.yml up -d --build
 ```
 
 - **Web** → http://localhost
@@ -25,7 +25,7 @@ docker compose -f docker-compose.allinone.yml up -d --build
 Para detenerlo:
 
 ```powershell
-docker compose -f docker-compose.allinone.yml down
+docker compose --project-directory . -f docker/compose/docker-compose.allinone.yml down
 ```
 
 ## Persistencia
@@ -39,7 +39,7 @@ docker compose -f docker-compose.allinone.yml down
 **NO borrar `hotel_pgdata`** o pierdes toda la base de datos. Si quieres reiniciar desde cero:
 
 ```powershell
-docker compose -f docker-compose.allinone.yml down -v
+docker compose --project-directory . -f docker/compose/docker-compose.allinone.yml down -v
 ```
 
 ## Variables de entorno
@@ -76,13 +76,13 @@ Las mismas del `.env` original. Las críticas:
 
 ```powershell
 # Build
-docker compose -f docker-compose.allinone.yml build
+docker compose --project-directory . -f docker/compose/docker-compose.allinone.yml build
 
 # Run
-docker compose -f docker-compose.allinone.yml up -d
+docker compose --project-directory . -f docker/compose/docker-compose.allinone.yml up -d
 
 # Logs
-docker compose -f docker-compose.allinone.yml logs -f
+docker compose --project-directory . -f docker/compose/docker-compose.allinone.yml logs -f
 
 # Verificar que Postgres arrancó
 docker exec hotel_all su-exec postgres pg_isready -U hotel_user -d hotel_sjg
