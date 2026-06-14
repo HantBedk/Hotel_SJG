@@ -10,7 +10,9 @@ WORKDIR /var/www/html
 
 COPY backend/ .
 
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+RUN composer install --no-dev --optimize-autoloader --no-interaction \
+    && mkdir -p bootstrap/cache storage/framework/cache storage/logs \
+    && chmod -R 775 bootstrap/cache storage
 
 EXPOSE 8080
 
