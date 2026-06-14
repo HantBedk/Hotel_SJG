@@ -16,6 +16,7 @@ class MinibarSale extends Model
         'sale_number',
         'customer_name',
         'customer_document',
+        'guest_id',
         'subtotal',
         'total',
         'payment_method',
@@ -51,6 +52,11 @@ class MinibarSale extends Model
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by_id');
+    }
+
+    public function guest(): BelongsTo
+    {
+        return $this->belongsTo(Guest::class);
     }
 
     public function scopePending(Builder $q): Builder

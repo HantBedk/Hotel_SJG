@@ -18,6 +18,7 @@ export interface MinibarSalesFilters {
 export interface CreateMinibarSalePayload {
   customer_name?: string | null
   customer_document?: string | null
+  guest_id?: string | null
   notes?: string | null
   items: { minibar_product_id: string; quantity: number }[]
 }
@@ -43,7 +44,7 @@ export const createMinibarSaleApi = async (
 
 export const payMinibarSaleApi = async (
   id: string,
-  data: { payment_method: MinibarSalePaymentMethod },
+  data: { payment_method: MinibarSalePaymentMethod; guest_id?: string | null },
 ): Promise<MinibarSale> => {
   const res = await api.post(`/minibar-sales/${id}/pay`, data)
   return res.data.data

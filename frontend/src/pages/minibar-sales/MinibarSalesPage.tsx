@@ -1,15 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Search, Plus, Minus, Trash2, X, ShoppingCart, Banknote, CreditCard,
-  ArrowRightLeft, Receipt, Clock, XCircle, FileText,
+  ArrowRightLeft, Receipt, Clock, XCircle, FileText, Wallet, User,
 } from 'lucide-react'
 import { useMinibarProducts } from '@/hooks/useInventory'
 import { useMinibarSales, useMinibarSaleMutations } from '@/hooks/useMinibarSales'
+import { searchGuestsApi, createGuestApi } from '@/services/guests.service'
 import { formatCOP } from '@/lib/format'
 import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Modal } from '@/components/ui/Modal'
 import type {
+  Guest,
   MinibarProduct,
   MinibarSale,
   MinibarSalePaymentMethod,
@@ -29,12 +31,33 @@ const METHOD_LABEL: Record<MinibarSalePaymentMethod, string> = {
   cash:     'Efectivo',
   transfer: 'Transferencia',
   card:     'Tarjeta',
+  credit:   'Crédito',
 }
 
 const METHOD_ICON: Record<MinibarSalePaymentMethod, React.ElementType> = {
   cash:     Banknote,
   transfer: ArrowRightLeft,
   card:     CreditCard,
+  credit:   Wallet,
+}
+
+const DOCUMENT_TYPES = [
+  { value: 'cc',  label: 'Cédula' },
+  { value: 'ce',  label: 'C. Extranjería' },
+  { value: 'ti',  label: 'Tarjeta Identidad' },
+  { value: 'pa',  label: 'Pasaporte' },
+  { value: 'nit', label: 'NIT' },
+]
+
+type NewGuestForm = {
+  full_name: string
+  document_type: string
+  document_number: string
+  phone: string
+  email: string
+}
+const EMPTY_NEW_GUEST: NewGuestForm = {
+  full_name: '', document_type: 'cc', document_number: '', phone: '', email: '',
 }
 
 const STATUS_LABEL: Record<MinibarSaleStatus, string> = {
@@ -193,9 +216,23 @@ interface CartProps {
   customerDocument: string
   notes: string
   saving: boolean
+  paymentMethod: MinibarSalePaymentMethod
+  selectedGuest: Guest | null
+  isNewGuestMode: boolean
+  newGuestForm: NewGuestForm
+  guestSearch: string
+  guestResults: Guest[]
+  creatingGuest: boolean
+  guestError: string | null
   onSetCustomerName: (v: string) => void
   onSetCustomerDocument: (v: string) => void
   onSetNotes: (v: string) => void
+  onSetPaymentMethod: (m: MinibarSalePaymentMethod) => void
+  onSetSelectedGuest: (g: Guest | null) => void
+  onSetIsNewGuestMode: (v: boolean) => void
+  onSetNewGuestForm: (patch: Partial<NewGuestForm>) => void
+  onSetGuestSearch: (v: string) => void
+  onCreateGuest: () => void
   onIncrement: (id: string) => void
   onDecrement: (id: string) => void
   onRemove: (id: string) => void
@@ -206,7 +243,11 @@ interface CartProps {
 
 function Cart({
   items, customerName, customerDocument, notes, saving,
+  paymentMethod, selectedGuest, isNewGuestMode, newGuestForm, guestSearch, guestResults,
+  creatingGuest, guestError,
   onSetCustomerName, onSetCustomerDocument, onSetNotes,
+  onSetPaymentMethod, onSetSelectedGuest, onSetIsNewGuestMode, onSetNewGuestForm,
+  onSetGuestSearch, onCreateGuest,
   onIncrement, onDecrement, onRemove, onClear,
   onSavePending, onCharge,
 }: CartProps) {
@@ -352,6 +393,178 @@ function Cart({
           />
         </div>
 
+        {/* ── Método de pago ───────────────────────────────────────── */}
+        <div>
+          <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+            Método de pago
+          </label>
+          <div className="grid grid-cols-4 gap-1.5">
+            {(['cash', 'transfer', 'card', 'credit'] as MinibarSalePaymentMethod[]).map((m) => {
+              const Icon = METHOD_ICON[m]
+              const active = paymentMethod === m
+              return (
+                <button
+                  key={m}
+                  onClick={() => onSetPaymentMethod(m)}
+                  className="flex flex-col items-center justify-center gap-0.5 p-2 rounded-lg border-2 transition-all"
+                  style={{
+                    borderColor: active ? 'var(--color-primary)' : 'var(--border-default)',
+                    background: active ? 'var(--color-primary-light, #EFF6FF)' : 'var(--bg-surface)',
+                    color: active ? 'var(--color-primary)' : 'var(--text-secondary)',
+                  }}
+                >
+                  <Icon size={14} />
+                  <span className="text-[10px] font-medium">{METHOD_LABEL[m]}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ── Huésped (obligatorio si crédito) ──────────────────────── */}
+        {paymentMethod === 'credit' && (
+          <div className="rounded-lg p-2.5 space-y-2" style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}>
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-medium flex items-center gap-1" style={{ color: 'var(--text-secondary)' }}>
+                <User size={11} /> Huésped <span style={{ color: '#EF4444' }}>*</span>
+              </label>
+              {!isNewGuestMode && (
+                <button
+                  type="button"
+                  onClick={() => onSetIsNewGuestMode(true)}
+                  className="text-[11px] flex items-center gap-1 hover:opacity-80"
+                  style={{ color: 'var(--color-primary)' }}
+                >
+                  <Plus size={11} /> Nuevo huésped
+                </button>
+              )}
+              {isNewGuestMode && (
+                <button
+                  type="button"
+                  onClick={() => onSetIsNewGuestMode(false)}
+                  className="text-[11px] hover:opacity-80"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  ← Buscar
+                </button>
+              )}
+            </div>
+
+            {!isNewGuestMode ? (
+              <>
+                {selectedGuest ? (
+                  <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
+                    <User size={14} style={{ color: 'var(--color-primary)' }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>{selectedGuest.full_name}</p>
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        {selectedGuest.document_type.toUpperCase()} {selectedGuest.document_number}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => { onSetSelectedGuest(null); onSetGuestSearch('') }}
+                      className="text-[10px]"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      Cambiar
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
+                      <input
+                        type="text"
+                        value={guestSearch}
+                        onChange={(e) => onSetGuestSearch(e.target.value)}
+                        placeholder="Nombre, documento o teléfono…"
+                        className="w-full pl-7 pr-2 py-1.5 rounded-lg border text-xs"
+                        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                      />
+                    </div>
+                    {guestResults.length > 0 && (
+                      <div className="rounded-lg overflow-hidden max-h-40 overflow-y-auto" style={{ border: '1px solid var(--border-default)' }}>
+                        {guestResults.map((g) => (
+                          <button
+                            key={g.id}
+                            onClick={() => { onSetSelectedGuest(g); onSetGuestSearch(g.full_name) }}
+                            className="w-full text-left px-2 py-1.5 text-xs hover:opacity-80 border-b last:border-b-0"
+                            style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+                          >
+                            <span className="font-medium">{g.full_name}</span>
+                            <span className="ml-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                              {g.document_type.toUpperCase()} {g.document_number}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            ) : (
+              <div className="space-y-1.5">
+                <input
+                  type="text"
+                  placeholder="Nombre completo *"
+                  value={newGuestForm.full_name}
+                  onChange={(e) => onSetNewGuestForm({ full_name: e.target.value })}
+                  className="w-full px-2 py-1.5 rounded-lg border text-xs"
+                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                />
+                <div className="grid grid-cols-2 gap-1.5">
+                  <select
+                    value={newGuestForm.document_type}
+                    onChange={(e) => onSetNewGuestForm({ document_type: e.target.value })}
+                    className="px-2 py-1.5 rounded-lg border text-xs"
+                    style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  >
+                    {DOCUMENT_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Nº documento *"
+                    value={newGuestForm.document_number}
+                    onChange={(e) => onSetNewGuestForm({ document_number: e.target.value })}
+                    className="px-2 py-1.5 rounded-lg border text-xs"
+                    style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <input
+                    type="text"
+                    placeholder="Teléfono"
+                    value={newGuestForm.phone}
+                    onChange={(e) => onSetNewGuestForm({ phone: e.target.value })}
+                    className="px-2 py-1.5 rounded-lg border text-xs"
+                    style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={newGuestForm.email}
+                    onChange={(e) => onSetNewGuestForm({ email: e.target.value })}
+                    className="px-2 py-1.5 rounded-lg border text-xs"
+                    style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                {guestError && (
+                  <p className="text-[10px]" style={{ color: '#EF4444' }}>{guestError}</p>
+                )}
+                <button
+                  type="button"
+                  onClick={onCreateGuest}
+                  disabled={creatingGuest || !newGuestForm.full_name.trim() || !newGuestForm.document_number.trim()}
+                  className="w-full px-2 py-1.5 rounded-lg text-xs text-white font-medium disabled:opacity-40"
+                  style={{ background: 'var(--color-primary)' }}
+                >
+                  {creatingGuest ? 'Creando…' : 'Crear huésped'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-between pt-2 border-t" style={{ borderColor: 'var(--border-default)' }}>
           <span className="text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>Total</span>
           <span className="text-2xl font-bold" style={{ color: 'var(--color-primary)' }}>
@@ -374,7 +587,8 @@ function Cart({
           </button>
           <button
             onClick={onCharge}
-            disabled={empty || saving}
+            disabled={empty || saving || (paymentMethod === 'credit' && !selectedGuest)}
+            title={paymentMethod === 'credit' && !selectedGuest ? 'Seleccioná un huésped para cobrar a crédito' : undefined}
             className="flex-1 px-3 py-2 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: 'var(--color-primary)' }}
           >
@@ -387,8 +601,9 @@ function Cart({
   )
 }
 
-// ── Modal de cobro ────────────────────────────────────────────────────────────
+// ── Modal de cobro (para vista de Historial: cobrar venta pendiente) ──────────
 interface ChargeModalProps {
+  sale?: MinibarSale | null
   open: boolean
   total: number
   saving: boolean
@@ -396,8 +611,10 @@ interface ChargeModalProps {
   onConfirm: (method: MinibarSalePaymentMethod) => void
 }
 
-function ChargeModal({ open, total, saving, onClose, onConfirm }: ChargeModalProps) {
+function ChargeModal({ sale, open, total, saving, onClose, onConfirm }: ChargeModalProps) {
   const [method, setMethod] = useState<MinibarSalePaymentMethod>('cash')
+  const saleGuest = sale?.guest ?? null
+  const creditDisabledNoGuest = method === 'credit' && !saleGuest
 
   return (
     <Modal open={open} onClose={onClose} size="sm" ariaLabel="Cobrar venta">
@@ -422,8 +639,8 @@ function ChargeModal({ open, total, saving, onClose, onConfirm }: ChargeModalPro
           <label className="block text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
             Método de pago
           </label>
-          <div className="grid grid-cols-3 gap-2">
-            {(['cash', 'transfer', 'card'] as MinibarSalePaymentMethod[]).map((m) => {
+          <div className="grid grid-cols-4 gap-2">
+            {(['cash', 'transfer', 'card', 'credit'] as MinibarSalePaymentMethod[]).map((m) => {
               const Icon = METHOD_ICON[m]
               const active = method === m
               return (
@@ -437,12 +654,28 @@ function ChargeModal({ open, total, saving, onClose, onConfirm }: ChargeModalPro
                     color: active ? 'var(--color-primary)' : 'var(--text-secondary)',
                   }}
                 >
-                  <Icon size={18} />
-                  <span className="text-xs font-medium">{METHOD_LABEL[m]}</span>
+                  <Icon size={16} />
+                  <span className="text-[11px] font-medium">{METHOD_LABEL[m]}</span>
                 </button>
               )
             })}
           </div>
+          {method === 'credit' && saleGuest && (
+            <div className="mt-2 flex items-center gap-2 p-2 rounded-lg" style={{ background: 'var(--bg-input)' }}>
+              <User size={13} style={{ color: 'var(--color-primary)' }} />
+              <div className="text-xs" style={{ color: 'var(--text-primary)' }}>
+                Cargar a: <span className="font-medium">{saleGuest.full_name}</span>
+                <span className="ml-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                  {saleGuest.document_type.toUpperCase()} {saleGuest.document_number}
+                </span>
+              </div>
+            </div>
+          )}
+          {creditDisabledNoGuest && (
+            <p className="mt-2 text-[11px]" style={{ color: '#EF4444' }}>
+              Esta venta no tiene huésped asociado. Para cobrar a crédito, creala desde "Nueva venta".
+            </p>
+          )}
         </div>
       </div>
 
@@ -457,7 +690,7 @@ function ChargeModal({ open, total, saving, onClose, onConfirm }: ChargeModalPro
         </button>
         <button
           onClick={() => onConfirm(method)}
-          disabled={saving}
+          disabled={saving || creditDisabledNoGuest}
           className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
           style={{ background: 'var(--color-primary)' }}
         >
@@ -821,19 +1054,67 @@ export default function MinibarSalesPage() {
   const [customerName, setCustomerName]   = useState('')
   const [customerDocument, setCustDoc]    = useState('')
   const [notes, setNotes]                 = useState('')
-  const [chargeOpen, setChargeOpen]       = useState(false)
+
+  const [paymentMethod, setPaymentMethod] = useState<MinibarSalePaymentMethod>('cash')
+  const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null)
+  const [isNewGuestMode, setIsNewGuestMode] = useState(false)
+  const [newGuestForm, setNewGuestForm]   = useState<NewGuestForm>(EMPTY_NEW_GUEST)
+  const [guestSearch, setGuestSearch]     = useState('')
+  const [guestResults, setGuestResults]   = useState<Guest[]>([])
+  const [creatingGuest, setCreatingGuest] = useState(false)
+  const [guestError, setGuestError]       = useState<string | null>(null)
 
   const [detailSale, setDetailSale]   = useState<MinibarSale | null>(null)
   const [paySale, setPaySale]         = useState<MinibarSale | null>(null)
   const [cancelTarget, setCancelTarget] = useState<MinibarSale | null>(null)
+
+  // Buscador con debounce para huéspedes.
+  useEffect(() => {
+    if (paymentMethod !== 'credit' || isNewGuestMode || selectedGuest) {
+      setGuestResults([])
+      return
+    }
+    const term = guestSearch.trim()
+    if (term.length < 2) { setGuestResults([]); return }
+    const t = setTimeout(async () => {
+      try {
+        const found = await searchGuestsApi(term)
+        setGuestResults(found.slice(0, 8))
+      } catch {
+        setGuestResults([])
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [guestSearch, paymentMethod, isNewGuestMode, selectedGuest])
+
+  const handleCreateGuest = async () => {
+    setCreatingGuest(true)
+    setGuestError(null)
+    try {
+      const created = await createGuestApi({
+        full_name:        newGuestForm.full_name.trim(),
+        document_type:    newGuestForm.document_type,
+        document_number:  newGuestForm.document_number.trim(),
+        phone:            newGuestForm.phone.trim() || undefined,
+        email:            newGuestForm.email.trim() || undefined,
+      })
+      setSelectedGuest(created)
+      setIsNewGuestMode(false)
+      setNewGuestForm(EMPTY_NEW_GUEST)
+      setGuestSearch(created.full_name)
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+      setGuestError(msg ?? 'No se pudo crear el huésped.')
+    } finally {
+      setCreatingGuest(false)
+    }
+  }
 
   const cartById = useMemo(() => {
     const m = new Map<string, CartItem>()
     for (const it of cart) m.set(it.productId, it)
     return m
   }, [cart])
-
-  const cartTotal = cart.reduce((s, it) => s + it.unitPrice * it.qty, 0)
 
   const productById = useMemo(() => {
     const m = new Map<string, MinibarProduct>()
@@ -881,11 +1162,19 @@ export default function MinibarSalesPage() {
     setCustomerName('')
     setCustDoc('')
     setNotes('')
+    setPaymentMethod('cash')
+    setSelectedGuest(null)
+    setIsNewGuestMode(false)
+    setNewGuestForm(EMPTY_NEW_GUEST)
+    setGuestSearch('')
+    setGuestResults([])
+    setGuestError(null)
   }
 
   const buildPayload = () => ({
     customer_name:     customerName.trim() || null,
     customer_document: customerDocument.trim() || null,
+    guest_id:          selectedGuest?.id ?? null,
     notes:             notes.trim() || null,
     items: cart.map((it) => ({ minibar_product_id: it.productId, quantity: it.qty })),
   })
@@ -897,24 +1186,25 @@ export default function MinibarSalesPage() {
     })
   }
 
-  const handleConfirmCharge = (method: MinibarSalePaymentMethod) => {
+  const handleCharge = () => {
+    if (cart.length === 0) return
+    if (paymentMethod === 'credit' && !selectedGuest) return
     createMutation.mutate(buildPayload(), {
       onSuccess: (sale) => {
-        payMutation.mutate({ id: sale.id, payment_method: method }, {
-          onSuccess: () => {
-            setChargeOpen(false)
-            resetCart()
-          },
-        })
+        payMutation.mutate(
+          { id: sale.id, payment_method: paymentMethod, guest_id: selectedGuest?.id ?? null },
+          { onSuccess: () => resetCart() },
+        )
       },
     })
   }
 
   const handlePayExisting = (method: MinibarSalePaymentMethod) => {
     if (!paySale) return
-    payMutation.mutate({ id: paySale.id, payment_method: method }, {
-      onSuccess: () => setPaySale(null),
-    })
+    payMutation.mutate(
+      { id: paySale.id, payment_method: method, guest_id: paySale.guest_id ?? null },
+      { onSuccess: () => setPaySale(null) },
+    )
   }
 
   const handleConfirmCancel = () => {
@@ -972,15 +1262,29 @@ export default function MinibarSalesPage() {
               customerDocument={customerDocument}
               notes={notes}
               saving={saving}
+              paymentMethod={paymentMethod}
+              selectedGuest={selectedGuest}
+              isNewGuestMode={isNewGuestMode}
+              newGuestForm={newGuestForm}
+              guestSearch={guestSearch}
+              guestResults={guestResults}
+              creatingGuest={creatingGuest}
+              guestError={guestError}
               onSetCustomerName={setCustomerName}
               onSetCustomerDocument={setCustDoc}
               onSetNotes={setNotes}
+              onSetPaymentMethod={setPaymentMethod}
+              onSetSelectedGuest={setSelectedGuest}
+              onSetIsNewGuestMode={setIsNewGuestMode}
+              onSetNewGuestForm={(patch) => setNewGuestForm((f) => ({ ...f, ...patch }))}
+              onSetGuestSearch={setGuestSearch}
+              onCreateGuest={handleCreateGuest}
               onIncrement={handleIncrement}
               onDecrement={handleDecrement}
               onRemove={handleRemove}
               onClear={resetCart}
               onSavePending={handleSavePending}
-              onCharge={() => setChargeOpen(true)}
+              onCharge={handleCharge}
             />
           </div>
         </div>
@@ -993,14 +1297,7 @@ export default function MinibarSalesPage() {
       )}
 
       <ChargeModal
-        open={chargeOpen}
-        total={cartTotal}
-        saving={saving}
-        onClose={() => setChargeOpen(false)}
-        onConfirm={handleConfirmCharge}
-      />
-
-      <ChargeModal
+        sale={paySale}
         open={!!paySale}
         total={paySale ? Number(paySale.total) : 0}
         saving={payMutation.isPending}

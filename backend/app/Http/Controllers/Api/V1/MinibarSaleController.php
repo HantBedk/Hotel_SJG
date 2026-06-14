@@ -29,7 +29,7 @@ class MinibarSaleController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $q = MinibarSale::with(['items.product', 'registeredBy:id,name', 'cancelledBy:id,name'])
+        $q = MinibarSale::with(['items.product', 'registeredBy:id,name', 'guest:id,full_name,document_type,document_number,phone', 'cancelledBy:id,name', 'guest:id,full_name,document_type,document_number,phone'])
             ->orderByDesc('created_at');
 
         if ($status = $request->query('status')) {
@@ -66,7 +66,7 @@ class MinibarSaleController extends Controller
 
     public function show(MinibarSale $minibarSale): JsonResponse
     {
-        $minibarSale->load(['items.product', 'registeredBy:id,name', 'cancelledBy:id,name']);
+        $minibarSale->load(['items.product', 'registeredBy:id,name', 'guest:id,full_name,document_type,document_number,phone', 'cancelledBy:id,name', 'guest:id,full_name,document_type,document_number,phone']);
         return $this->success($minibarSale);
     }
 
@@ -78,6 +78,7 @@ class MinibarSaleController extends Controller
         $data = $request->validate([
             'customer_name'      => 'nullable|string|max:150',
             'customer_document'  => 'nullable|string|max:50',
+            'guest_id'           => 'nullable|uuid|exists:guests,id',
             'notes'              => 'nullable|string|max:500',
             'items'              => 'required|array|min:1',
             'items.*.minibar_product_id' => 'required|uuid|exists:minibar_products,id',
@@ -115,6 +116,7 @@ class MinibarSaleController extends Controller
                 'sale_number'       => $this->nextSaleNumber(),
                 'customer_name'     => $data['customer_name']     ?? null,
                 'customer_document' => $data['customer_document'] ?? null,
+                'guest_id'          => $data['guest_id']          ?? null,
                 'subtotal'          => $subtotal,
                 'total'             => $subtotal,
                 'status'            => 'pending',
@@ -137,7 +139,7 @@ class MinibarSaleController extends Controller
         });
 
         return $this->success(
-            $sale->load(['items.product', 'registeredBy:id,name']),
+            $sale->load(['items.product', 'registeredBy:id,name', 'guest:id,full_name,document_type,document_number,phone']),
             'Venta registrada (pendiente de pago).',
             201,
         );
@@ -150,10 +152,20 @@ class MinibarSaleController extends Controller
     public function pay(Request $request, MinibarSale $minibarSale): JsonResponse
     {
         $data = $request->validate([
-            'payment_method' => 'required|in:cash,transfer,card',
+            'payment_method' => 'required|in:cash,transfer,card,credit',
+            'guest_id'       => 'nullable|uuid|exists:guests,id',
         ]);
 
         abort_if($minibarSale->status !== 'pending', 422, 'Esta venta no está pendiente.');
+
+        // Crédito exige un huésped (de la BD) al que cargarle el saldo.
+        if ($data['payment_method'] === 'credit') {
+            $guestId = $data['guest_id'] ?? $minibarSale->guest_id;
+            abort_if(! $guestId, 422, 'Para pago a crédito se requiere seleccionar un huésped.');
+            if ($data['guest_id'] ?? null) {
+                $minibarSale->guest_id = $data['guest_id'];
+            }
+        }
 
         DB::transaction(function () use ($minibarSale, $data, $request) {
             $minibarSale->load('items');
@@ -219,7 +231,7 @@ class MinibarSaleController extends Controller
         });
 
         return $this->success(
-            $minibarSale->fresh()->load(['items.product', 'registeredBy:id,name']),
+            $minibarSale->fresh()->load(['items.product', 'registeredBy:id,name', 'guest:id,full_name,document_type,document_number,phone']),
             'Venta pagada.',
         );
     }
@@ -290,7 +302,7 @@ class MinibarSaleController extends Controller
         });
 
         return $this->success(
-            $minibarSale->fresh()->load(['items.product', 'registeredBy:id,name', 'cancelledBy:id,name']),
+            $minibarSale->fresh()->load(['items.product', 'registeredBy:id,name', 'guest:id,full_name,document_type,document_number,phone', 'cancelledBy:id,name', 'guest:id,full_name,document_type,document_number,phone']),
             'Venta cancelada.',
         );
     }

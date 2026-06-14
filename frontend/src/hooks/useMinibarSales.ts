@@ -9,6 +9,7 @@ import {
   payMinibarSaleApi,
   type MinibarSalesFilters,
 } from '@/services/minibar-sales.service'
+import type { MinibarSalePaymentMethod } from '@/types'
 
 type ApiError = { response?: { data?: { message?: string } } }
 const errMsg = (e: ApiError, fallback: string) => e?.response?.data?.message ?? fallback
@@ -50,8 +51,8 @@ export function useMinibarSaleMutations() {
   })
 
   const payMutation = useMutation({
-    mutationFn: ({ id, payment_method }: { id: string; payment_method: 'cash' | 'transfer' | 'card' }) =>
-      payMinibarSaleApi(id, { payment_method }),
+    mutationFn: ({ id, payment_method, guest_id }: { id: string; payment_method: MinibarSalePaymentMethod; guest_id?: string | null }) =>
+      payMinibarSaleApi(id, { payment_method, guest_id }),
     onSuccess: () => {
       toast.success('Venta pagada.')
       invalidate()
