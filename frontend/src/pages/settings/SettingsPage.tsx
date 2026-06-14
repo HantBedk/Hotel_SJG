@@ -14,7 +14,7 @@ import BackupsTab      from './tabs/BackupsTab'
 const ALL_TABS = [
   { key: 'hotel',       label: 'Hotel',        icon: Hotel,     permission: 'manage_settings' },
   { key: 'rooms',       label: 'Habitaciones', icon: Building2, permission: 'manage_settings' },
-  { key: 'houses',      label: 'Casas & Tipos', icon: Layers,   permission: 'manage_settings' },
+  { key: 'houses',      label: 'Tipos de habitación', icon: Layers,   permission: 'manage_settings' },
   { key: 'seasons',     label: 'Temporadas',   icon: Calendar,  permission: 'manage_settings' },
   { key: 'services',    label: 'Servicios',    icon: Package,   permission: 'manage_settings' },
   { key: 'config',      label: 'Configuración', icon: Settings, permission: 'manage_settings' },

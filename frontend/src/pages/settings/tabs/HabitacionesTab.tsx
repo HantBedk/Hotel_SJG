@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus, Pencil, Trash2, DollarSign } from 'lucide-react'
-import { useAdminRooms, useAdminRoomMutations, useAdminRoomTypes, useRoomTypeMutations, useAdminHouses } from '@/hooks/useAdmin'
+import { useAdminRooms, useAdminRoomMutations, useAdminRoomTypes, useRoomTypeMutations } from '@/hooks/useAdmin'
 import type { Room, RoomType } from '@/types'
 import { SkeletonText } from '@/components/ui/Skeleton'
 import { formatCOP } from '@/lib/format'
@@ -25,13 +25,12 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
 
 type RoomForm = {
   room_type_id: string
-  house_id: string
   number: string
   floor: string
   notes: string
   is_active: boolean
 }
-const EMPTY: RoomForm = { room_type_id: '', house_id: '', number: '', floor: '', notes: '', is_active: true }
+const EMPTY: RoomForm = { room_type_id: '', number: '', floor: '', notes: '', is_active: true }
 
 type MassPriceForm = { room_type_id: string; base_price: string }
 
@@ -64,7 +63,6 @@ export default function HabitacionesTab() {
   const { data: rooms = [], isLoading } = useAdminRooms()
   const { create, update, remove }      = useAdminRoomMutations()
   const { data: types = [] }            = useAdminRoomTypes()
-  const { data: houses = [] }           = useAdminHouses()
   const { massPrice }                   = useRoomTypeMutations()
 
   const [form, setForm]       = useState<RoomForm>(EMPTY)
@@ -79,7 +77,6 @@ export default function HabitacionesTab() {
     setEditing(r)
     setForm({
       room_type_id: r.room_type_id,
-      house_id:     r.house_id ?? '',
       number:       r.number,
       floor:        r.floor ? String(r.floor) : '',
       notes:        r.notes ?? '',
@@ -93,7 +90,6 @@ export default function HabitacionesTab() {
     e.preventDefault()
     const payload = {
       ...form,
-      house_id: form.house_id || null,
       floor:    form.floor ? parseInt(form.floor) : null,
     }
     if (editing) await update.mutateAsync({ id: editing.id, data: payload })
@@ -143,7 +139,6 @@ export default function HabitacionesTab() {
               <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
                 <th className="text-left py-2 font-medium">Nro.</th>
                 <th className="text-left py-2 font-medium">Tipo</th>
-                <th className="text-left py-2 font-medium">Casa</th>
                 <th className="text-left py-2 font-medium">Piso</th>
                 <th className="text-left py-2 font-medium">Precio</th>
                 <th className="text-left py-2 font-medium">Estado</th>
@@ -158,7 +153,6 @@ export default function HabitacionesTab() {
                   <tr key={r.id} style={{ borderBottom: '1px solid var(--border-default)' }}>
                     <td className="py-2 font-medium" style={{ color: 'var(--text-primary)' }}>{r.number}</td>
                     <td className="py-2" style={{ color: 'var(--text-secondary)' }}>{r.room_type?.name ?? '—'}</td>
-                    <td className="py-2" style={{ color: 'var(--text-secondary)' }}>{r.house?.name ?? '—'}</td>
                     <td className="py-2" style={{ color: 'var(--text-muted)' }}>{r.floor ?? '—'}</td>
                     <td className="py-2" style={{ color: 'var(--text-secondary)' }}>
                       {r.room_type ? formatCOP(parseFloat(r.room_type.base_price)) : '—'}
@@ -211,17 +205,6 @@ export default function HabitacionesTab() {
               >
                 <option value="">Seleccionar…</option>
                 {types.map((t: RoomType) => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </F>
-            <F k="house_id" label="Casa" form={form} setForm={setForm}>
-              <select
-                value={form.house_id}
-                onChange={e => setForm(f => ({ ...f, house_id: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
-                style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
-              >
-                <option value="">Sin casa</option>
-                {houses.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
               </select>
             </F>
             <div className="grid grid-cols-2 gap-3">
