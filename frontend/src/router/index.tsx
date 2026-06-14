@@ -14,8 +14,9 @@ const CompaniesPage   = lazy(() => import('@/pages/companies/CompaniesPage'))
 const SettingsPage    = lazy(() => import('@/pages/settings/SettingsPage'))
 const ReservationsPage= lazy(() => import('@/pages/reservations/ReservationsPage'))
 const CalendarPage    = lazy(() => import('@/pages/calendar/CalendarPage'))
-const InventoryPage   = lazy(() => import('@/pages/inventory/InventoryPage'))
-const IncomePage      = lazy(() => import('@/pages/income/IncomePage'))
+const InventoryPage    = lazy(() => import('@/pages/inventory/InventoryPage'))
+const MinibarSalesPage = lazy(() => import('@/pages/minibar-sales/MinibarSalesPage'))
+const IncomePage       = lazy(() => import('@/pages/income/IncomePage'))
 const ActivityPage    = lazy(() => import('@/pages/activity/ActivityPage'))
 
 function PageLoader() {
@@ -139,6 +140,14 @@ export const router = createBrowserRouter([
             element: (
               <RequirePermission permission="view_inventory">
                 <Lazy><InventoryPage /></Lazy>
+              </RequirePermission>
+            ),
+          },
+          {
+            path: 'minibar-sales',
+            element: (
+              <RequirePermission permission="check_in">
+                <Lazy><MinibarSalesPage /></Lazy>
               </RequirePermission>
             ),
           },

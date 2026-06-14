@@ -576,6 +576,55 @@ export interface Minibar {
   updated_at: string
 }
 
+// ── Minibar sales (POS / clientes externos) ──────────────────────────────────
+
+export type MinibarSaleStatus = 'pending' | 'paid' | 'cancelled'
+export type MinibarSalePaymentMethod = 'cash' | 'transfer' | 'card'
+
+export interface MinibarSaleItem {
+  id: string
+  minibar_sale_id: string
+  minibar_product_id: string
+  product_name: string
+  product_code: string | null
+  quantity: number
+  unit_price: string
+  total: string
+  product?: MinibarProduct | null
+}
+
+export interface MinibarSale {
+  id: string
+  sale_number: string
+  customer_name: string | null
+  customer_document: string | null
+  subtotal: string
+  total: string
+  payment_method: MinibarSalePaymentMethod | null
+  status: MinibarSaleStatus
+  paid_at: string | null
+  cancelled_at: string | null
+  cancellation_reason: string | null
+  notes: string | null
+  registered_by: string
+  cancelled_by_id: string | null
+  items?: MinibarSaleItem[]
+  registered_by_user?: { id: string; name: string } | null
+  cancelled_by?: { id: string; name: string } | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MinibarSalesPage {
+  data: MinibarSale[]
+  meta: {
+    current_page: number
+    last_page: number
+    per_page: number
+    total: number
+  }
+}
+
 // ── Assets ────────────────────────────────────────────────────────────────────
 
 export type AssetLocationType = 'room' | 'general'

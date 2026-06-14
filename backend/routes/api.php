@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\GuestController;
 use App\Http\Controllers\Api\V1\IncomeController;
 use App\Http\Controllers\Api\V1\InventoryController;
 use App\Http\Controllers\Api\V1\MinibarController;
+use App\Http\Controllers\Api\V1\MinibarSaleController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\ReservationController;
 use App\Http\Controllers\Api\V1\RoomController;
@@ -259,6 +260,18 @@ Route::prefix('v1')->group(function () {
             Route::patch('/repair-orders/{repairOrder}/close',          [AssetController::class, 'closeRepairOrder'])
                  ->middleware('permission:manage_inventory');
         });
+
+        // ── Ventas directas de minibar (clientes externos / POS) ──────────────
+        Route::prefix('minibar-sales')
+            ->middleware('permission:manage_inventory|check_in|check_out')
+            ->group(function () {
+                Route::get('/',                        [MinibarSaleController::class, 'index']);
+                Route::post('/',                       [MinibarSaleController::class, 'store']);
+                Route::get('/{minibarSale}',           [MinibarSaleController::class, 'show']);
+                Route::delete('/{minibarSale}',        [MinibarSaleController::class, 'destroy']);
+                Route::post('/{minibarSale}/pay',      [MinibarSaleController::class, 'pay']);
+                Route::post('/{minibarSale}/cancel',   [MinibarSaleController::class, 'cancel']);
+            });
 
         // ── Notificaciones ────────────────────────────────────────────────────
         Route::get('/notifications',              [NotificationController::class, 'index']);

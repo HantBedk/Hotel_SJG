@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Plus, Pencil, Trash2, X, RefreshCw, Clock, BedDouble, ChevronRight, Undo2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Plus, Pencil, Trash2, X, RefreshCw, Clock, BedDouble, ChevronRight, Undo2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
@@ -634,14 +634,87 @@ function ReturnToCatalogModal({ roomNumber, roomMinibars, onSave, onClose, savin
 }
 
 // ── Catalogue section ─────────────────────────────────────────────────────────
+type SortKey = 'code' | 'name' | 'presentation' | 'cost_price' | 'sale_price' | 'stock' | 'expiration_date' | 'active'
+type SortDir = 'asc' | 'desc'
+
+const COLUMNS: { key: SortKey | null; label: string; numeric?: boolean }[] = [
+  { key: 'code',            label: 'Código' },
+  { key: 'name',            label: 'Nombre' },
+  { key: 'presentation',    label: 'Presentación' },
+  { key: 'cost_price',      label: 'P. compra',  numeric: true },
+  { key: 'sale_price',      label: 'P. venta',   numeric: true },
+  { key: 'stock',           label: 'Cantidad',   numeric: true },
+  { key: 'expiration_date', label: 'Vence' },
+  { key: 'active',          label: 'Estado' },
+  { key: null,              label: '' },
+]
+
 function CatalogueSection() {
   const { hasPermission } = useAuth()
   const canManage = hasPermission('manage_inventory')
 
   const [modalProduct, setModalProduct] = useState<MinibarProduct | null | undefined>(undefined)
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
   const { data: products = [], isLoading } = useMinibarProducts()
   const { createMutation, updateMutation, deleteMutation } = useMinibarProductMutations()
+
+  const stockOf = (p: MinibarProduct) => {
+    const warehouse = p.inventory_item ? p.inventory_item.current_stock : p.stock_quantity
+    return p.total_stock ?? warehouse
+  }
+
+  const sortedProducts = useMemo(() => {
+    const arr = [...products]
+    const dir = sortDir === 'asc' ? 1 : -1
+    arr.sort((a, b) => {
+      let cmp = 0
+      switch (sortKey) {
+        case 'code':
+        case 'name':
+        case 'presentation': {
+          const av = (a[sortKey] ?? '').toString()
+          const bv = (b[sortKey] ?? '').toString()
+          cmp = av.localeCompare(bv, 'es', { numeric: true, sensitivity: 'base' })
+          break
+        }
+        case 'cost_price':
+        case 'sale_price': {
+          cmp = (Number(a[sortKey]) || 0) - (Number(b[sortKey]) || 0)
+          break
+        }
+        case 'stock': {
+          cmp = stockOf(a) - stockOf(b)
+          break
+        }
+        case 'expiration_date': {
+          const at = a.expiration_date ? new Date(a.expiration_date).getTime() : Number.POSITIVE_INFINITY
+          const bt = b.expiration_date ? new Date(b.expiration_date).getTime() : Number.POSITIVE_INFINITY
+          cmp = at - bt
+          break
+        }
+        case 'active': {
+          cmp = Number(a.active) - Number(b.active)
+          break
+        }
+      }
+      if (cmp === 0) cmp = a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
+      return cmp * dir
+    })
+    return arr
+  }, [products, sortKey, sortDir])
+
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      // Numéricos arrancan de mayor a menor; texto/fecha de A→Z / más próximo.
+      const col = COLUMNS.find((c) => c.key === key)
+      setSortDir(col?.numeric ? 'desc' : 'asc')
+    }
+  }
 
   const handleSave = (formData: Partial<MinibarProduct>) => {
     if (modalProduct?.id) {
@@ -675,13 +748,30 @@ function CatalogueSection() {
           <table className="w-full min-w-[820px] text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
-                {['Código', 'Nombre', 'Presentación', 'P. compra', 'P. venta', 'Cantidad', 'Vence', 'Estado', ''].map((h) => (
-                  <th key={h} className="px-3 py-3 text-left font-medium whitespace-nowrap">{h}</th>
-                ))}
+                {COLUMNS.map((col) => {
+                  if (!col.key) {
+                    return <th key="actions" className="px-3 py-3 text-left font-medium whitespace-nowrap"></th>
+                  }
+                  const active = sortKey === col.key
+                  const Icon = !active ? ArrowUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown
+                  return (
+                    <th key={col.key} className="px-3 py-3 text-left font-medium whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => handleSort(col.key as SortKey)}
+                        className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity"
+                        style={{ color: active ? 'var(--color-primary)' : 'var(--text-secondary)' }}
+                      >
+                        {col.label}
+                        <Icon size={12} style={{ opacity: active ? 1 : 0.5 }} />
+                      </button>
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => {
+              {sortedProducts.map((p) => {
                 const expired = p.expiration_date && new Date(p.expiration_date) < new Date()
                 // Mostramos el stock total disponible (bodega + lo que está en las
                 // habitaciones) para que el número baje al consumir desde cualquier hab.

@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-import { Plus, Search, Pencil, Trash2, RefreshCw, SlidersHorizontal, X, Truck, FolderPlus, Check } from 'lucide-react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { Plus, Search, Pencil, Trash2, RefreshCw, SlidersHorizontal, X, Truck, FolderPlus, Check, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { useInventoryItems, useInventoryCategories, useInventoryMutations, useCreateCategory, useLowStockThreshold, useSetLowStockThreshold } from '@/hooks/useInventory'
 import { useAdminUsers } from '@/hooks/useAdmin'
 import { useAuth } from '@/hooks/useAuth'
@@ -390,12 +390,27 @@ function DeliverModal({ item, users, onSave, onClose, saving }: DeliverModalProp
 }
 
 // ── Main tab ──────────────────────────────────────────────────────────────────
+type SortKey = 'code' | 'name' | 'category' | 'current_stock' | 'cost_price' | 'expiry_date'
+type SortDir = 'asc' | 'desc'
+
+const COLUMNS: { key: SortKey | null; label: string; numeric?: boolean }[] = [
+  { key: 'code',          label: 'Código' },
+  { key: 'name',          label: 'Nombre' },
+  { key: 'category',      label: 'Categoría' },
+  { key: 'current_stock', label: 'Stock',       numeric: true },
+  { key: 'cost_price',    label: 'Costo',       numeric: true },
+  { key: 'expiry_date',   label: 'Vencimiento' },
+  { key: null,            label: '' },
+]
+
 export default function ConsumiblesTab() {
   const { hasPermission } = useAuth()
   const canManage = hasPermission('manage_inventory')
 
   const [search, setSearch] = useState('')
   const [categoryId, setCategoryId] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [thresholdOpen, setThresholdOpen] = useState(false)
   const [thresholdInput, setThresholdInput] = useState('')
   const thresholdRef = useRef<HTMLDivElement>(null)
@@ -434,6 +449,56 @@ export default function ConsumiblesTab() {
 
   const { data, isLoading } = useInventoryItems(filters)
   const items = data?.data ?? []
+
+  const sortedItems = useMemo(() => {
+    const arr = [...items]
+    const dir = sortDir === 'asc' ? 1 : -1
+    arr.sort((a, b) => {
+      let cmp = 0
+      switch (sortKey) {
+        case 'code':
+        case 'name': {
+          const av = (a[sortKey] ?? '').toString()
+          const bv = (b[sortKey] ?? '').toString()
+          cmp = av.localeCompare(bv, 'es', { numeric: true, sensitivity: 'base' })
+          break
+        }
+        case 'category': {
+          const av = a.category?.name ?? ''
+          const bv = b.category?.name ?? ''
+          cmp = av.localeCompare(bv, 'es', { sensitivity: 'base' })
+          break
+        }
+        case 'current_stock': {
+          cmp = a.current_stock - b.current_stock
+          break
+        }
+        case 'cost_price': {
+          cmp = (Number(a.cost_price) || 0) - (Number(b.cost_price) || 0)
+          break
+        }
+        case 'expiry_date': {
+          const at = a.expiry_date ? new Date(a.expiry_date).getTime() : Number.POSITIVE_INFINITY
+          const bt = b.expiry_date ? new Date(b.expiry_date).getTime() : Number.POSITIVE_INFINITY
+          cmp = at - bt
+          break
+        }
+      }
+      if (cmp === 0) cmp = a.name.localeCompare(b.name, 'es', { sensitivity: 'base' })
+      return cmp * dir
+    })
+    return arr
+  }, [items, sortKey, sortDir])
+
+  const handleSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortKey(key)
+      const col = COLUMNS.find((c) => c.key === key)
+      setSortDir(col?.numeric ? 'desc' : 'asc')
+    }
+  }
 
   const { createMutation, updateMutation, deleteMutation, restockMutation, deliverMutation } = useInventoryMutations()
 
@@ -569,7 +634,7 @@ export default function ConsumiblesTab() {
         <>
         {/* Mobile cards (< md) */}
         <div className="md:hidden space-y-3">
-          {items.map((item) => (
+          {sortedItems.map((item) => (
             <div
               key={item.id}
               className="rounded-xl p-4"
@@ -623,13 +688,30 @@ export default function ConsumiblesTab() {
           <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
-                {['Código', 'Nombre', 'Categoría', 'Stock', 'Costo', 'Vencimiento', ''].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
-                ))}
+                {COLUMNS.map((col) => {
+                  if (!col.key) {
+                    return <th key="actions" className="px-4 py-3 text-left font-medium"></th>
+                  }
+                  const active = sortKey === col.key
+                  const Icon = !active ? ArrowUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown
+                  return (
+                    <th key={col.key} className="px-4 py-3 text-left font-medium">
+                      <button
+                        type="button"
+                        onClick={() => handleSort(col.key as SortKey)}
+                        className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity"
+                        style={{ color: active ? 'var(--color-primary)' : 'var(--text-secondary)' }}
+                      >
+                        {col.label}
+                        <Icon size={12} style={{ opacity: active ? 1 : 0.5 }} />
+                      </button>
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
+              {sortedItems.map((item) => (
                 <tr
                   key={item.id}
                   className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
