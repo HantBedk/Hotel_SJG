@@ -189,8 +189,10 @@ class BackupController extends Controller
             'PGPASSWORD' => $db['password'],
         ];
 
+        // --clean --if-exists: el SQL incluye DROP TABLE IF EXISTS antes de cada CREATE,
+        // para que la restauración sobre una BD ya inicializada no choque con tablas existentes.
         $cmd = sprintf(
-            'pg_dump -h %s -p %s -U %s -F p -f %s %s',
+            'pg_dump -h %s -p %s -U %s -F p --clean --if-exists -f %s %s',
             escapeshellarg($db['host']),
             escapeshellarg($db['port']),
             escapeshellarg($db['username']),
@@ -328,8 +330,11 @@ class BackupController extends Controller
         @unlink($zipFull);
 
         $env = ['PGPASSWORD' => $db['password']];
+
+        // ON_ERROR_STOP=1: detiene psql al primer error en lugar de continuar silenciosamente.
+        // --single-transaction: si algo falla, se hace ROLLBACK completo (no quedan datos parciales).
         $cmd = sprintf(
-            'psql -h %s -p %s -U %s -d %s -f %s',
+            'psql -h %s -p %s -U %s -d %s --single-transaction -v ON_ERROR_STOP=1 -f %s',
             escapeshellarg($db['host']),
             escapeshellarg($db['port']),
             escapeshellarg($db['username']),
