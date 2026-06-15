@@ -11,6 +11,7 @@ import NotificationCenter from '@/components/notifications/NotificationCenter'
 import { useReverb } from '@/hooks/useReverb'
 import { useSwitchHotel } from '@/hooks/useSwitchHotel'
 import { hotelQueryKey, useHotelQueryKey } from '@/lib/hotelQueryKey'
+import { getDefaultSettingsPath } from '@/components/layout/sidebar'
 
 interface NotificationBroadcast {
   id:         string
@@ -44,8 +45,9 @@ interface HeaderProps {
 
 export default function Header({ title, onToggleSidebar, darkMode, onToggleDark }: HeaderProps) {
   const user = useAuthStore((s) => s.user)
-  const { logout, hasPermission } = useAuth()
+  const { logout, hasAnyPermission } = useAuth()
   const navigate = useNavigate()
+  const settingsPath = getDefaultSettingsPath(hasAnyPermission)
   const switchHotel = useSwitchHotel()
   const queryClient = useQueryClient()
   const hotels = useHotelStore((s) => s.hotels)
@@ -228,10 +230,10 @@ export default function Header({ title, onToggleSidebar, darkMode, onToggleDark 
                 <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{user?.name}</p>
                 <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{user?.email}</p>
               </div>
-              {hasPermission('view_settings') && (
+              {settingsPath.startsWith('/settings') && (
                 <button
                   role="menuitem"
-                  onClick={() => { setUserMenuOpen(false); navigate('/settings') }}
+                  onClick={() => { setUserMenuOpen(false); navigate(settingsPath) }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                   style={{ color: 'var(--text-primary)' }}
                 >

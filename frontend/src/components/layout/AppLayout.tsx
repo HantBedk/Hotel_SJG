@@ -1,25 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
-import Sidebar from './Sidebar'
+import Sidebar, { getPageTitle } from './sidebar'
 import Header from './Header'
 import HotelSwitchOverlay from './HotelSwitchOverlay'
 import NotificationModal from '@/components/notifications/NotificationModal'
 import { useHotelStore } from '@/store/hotelStore'
 import { cn } from '@/lib/cn'
-
-const PAGE_TITLES: Record<string, string> = {
-  '/':             'Dashboard',
-  '/rooms':        'Habitaciones',
-  '/stays':        'Estadías',
-  '/guests':       'Huéspedes',
-  '/companies':    'Empresas',
-  '/reservations': 'Reservaciones',
-  '/calendar':     'Calendario',
-  '/inventory':    'Inventario',
-  '/income':       'Ingresos',
-  '/activity':     'Historial',
-  '/settings':     'Configuración',
-}
 
 const DARK_MODE_KEY = 'hotel_dark_mode'
 
@@ -34,7 +20,7 @@ export default function AppLayout() {
     () => localStorage.getItem(DARK_MODE_KEY) === 'true'
   )
 
-  const title = PAGE_TITLES[location.pathname] ?? 'Hotel Manager'
+  const title = getPageTitle(location.pathname)
   const switchingHotelName = hotels.find((h) => h.id === currentHotelId)?.name
 
   // Close mobile sidebar on navigation

@@ -1,15 +1,17 @@
-import { useState, type CSSProperties } from 'react'
+import { type CSSProperties } from 'react'
 import { Save } from 'lucide-react'
 import { useSettings } from '@/hooks/useSettings'
 import type { SettingsMap } from '@/services/settings.service'
 import { SkeletonText } from '@/components/ui/Skeleton'
 import { cn } from '@/lib/cn'
 
-const GROUPS = [
-  { key: 'hotel',     label: 'Hotel' },
+export const SETTINGS_CONFIG_GROUPS = [
+  { key: 'hotel', label: 'Hotel' },
   { key: 'inventory', label: 'Inventario' },
-  { key: 'system',    label: 'Sistema' },
+  { key: 'system', label: 'Sistema' },
 ] as const
+
+export type SettingsConfigGroup = typeof SETTINGS_CONFIG_GROUPS[number]['key']
 
 const LABELS: Record<string, string> = {
   'hotel.iva_enabled':              'IVA habilitado',
@@ -50,21 +52,6 @@ function segmentButtonStyle(selected: boolean): CSSProperties {
 function saveButtonLabel(isSaving: boolean): string {
   if (isSaving) return 'Guardando…'
   return 'Guardar cambios'
-}
-
-function groupNavStyle(active: boolean): CSSProperties {
-  if (active) {
-    return {
-      background: 'var(--color-primary-light)',
-      color: 'var(--color-primary)',
-      fontWeight: 600,
-    }
-  }
-  return {
-    background: 'transparent',
-    color: 'var(--text-secondary)',
-    fontWeight: 400,
-  }
 }
 
 interface BooleanSettingFieldProps {
@@ -217,57 +204,43 @@ function SettingsForm({ data, unsaved, hasUnsaved, isSaving, onChange, onSave }:
   )
 }
 
-export default function ConfiguracionTab() {
-  const [group, setGroup] = useState('hotel')
+interface ConfiguracionFormProps {
+  readonly group: SettingsConfigGroup
+}
 
+export default function ConfiguracionForm({ group }: ConfiguracionFormProps) {
   const {
     data, isLoading, unsaved, hasUnsaved,
     isSaving, handleChange, handleDiscard, handleSave,
   } = useSettings(group)
 
   return (
-    <div className="flex gap-4">
-      <nav className="w-32 flex-shrink-0 space-y-1">
-        {GROUPS.map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setGroup(key)}
-            className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors"
-            style={groupNavStyle(group === key)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+    <div
+      className="rounded-xl p-5 space-y-4"
+      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+    >
+      {hasUnsaved && (
+        <div
+          className="flex items-center justify-between px-3 py-2 rounded-lg text-xs"
+          style={{ background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E' }}
+        >
+          <span>Cambios sin guardar</span>
+          <button type="button" onClick={handleDiscard} className="underline">Descartar</button>
+        </div>
+      )}
 
-      <div
-        className="flex-1 rounded-xl p-5 space-y-4"
-        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
-      >
-        {hasUnsaved && (
-          <div
-            className="flex items-center justify-between px-3 py-2 rounded-lg text-xs"
-            style={{ background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E' }}
-          >
-            <span>Cambios sin guardar</span>
-            <button type="button" onClick={handleDiscard} className="underline">Descartar</button>
-          </div>
-        )}
-
-        {isLoading ? (
-          <SkeletonText lines={5} />
-        ) : (
-          <SettingsForm
-            data={data ?? {}}
-            unsaved={unsaved}
-            hasUnsaved={hasUnsaved}
-            isSaving={isSaving}
-            onChange={handleChange}
-            onSave={handleSave}
-          />
-        )}
-      </div>
+      {isLoading ? (
+        <SkeletonText lines={5} />
+      ) : (
+        <SettingsForm
+          data={data ?? {}}
+          unsaved={unsaved}
+          hasUnsaved={hasUnsaved}
+          isSaving={isSaving}
+          onChange={handleChange}
+          onSave={handleSave}
+        />
+      )}
     </div>
   )
 }

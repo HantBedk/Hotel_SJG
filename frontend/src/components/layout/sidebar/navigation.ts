@@ -1,0 +1,367 @@
+import type { ElementType } from 'react'
+import {
+  LayoutDashboard,
+  BedDouble,
+  Users,
+  Building2,
+  CalendarDays,
+  CalendarRange,
+  BarChart3,
+  ClipboardList,
+  Package,
+  ShoppingCart,
+  DollarSign,
+  Hotel,
+  Layers,
+  Calendar,
+  Shield,
+  Database,
+  Cog,
+  Boxes,
+  Sparkles,
+  SlidersHorizontal,
+  Network,
+} from 'lucide-react'
+
+export interface NavItem {
+  readonly id: string
+  readonly to: string
+  readonly label: string
+  readonly pageTitle: string
+  readonly icon: ElementType
+  readonly permissions: readonly string[]
+  readonly end?: boolean
+}
+
+export interface NavModule {
+  readonly id: string
+  readonly label: string
+  readonly items: readonly NavItem[]
+}
+
+/** Módulos de administración (/settings/*), en orden de prioridad para redirects. */
+const SETTINGS_MODULE_IDS = ['property', 'parameters', 'platform'] as const
+
+export const NAV_MODULES: readonly NavModule[] = [
+  {
+    id: 'overview',
+    label: 'Inicio',
+    items: [
+      {
+        id: 'dashboard',
+        to: '/',
+        label: 'Dashboard',
+        pageTitle: 'Dashboard',
+        icon: LayoutDashboard,
+        permissions: ['view_dashboard'],
+        end: true,
+      },
+    ],
+  },
+  {
+    id: 'front-desk',
+    label: 'Recepción',
+    items: [
+      {
+        id: 'rooms',
+        to: '/rooms',
+        label: 'Plano de habitaciones',
+        pageTitle: 'Plano de habitaciones',
+        icon: BedDouble,
+        permissions: ['view_rooms'],
+      },
+      {
+        id: 'stays',
+        to: '/stays',
+        label: 'Estadías',
+        pageTitle: 'Estadías',
+        icon: ClipboardList,
+        permissions: ['check_in'],
+      },
+      {
+        id: 'guests',
+        to: '/guests',
+        label: 'Huéspedes',
+        pageTitle: 'Huéspedes',
+        icon: Users,
+        permissions: ['check_in'],
+      },
+      {
+        id: 'companies',
+        to: '/companies',
+        label: 'Empresas',
+        pageTitle: 'Empresas',
+        icon: Building2,
+        permissions: ['check_in'],
+      },
+      {
+        id: 'reservations-list',
+        to: '/reservations',
+        label: 'Reservas',
+        pageTitle: 'Reservaciones',
+        icon: CalendarDays,
+        permissions: ['view_reservations', 'manage_reservations'],
+      },
+      {
+        id: 'calendar',
+        to: '/calendar',
+        label: 'Calendario',
+        pageTitle: 'Calendario',
+        icon: CalendarRange,
+        permissions: ['view_reservations', 'manage_reservations'],
+      },
+      {
+        id: 'minibar-sales',
+        to: '/minibar-sales',
+        label: 'Venta productos',
+        pageTitle: 'Venta productos',
+        icon: ShoppingCart,
+        permissions: ['check_in'],
+      },
+    ],
+  },
+  {
+    id: 'inventory',
+    label: 'Inventario',
+    items: [
+      {
+        id: 'inventory',
+        to: '/inventory',
+        label: 'Inventario',
+        pageTitle: 'Inventario',
+        icon: Package,
+        permissions: ['view_inventory', 'manage_inventory'],
+      },
+    ],
+  },
+  {
+    id: 'finance',
+    label: 'Finanzas',
+    items: [
+      {
+        id: 'income',
+        to: '/income',
+        label: 'Ingresos',
+        pageTitle: 'Ingresos',
+        icon: DollarSign,
+        permissions: ['view_reports'],
+      },
+    ],
+  },
+  {
+    id: 'audit',
+    label: 'Auditoría',
+    items: [
+      {
+        id: 'activity',
+        to: '/activity',
+        label: 'Registro de actividad',
+        pageTitle: 'Registro de actividad',
+        icon: BarChart3,
+        permissions: ['view_activity_log'],
+      },
+    ],
+  },
+  {
+    id: 'property',
+    label: 'Propiedad',
+    items: [
+      {
+        id: 'settings-hotel',
+        to: '/settings/hotel',
+        label: 'Datos del hotel',
+        pageTitle: 'Datos del hotel',
+        icon: Hotel,
+        permissions: ['manage_settings'],
+        end: true,
+      },
+      {
+        id: 'settings-houses',
+        to: '/settings/houses',
+        label: 'Tipos de habitación',
+        pageTitle: 'Tipos de habitación',
+        icon: Layers,
+        permissions: ['manage_settings'],
+        end: true,
+      },
+      {
+        id: 'settings-rooms',
+        to: '/settings/rooms',
+        label: 'Catálogo de habitaciones',
+        pageTitle: 'Catálogo de habitaciones',
+        icon: BedDouble,
+        permissions: ['manage_settings'],
+        end: true,
+      },
+      {
+        id: 'settings-seasons',
+        to: '/settings/seasons',
+        label: 'Temporadas',
+        pageTitle: 'Temporadas',
+        icon: Calendar,
+        permissions: ['manage_settings'],
+        end: true,
+      },
+      {
+        id: 'settings-services',
+        to: '/settings/services',
+        label: 'Servicios adicionales',
+        pageTitle: 'Servicios adicionales',
+        icon: Sparkles,
+        permissions: ['manage_settings'],
+        end: true,
+      },
+    ],
+  },
+  {
+    id: 'parameters',
+    label: 'Parámetros',
+    items: [
+      {
+        id: 'settings-config-hotel',
+        to: '/settings/config/hotel',
+        label: 'Ajustes hotel',
+        pageTitle: 'Ajustes hotel',
+        icon: SlidersHorizontal,
+        permissions: ['manage_settings'],
+        end: true,
+      },
+      {
+        id: 'settings-config-inventory',
+        to: '/settings/config/inventory',
+        label: 'Ajustes inventario',
+        pageTitle: 'Ajustes inventario',
+        icon: Boxes,
+        permissions: ['manage_settings'],
+        end: true,
+      },
+      {
+        id: 'settings-config-system',
+        to: '/settings/config/system',
+        label: 'Ajustes sistema',
+        pageTitle: 'Ajustes sistema',
+        icon: Cog,
+        permissions: ['manage_settings'],
+        end: true,
+      },
+    ],
+  },
+  {
+    id: 'platform',
+    label: 'Plataforma',
+    items: [
+      {
+        id: 'settings-hotels',
+        to: '/settings/hotels',
+        label: 'Red de hoteles',
+        pageTitle: 'Red de hoteles',
+        icon: Network,
+        permissions: ['view_hotels'],
+        end: true,
+      },
+      {
+        id: 'settings-users',
+        to: '/settings/users',
+        label: 'Usuarios',
+        pageTitle: 'Usuarios',
+        icon: Users,
+        permissions: ['manage_users'],
+        end: true,
+      },
+      {
+        id: 'settings-permissions',
+        to: '/settings/permissions',
+        label: 'Roles y permisos',
+        pageTitle: 'Roles y permisos',
+        icon: Shield,
+        permissions: ['manage_roles'],
+        end: true,
+      },
+      {
+        id: 'settings-backups',
+        to: '/settings/backups',
+        label: 'Backups',
+        pageTitle: 'Backups',
+        icon: Database,
+        permissions: ['trigger_backup'],
+        end: true,
+      },
+    ],
+  },
+] as const
+
+export const NAV_ITEMS: readonly NavItem[] = NAV_MODULES.flatMap((module) => module.items)
+
+export function matchesNavItemPath(pathname: string, item: NavItem): boolean {
+  const exact = item.end ?? item.to === '/'
+  if (exact) return pathname === item.to
+  return pathname === item.to || pathname.startsWith(`${item.to}/`)
+}
+
+export function getModuleIdForPath(
+  pathname: string,
+  modules: readonly NavModule[],
+): string | undefined {
+  for (const module of modules) {
+    if (module.items.some((item) => matchesNavItemPath(pathname, item))) {
+      return module.id
+    }
+  }
+  return undefined
+}
+
+export function getNavItemByPath(pathname: string): NavItem | undefined {
+  return NAV_ITEMS.find((item) => matchesNavItemPath(pathname, item))
+}
+
+/** Segmento de ruta React Router (`null` = index `/`). */
+export function navItemRouteSegment(item: NavItem): string | null {
+  if (item.to === '/') return null
+  return item.to.slice(1)
+}
+
+export function filterVisibleModules(
+  modules: readonly NavModule[],
+  hasAnyPermission: (permissions: readonly string[]) => boolean,
+): NavModule[] {
+  return modules
+    .map((module) => ({
+      ...module,
+      items: module.items.filter((item) => hasAnyPermission(item.permissions)),
+    }))
+    .filter((module) => module.items.length > 0)
+}
+
+const PAGE_TITLE_BY_PATH = new Map(
+  NAV_MODULES.flatMap((module) => module.items.map((item) => [item.to, item.pageTitle] as const)),
+)
+
+function firstAccessibleItemInModules(
+  moduleIds: readonly string[],
+  hasAnyPermission: (permissions: readonly string[]) => boolean,
+): NavItem | undefined {
+  for (const moduleId of moduleIds) {
+    const module = NAV_MODULES.find((entry) => entry.id === moduleId)
+    const item = module?.items.find((entry) => hasAnyPermission(entry.permissions))
+    if (item) return item
+  }
+  return undefined
+}
+
+export function getDefaultConfigPath(
+  hasAnyPermission: (permissions: readonly string[]) => boolean,
+): string {
+  const first = firstAccessibleItemInModules(['parameters'], hasAnyPermission)
+  return first?.to ?? getDefaultSettingsPath(hasAnyPermission)
+}
+
+export function getDefaultSettingsPath(
+  hasAnyPermission: (permissions: readonly string[]) => boolean,
+): string {
+  const first = firstAccessibleItemInModules(SETTINGS_MODULE_IDS, hasAnyPermission)
+  return first?.to ?? '/'
+}
+
+export function getPageTitle(pathname: string): string {
+  return PAGE_TITLE_BY_PATH.get(pathname) ?? 'Hotel Manager'
+}
