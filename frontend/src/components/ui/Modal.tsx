@@ -1,16 +1,16 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { cn } from '@/lib/cn'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 
 interface ModalProps {
-  open: boolean
-  onClose: () => void
-  title?: string
-  ariaLabel?: string
-  size?: 'sm' | 'md' | 'lg' | 'xl'
-  children: ReactNode
-  className?: string
-  closeOnBackdrop?: boolean
+  readonly open: boolean
+  readonly onClose: () => void
+  readonly title?: string
+  readonly ariaLabel?: string
+  readonly size?: 'sm' | 'md' | 'lg' | 'xl'
+  readonly children: ReactNode
+  readonly className?: string
+  readonly closeOnBackdrop?: boolean
 }
 
 const SIZE: Record<NonNullable<ModalProps['size']>, string> = {
@@ -30,7 +30,42 @@ export function Modal({
   className,
   closeOnBackdrop = true,
 }: ModalProps) {
-  const ref = useFocusTrap<HTMLDivElement>(open, onClose)
+  const ref = useFocusTrap<HTMLDialogElement>(open)
+  const closingFromProp = useRef(false)
+
+  useEffect(() => {
+    const dialog = ref.current
+    if (!dialog) return
+
+    if (open) {
+      if (!dialog.open) dialog.showModal()
+    } else if (dialog.open) {
+      closingFromProp.current = true
+      dialog.close()
+      closingFromProp.current = false
+    }
+  }, [open, ref])
+
+  useEffect(() => {
+    const dialog = ref.current
+    if (!dialog) return
+
+    const handleCancel = (e: Event) => {
+      e.preventDefault()
+      onClose()
+    }
+
+    const handleClose = () => {
+      if (!closingFromProp.current) onClose()
+    }
+
+    dialog.addEventListener('cancel', handleCancel)
+    dialog.addEventListener('close', handleClose)
+    return () => {
+      dialog.removeEventListener('cancel', handleCancel)
+      dialog.removeEventListener('close', handleClose)
+    }
+  }, [onClose, ref])
 
   useEffect(() => {
     if (!open) return
@@ -41,26 +76,34 @@ export function Modal({
     }
   }, [open])
 
-  if (!open) return null
+  const backdropClassName = 'absolute inset-0 border-0 p-0 cursor-default'
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40"
-      onClick={closeOnBackdrop ? onClose : undefined}
-      aria-hidden="false"
+    <dialog
+      ref={ref}
+      aria-label={ariaLabel || title}
+      className={cn(
+        'app-modal fixed inset-0 z-50 m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
+        'flex items-end sm:items-center justify-center pointer-events-none',
+      )}
     >
+      {closeOnBackdrop ? (
+        <button
+          type="button"
+          aria-label="Cerrar modal"
+          className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
+          onClick={onClose}
+        />
+      ) : (
+        <div className={cn(backdropClassName, 'pointer-events-none')} aria-hidden="true" />
+      )}
       <div
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-label={ariaLabel || title}
         className={cn(
-          'w-full bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] overflow-hidden flex flex-col',
+          'relative z-10 pointer-events-auto w-full bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] overflow-hidden flex flex-col',
           SIZE[size],
           className,
         )}
         style={{ background: 'var(--bg-surface)' }}
-        onClick={(e) => e.stopPropagation()}
       >
         {title && (
           <h2 className="text-lg font-semibold px-5 pt-5" style={{ color: 'var(--text-primary)' }}>
@@ -69,6 +112,6 @@ export function Modal({
         )}
         {children}
       </div>
-    </div>
+    </dialog>
   )
 }

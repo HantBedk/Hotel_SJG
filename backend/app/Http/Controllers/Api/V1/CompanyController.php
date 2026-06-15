@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
+use App\Support\TenantContext;
 use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,6 +16,10 @@ class CompanyController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Company::query();
+
+        if ($hotelId = TenantContext::id()) {
+            $query->forHotel($hotelId);
+        }
 
         if ($search = $request->query('search')) {
             $query->search($search);

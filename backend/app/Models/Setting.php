@@ -15,7 +15,9 @@ class Setting extends Model
     public static function get(string $key, mixed $default = null): mixed
     {
         $setting = static::find($key);
-        if (!$setting) return $default;
+        if (!$setting) {
+            return $default;
+        }
 
         return match ($setting->type) {
             'boolean' => filter_var($setting->value, FILTER_VALIDATE_BOOLEAN),

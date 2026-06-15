@@ -4,12 +4,12 @@ import { RoomStatusBadge } from './RoomStatusBadge'
 import { cn } from '@/lib/cn'
 
 interface Props {
-  room: Room
-  canEdit: boolean
-  onChangeStatus: (room: Room) => void
-  onCheckIn?: (room: Room) => void
-  isSelected?: boolean
-  onSelect?: (room: Room) => void
+  readonly room: Room
+  readonly canEdit: boolean
+  readonly onChangeStatus: (room: Room) => void
+  readonly onCheckIn?: (room: Room) => void
+  readonly isSelected?: boolean
+  readonly onSelect?: (room: Room) => void
 }
 
 export function RoomCard({ room, canEdit, onChangeStatus, onCheckIn, isSelected, onSelect }: Props) {
@@ -45,6 +45,7 @@ export function RoomCard({ room, canEdit, onChangeStatus, onCheckIn, isSelected,
           {/* Selection toggle — only for available rooms when onSelect provided */}
           {isAvailable && onSelect && (
             <button
+              type="button"
               onClick={() => onSelect(room)}
               title={isSelected ? 'Deseleccionar' : 'Seleccionar para check-in múltiple'}
               className={cn(
@@ -77,6 +78,7 @@ export function RoomCard({ room, canEdit, onChangeStatus, onCheckIn, isSelected,
         <div className="flex gap-2">
           {isAvailable && onCheckIn && (
             <button
+              type="button"
               onClick={() => onCheckIn(room)}
               className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-opacity hover:opacity-80"
               style={{ background: 'var(--color-primary)', color: '#fff' }}
@@ -86,6 +88,7 @@ export function RoomCard({ room, canEdit, onChangeStatus, onCheckIn, isSelected,
             </button>
           )}
           <button
+            type="button"
             onClick={() => onChangeStatus(room)}
             className="flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs border transition-opacity hover:opacity-80"
             style={{

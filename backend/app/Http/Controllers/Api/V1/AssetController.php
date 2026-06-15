@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Events\RoomStatusChanged;
 use App\Http\Controllers\Controller;
+use App\Models\ActivityLog;
 use App\Models\Asset;
 use App\Models\AssetMaintenance;
 use App\Models\RepairOrder;
+use App\Models\Room;
+use App\Support\RoomRepairOrderService;
 use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -49,7 +53,10 @@ class AssetController extends Controller
 
         $asset = DB::transaction(function () use ($data) {
             $last = Asset::lockForUpdate()->orderByDesc('asset_code')->first();
-            $num  = $last ? ((int) ltrim(substr($last->asset_code, 4), '0') ?: 0) + 1 : 1;
+            $num  = 1;
+            if ($last) {
+                $num = (int) ltrim(substr($last->asset_code, 4), '0') + 1;
+            }
             $code = 'ACT-' . str_pad($num, 4, '0', STR_PAD_LEFT);
 
             return Asset::create(array_merge($data, ['asset_code' => $code]));
@@ -149,6 +156,18 @@ class AssetController extends Controller
             $query->where('status', $status);
         }
 
+        if ($roomId = $request->query('room_id')) {
+            $room = Room::find($roomId);
+            if ($room?->status === Room::STATUS_MAINTENANCE) {
+                RoomRepairOrderService::ensureForRoomMaintenance(
+                    $room,
+                    $room->notes ?? 'Habitación en mantenimiento.',
+                    $request->user()->id,
+                );
+            }
+            $query->where('room_id', $roomId);
+        }
+
         return response()->json(['success' => true, 'data' => $query->paginate($this->perPage($request, 30))]);
     }
 
@@ -190,6 +209,19 @@ class AssetController extends Controller
             'status'       => 'completed',
             'completed_at' => now(),
         ]);
+
+        $repairOrder->load('room');
+
+        if ($repairOrder->room && RoomRepairOrderService::releaseIfMaintenanceResolved($repairOrder->room)) {
+            $room = $repairOrder->room->fresh();
+            ActivityLog::record('room.status_changed', $request->user()->id, [
+                'room_id'     => $room->id,
+                'room_number' => $room->number,
+                'old_status'  => Room::STATUS_MAINTENANCE,
+                'new_status'  => Room::STATUS_AVAILABLE,
+            ]);
+            broadcast(new RoomStatusChanged($room))->toOthers();
+        }
 
         return response()->json(['success' => true, 'data' => $repairOrder->refresh(), 'message' => 'Orden cerrada.']);
     }

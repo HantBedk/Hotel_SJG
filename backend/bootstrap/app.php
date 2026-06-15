@@ -14,6 +14,10 @@ use Illuminate\Auth\AuthenticationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 
+if (! defined('API_ROUTE_PATTERN')) {
+    define('API_ROUTE_PATTERN', 'api/*');
+}
+
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         api:         __DIR__ . '/../routes/api.php',
@@ -48,7 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // aquí (somos SPA + API). Devolviendo null para API/JSON dejamos que
         // se lance AuthenticationException y el handler de abajo responda 401.
         $middleware->redirectGuestsTo(function (Request $request) {
-            if ($request->expectsJson() || $request->is('api/*')) {
+            if ($request->expectsJson() || $request->is(API_ROUTE_PATTERN)) {
                 return null;
             }
             return '/login';
@@ -62,8 +66,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        $exceptions->render(function (AuthenticationException $e, Request $request) {
-            if ($request->expectsJson() || $request->is('api/*')) {
+        $exceptions->render(function (AuthenticationException $_, Request $request) {
+            if ($request->expectsJson() || $request->is(API_ROUTE_PATTERN)) {
                 return response()->json([
                     'success' => false,
                     'data'    => null,
@@ -73,8 +77,8 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
-        $exceptions->render(function (NotFoundHttpException $e, Request $request) {
-            if ($request->is('api/*')) {
+        $exceptions->render(function (NotFoundHttpException $_, Request $request) {
+            if ($request->is(API_ROUTE_PATTERN)) {
                 return response()->json([
                     'success' => false,
                     'data'    => null,
@@ -84,8 +88,8 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
-        $exceptions->render(function (MethodNotAllowedHttpException $e, Request $request) {
-            if ($request->is('api/*')) {
+        $exceptions->render(function (MethodNotAllowedHttpException $_, Request $request) {
+            if ($request->is(API_ROUTE_PATTERN)) {
                 return response()->json([
                     'success' => false,
                     'data'    => null,
@@ -95,8 +99,8 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
-        $exceptions->render(function (\Spatie\Permission\Exceptions\UnauthorizedException $e, Request $request) {
-            if ($request->is('api/*')) {
+        $exceptions->render(function (\Spatie\Permission\Exceptions\UnauthorizedException $_, Request $request) {
+            if ($request->is(API_ROUTE_PATTERN)) {
                 return response()->json([
                     'success' => false,
                     'data'    => null,
@@ -107,7 +111,7 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (\Illuminate\Validation\ValidationException $e, Request $request) {
-            if ($request->is('api/*')) {
+            if ($request->is(API_ROUTE_PATTERN)) {
                 return response()->json([
                     'success' => false,
                     'data'    => null,

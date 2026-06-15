@@ -3,6 +3,7 @@
 namespace App\Events;
 
 use App\Models\Room;
+use App\Support\TenantContext;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -18,7 +19,7 @@ class RoomStatusChanged implements ShouldBroadcast
 
     public function broadcastOn(): array
     {
-        return [new PrivateChannel('hotel.rooms')];
+        return [new PrivateChannel('hotel.' . $this->room->hotel_id . '.rooms')];
     }
 
     public function broadcastAs(): string

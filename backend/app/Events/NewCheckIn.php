@@ -3,6 +3,7 @@
 namespace App\Events;
 
 use App\Models\Stay;
+use App\Support\TenantContext;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -17,7 +18,9 @@ class NewCheckIn implements ShouldBroadcast
 
     public function broadcastOn(): array
     {
-        return [new PrivateChannel('hotel.rooms')];
+        $hotelId = $this->stay->hotel_id ?? TenantContext::id();
+
+        return $hotelId ? [new PrivateChannel("hotel.{$hotelId}.rooms")] : [];
     }
 
     public function broadcastAs(): string

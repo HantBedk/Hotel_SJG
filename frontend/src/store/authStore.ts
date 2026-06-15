@@ -2,17 +2,39 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { AuthUser } from '@/types'
 
-interface AuthState {
+const AUTH_STORAGE_KEY = 'hotel-sjg-auth'
+const SUPERADMIN_ROLE = 'superadmin'
+
+interface AuthPersistedState {
   user: AuthUser | null
   token: string | null
   isAuthenticated: boolean
+}
+
+interface AuthState extends AuthPersistedState {
   isBootstrapping: boolean
   setAuth: (user: AuthUser, token: string) => void
   setUser: (user: AuthUser) => void
   clearAuth: () => void
   setBootstrapping: (value: boolean) => void
   hasPermission: (permission: string) => boolean
+  hasAnyPermission: (permissions: readonly string[]) => boolean
   hasRole: (role: string) => boolean
+}
+
+function userHasPermission(user: AuthUser | null, permission: string): boolean {
+  if (!user) return false
+  if (user.roles.includes(SUPERADMIN_ROLE)) return true
+  return user.permissions.includes(permission)
+}
+
+function userHasAnyPermission(user: AuthUser | null, permissions: readonly string[]): boolean {
+  return permissions.some((permission) => userHasPermission(user, permission))
+}
+
+function userHasRole(user: AuthUser | null, role: string): boolean {
+  if (!user) return false
+  return user.roles.includes(role)
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -31,26 +53,19 @@ export const useAuthStore = create<AuthState>()(
 
       setBootstrapping: (value) => set({ isBootstrapping: value }),
 
-      hasPermission: (permission) => {
-        const { user } = get()
-        if (!user) return false
-        if (user.roles.includes('superadmin')) return true
-        return user.permissions.includes(permission)
-      },
+      hasPermission: (permission) => userHasPermission(get().user, permission),
 
-      hasRole: (role) => {
-        const { user } = get()
-        if (!user) return false
-        return user.roles.includes(role)
-      },
+      hasAnyPermission: (permissions) => userHasAnyPermission(get().user, permissions),
+
+      hasRole: (role) => userHasRole(get().user, role),
     }),
     {
-      name: 'hotel-sjg-auth',
-      partialize: (state) => ({
+      name: AUTH_STORAGE_KEY,
+      partialize: (state): AuthPersistedState => ({
         token: state.token,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
-    }
-  )
+    },
+  ),
 )

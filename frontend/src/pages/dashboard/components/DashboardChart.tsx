@@ -9,7 +9,7 @@ export function DashboardChart() {
   const { history, isLoading } = useOccupancyHistory(apiPeriod)
 
   const points = history?.data ?? []
-  const allZero = points.length === 0 || points.every((d) => d.rate === 0)
+  const allZero = points.every((d) => d.rate === 0)
 
   const generatePath = () => {
     if (points.length < 2) return ''
@@ -28,6 +28,39 @@ export function DashboardChart() {
 
   const pathD = generatePath()
   const areaD = pathD ? `${pathD} L 100,95 L 0,95 Z` : ''
+
+  let chartContent
+  if (isLoading) {
+    chartContent = (
+      <div className="absolute inset-0 flex items-center justify-center pl-8">
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Cargando…</p>
+      </div>
+    )
+  } else if (allZero) {
+    chartContent = (
+      <div className="absolute inset-0 flex items-center justify-center pl-8">
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Sin datos de ocupación aún</p>
+      </div>
+    )
+  } else {
+    chartContent = (
+      <svg className="absolute inset-0 h-full w-full pl-8 pb-4" preserveAspectRatio="none" viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="dashChartGrad" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%"   stopColor="var(--color-primary)" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {areaD && <path d={areaD} fill="url(#dashChartGrad)" />}
+        {pathD && <path d={pathD} fill="none" stroke="var(--color-primary)" strokeWidth="2.5" strokeLinecap="round" />}
+        {points.map((d, i) => {
+          const x = (i / (points.length - 1)) * 100
+          const y = 100 - (d.rate / 100) * 90 - 5
+          return <circle key={d.label} cx={x} cy={y} r="1.5" fill="var(--color-primary)" />
+        })}
+      </svg>
+    )
+  }
 
   return (
     <div
@@ -73,31 +106,7 @@ export function DashboardChart() {
           ))}
         </div>
 
-        {isLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center pl-8">
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Cargando…</p>
-          </div>
-        ) : allZero ? (
-          <div className="absolute inset-0 flex items-center justify-center pl-8">
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Sin datos de ocupación aún</p>
-          </div>
-        ) : (
-          <svg className="absolute inset-0 h-full w-full pl-8 pb-4" preserveAspectRatio="none" viewBox="0 0 100 100">
-            <defs>
-              <linearGradient id="dashChartGrad" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%"   stopColor="var(--color-primary)" stopOpacity="0.25" />
-                <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            {areaD && <path d={areaD} fill="url(#dashChartGrad)" />}
-            {pathD && <path d={pathD} fill="none" stroke="var(--color-primary)" strokeWidth="2.5" strokeLinecap="round" />}
-            {points.map((d, i) => {
-              const x = (i / (points.length - 1)) * 100
-              const y = 100 - (d.rate / 100) * 90 - 5
-              return <circle key={i} cx={x} cy={y} r="1.5" fill="var(--color-primary)" />
-            })}
-          </svg>
-        )}
+        {chartContent}
 
         {/* X-axis labels */}
         {points.length > 0 && (

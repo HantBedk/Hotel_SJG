@@ -3,17 +3,17 @@ import { Modal } from '@/components/ui/Modal'
 import { formatCOP } from '@/lib/format'
 
 interface CancelPaymentModalProps {
-  open: boolean
-  onClose: () => void
-  payment: {
-    id: string
-    amount: number | string
-    guest_name?: string | null
-    payment_method?: string
-    payment_date?: string
+  readonly open: boolean
+  readonly onClose: () => void
+  readonly payment: {
+    readonly id: string
+    readonly amount: number | string
+    readonly guest_name?: string | null
+    readonly payment_method?: string
+    readonly payment_date?: string
   } | null
-  onConfirm: (reason: string) => Promise<unknown>
-  isPending?: boolean
+  readonly onConfirm: (reason: string) => Promise<unknown>
+  readonly isPending?: boolean
 }
 
 const METHOD_LABELS: Record<string, string> = {
@@ -28,7 +28,7 @@ export function CancelPaymentModal({ open, onClose, payment, onConfirm, isPendin
 
   if (!payment) return null
 
-  const amount = typeof payment.amount === 'string' ? parseFloat(payment.amount) : payment.amount
+  const amount = typeof payment.amount === 'string' ? Number.parseFloat(payment.amount) : payment.amount
 
   const handleConfirm = async () => {
     if (reason.trim().length < 5) return
@@ -77,10 +77,15 @@ export function CancelPaymentModal({ open, onClose, payment, onConfirm, isPendin
         </div>
 
         <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+          <label
+            htmlFor="cancel-payment-reason"
+            className="block text-xs font-medium mb-1"
+            style={{ color: 'var(--text-secondary)' }}
+          >
             Motivo de la anulación <span style={{ color: '#EF4444' }}>*</span>
           </label>
           <textarea
+            id="cancel-payment-reason"
             value={reason}
             onChange={e => setReason(e.target.value)}
             rows={3}

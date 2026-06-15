@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ElementType } from 'react'
 import {
   Search, Plus, Minus, Trash2, X, ShoppingCart, Banknote, CreditCard,
   ArrowRightLeft, Receipt, Clock, XCircle, FileText, Wallet, User,
@@ -34,7 +34,7 @@ const METHOD_LABEL: Record<MinibarSalePaymentMethod, string> = {
   credit:   'Crédito',
 }
 
-const METHOD_ICON: Record<MinibarSalePaymentMethod, React.ElementType> = {
+const METHOD_ICON: Record<MinibarSalePaymentMethod, ElementType> = {
   cash:     Banknote,
   transfer: ArrowRightLeft,
   card:     CreditCard,
@@ -85,12 +85,36 @@ function availableStock(p: MinibarProduct): number {
   return p.stock_quantity
 }
 
+const CATALOG_SKELETON_KEYS = [
+  'catalog-skeleton-1',
+  'catalog-skeleton-2',
+  'catalog-skeleton-3',
+  'catalog-skeleton-4',
+  'catalog-skeleton-5',
+  'catalog-skeleton-6',
+  'catalog-skeleton-7',
+  'catalog-skeleton-8',
+] as const
+
+function remainingStockBadgeStyle(remaining: number): { background: string; color: string } {
+  if (remaining > 5) return { background: '#F0FDF4', color: '#15803D' }
+  if (remaining > 0) return { background: '#FEF3C7', color: '#B45309' }
+  return { background: '#FEF2F2', color: '#B91C1C' }
+}
+
+const HISTORY_STATUS_FILTERS: ReadonlyArray<{ key: MinibarSaleStatus | ''; label: string }> = [
+  { key: '', label: 'Todas' },
+  { key: 'pending', label: 'Pendientes' },
+  { key: 'paid', label: 'Pagadas' },
+  { key: 'cancelled', label: 'Canceladas' },
+]
+
 // ── Catálogo ──────────────────────────────────────────────────────────────────
 interface CatalogProps {
-  products: MinibarProduct[]
-  loading: boolean
-  cartById: Map<string, CartItem>
-  onAdd: (p: MinibarProduct) => void
+  readonly products: MinibarProduct[]
+  readonly loading: boolean
+  readonly cartById: Map<string, CartItem>
+  readonly onAdd: (p: MinibarProduct) => void
 }
 
 function Catalog({ products, loading, cartById, onAdd }: CatalogProps) {
@@ -110,6 +134,77 @@ function Catalog({ products, loading, cartById, onAdd }: CatalogProps) {
       })
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [products, search])
+
+  let catalogBodyContent
+  if (loading) {
+    catalogBodyContent = (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+        {CATALOG_SKELETON_KEYS.map((key) => <SkeletonCard key={key} />)}
+      </div>
+    )
+  } else if (filtered.length === 0) {
+    catalogBodyContent = (
+      <div className="text-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>
+        No hay productos que coincidan.
+      </div>
+    )
+  } else {
+    catalogBodyContent = (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+        {filtered.map((p) => {
+          const stock     = availableStock(p)
+          const inCart    = cartById.get(p.id)?.qty ?? 0
+          const remaining = stock - inCart
+          const sold      = remaining <= 0
+          const stockBadgeStyle = remainingStockBadgeStyle(remaining)
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => !sold && onAdd(p)}
+              disabled={sold}
+              className="text-left rounded-lg p-3 border transition-all flex flex-col gap-1.5 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: sold ? 'var(--bg-input)' : 'var(--bg-surface)',
+                borderColor: inCart > 0 ? 'var(--color-primary)' : 'var(--border-default)',
+              }}
+              title={sold ? 'Sin stock disponible' : `Agregar ${p.name}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-semibold text-sm leading-tight" style={{ color: 'var(--text-primary)' }}>
+                  {p.name}
+                </span>
+                {inCart > 0 && (
+                  <span
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white shrink-0"
+                    style={{ background: 'var(--color-primary)' }}
+                  >
+                    ×{inCart}
+                  </span>
+                )}
+              </div>
+              {p.presentation && (
+                <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                  {p.presentation}
+                </span>
+              )}
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-sm font-bold" style={{ color: 'var(--color-primary)' }}>
+                  {formatCOP(Number(p.sale_price))}
+                </span>
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                  style={stockBadgeStyle}
+                >
+                  {remaining > 0 ? `Stock ${remaining}` : 'Agotado'}
+                </span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
 
   return (
     <div
@@ -131,7 +226,7 @@ function Catalog({ products, loading, cartById, onAdd }: CatalogProps) {
             style={{ color: 'var(--text-primary)' }}
           />
           {search && (
-            <button onClick={() => setSearch('')} style={{ color: 'var(--text-muted)' }}>
+            <button type="button" onClick={() => setSearch('')} style={{ color: 'var(--text-muted)' }}>
               <X size={14} />
             </button>
           )}
@@ -139,71 +234,7 @@ function Catalog({ products, loading, cartById, onAdd }: CatalogProps) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
-        {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>
-            No hay productos que coincidan.
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {filtered.map((p) => {
-              const stock     = availableStock(p)
-              const inCart    = cartById.get(p.id)?.qty ?? 0
-              const remaining = stock - inCart
-              const sold      = remaining <= 0
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => !sold && onAdd(p)}
-                  disabled={sold}
-                  className="text-left rounded-lg p-3 border transition-all flex flex-col gap-1.5 hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{
-                    background: sold ? 'var(--bg-input)' : 'var(--bg-surface)',
-                    borderColor: inCart > 0 ? 'var(--color-primary)' : 'var(--border-default)',
-                  }}
-                  title={sold ? 'Sin stock disponible' : `Agregar ${p.name}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="font-semibold text-sm leading-tight" style={{ color: 'var(--text-primary)' }}>
-                      {p.name}
-                    </span>
-                    {inCart > 0 && (
-                      <span
-                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white shrink-0"
-                        style={{ background: 'var(--color-primary)' }}
-                      >
-                        ×{inCart}
-                      </span>
-                    )}
-                  </div>
-                  {p.presentation && (
-                    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                      {p.presentation}
-                    </span>
-                  )}
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-sm font-bold" style={{ color: 'var(--color-primary)' }}>
-                      {formatCOP(Number(p.sale_price))}
-                    </span>
-                    <span
-                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                      style={{
-                        background: remaining > 5 ? '#F0FDF4' : remaining > 0 ? '#FEF3C7' : '#FEF2F2',
-                        color:      remaining > 5 ? '#15803D' : remaining > 0 ? '#B45309' : '#B91C1C',
-                      }}
-                    >
-                      {remaining > 0 ? `Stock ${remaining}` : 'Agotado'}
-                    </span>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        )}
+        {catalogBodyContent}
       </div>
     </div>
   )
@@ -211,34 +242,34 @@ function Catalog({ products, loading, cartById, onAdd }: CatalogProps) {
 
 // ── Carrito ───────────────────────────────────────────────────────────────────
 interface CartProps {
-  items: CartItem[]
-  customerName: string
-  customerDocument: string
-  notes: string
-  saving: boolean
-  paymentMethod: MinibarSalePaymentMethod
-  selectedGuest: Guest | null
-  isNewGuestMode: boolean
-  newGuestForm: NewGuestForm
-  guestSearch: string
-  guestResults: Guest[]
-  creatingGuest: boolean
-  guestError: string | null
-  onSetCustomerName: (v: string) => void
-  onSetCustomerDocument: (v: string) => void
-  onSetNotes: (v: string) => void
-  onSetPaymentMethod: (m: MinibarSalePaymentMethod) => void
-  onSetSelectedGuest: (g: Guest | null) => void
-  onSetIsNewGuestMode: (v: boolean) => void
-  onSetNewGuestForm: (patch: Partial<NewGuestForm>) => void
-  onSetGuestSearch: (v: string) => void
-  onCreateGuest: () => void
-  onIncrement: (id: string) => void
-  onDecrement: (id: string) => void
-  onRemove: (id: string) => void
-  onClear: () => void
-  onSavePending: () => void
-  onCharge: () => void
+  readonly items: CartItem[]
+  readonly customerName: string
+  readonly customerDocument: string
+  readonly notes: string
+  readonly saving: boolean
+  readonly paymentMethod: MinibarSalePaymentMethod
+  readonly selectedGuest: Guest | null
+  readonly isNewGuestMode: boolean
+  readonly newGuestForm: NewGuestForm
+  readonly guestSearch: string
+  readonly guestResults: Guest[]
+  readonly creatingGuest: boolean
+  readonly guestError: string | null
+  readonly onSetCustomerName: (v: string) => void
+  readonly onSetCustomerDocument: (v: string) => void
+  readonly onSetNotes: (v: string) => void
+  readonly onSetPaymentMethod: (m: MinibarSalePaymentMethod) => void
+  readonly onSetSelectedGuest: (g: Guest | null) => void
+  readonly onSetIsNewGuestMode: (v: boolean) => void
+  readonly onSetNewGuestForm: (patch: Partial<NewGuestForm>) => void
+  readonly onSetGuestSearch: (v: string) => void
+  readonly onCreateGuest: () => void
+  readonly onIncrement: (id: string) => void
+  readonly onDecrement: (id: string) => void
+  readonly onRemove: (id: string) => void
+  readonly onClear: () => void
+  readonly onSavePending: () => void
+  readonly onCharge: () => void
 }
 
 function Cart({
@@ -279,6 +310,7 @@ function Cart({
         </div>
         {!empty && (
           <button
+            type="button"
             onClick={onClear}
             className="text-xs flex items-center gap-1 hover:opacity-80"
             style={{ color: 'var(--text-muted)' }}
@@ -313,6 +345,7 @@ function Cart({
                 style={{ border: '1px solid var(--border-default)' }}
               >
                 <button
+                  type="button"
                   onClick={() => onDecrement(it.productId)}
                   className="px-1.5 py-1 hover:bg-slate-100 dark:hover:bg-slate-800"
                   style={{ color: 'var(--text-secondary)' }}
@@ -323,6 +356,7 @@ function Cart({
                   {it.qty}
                 </span>
                 <button
+                  type="button"
                   onClick={() => onIncrement(it.productId)}
                   disabled={it.qty >= it.stockAvailable}
                   className="px-1.5 py-1 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
@@ -336,6 +370,7 @@ function Cart({
                 {formatCOP(it.unitPrice * it.qty)}
               </span>
               <button
+                type="button"
                 onClick={() => onRemove(it.productId)}
                 className="p-1 rounded hover:bg-red-50 text-red-500"
                 title="Quitar del carrito"
@@ -353,10 +388,11 @@ function Cart({
       >
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="cart-customer-name" className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
               Cliente (opcional)
             </label>
             <input
+              id="cart-customer-name"
               type="text"
               value={customerName}
               onChange={(e) => onSetCustomerName(e.target.value)}
@@ -366,10 +402,11 @@ function Cart({
             />
           </div>
           <div>
-            <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="cart-customer-document" className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
               Documento (opcional)
             </label>
             <input
+              id="cart-customer-document"
               type="text"
               value={customerDocument}
               onChange={(e) => onSetCustomerDocument(e.target.value)}
@@ -380,10 +417,11 @@ function Cart({
           </div>
         </div>
         <div>
-          <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+          <label htmlFor="cart-notes" className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
             Notas
           </label>
           <input
+            id="cart-notes"
             type="text"
             value={notes}
             onChange={(e) => onSetNotes(e.target.value)}
@@ -394,10 +432,10 @@ function Cart({
         </div>
 
         {/* ── Método de pago ───────────────────────────────────────── */}
-        <div>
-          <label className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+        <fieldset>
+          <legend className="block text-[11px] font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
             Método de pago
-          </label>
+          </legend>
           <div className="grid grid-cols-4 gap-1.5">
             {(['cash', 'transfer', 'card', 'credit'] as MinibarSalePaymentMethod[]).map((m) => {
               const Icon = METHOD_ICON[m]
@@ -405,6 +443,7 @@ function Cart({
               return (
                 <button
                   key={m}
+                  type="button"
                   onClick={() => onSetPaymentMethod(m)}
                   className="flex flex-col items-center justify-center gap-0.5 p-2 rounded-lg border-2 transition-all"
                   style={{
@@ -419,7 +458,7 @@ function Cart({
               )
             })}
           </div>
-        </div>
+        </fieldset>
 
         {/* ── Huésped (obligatorio si crédito) ──────────────────────── */}
         {paymentMethod === 'credit' && (
@@ -450,59 +489,7 @@ function Cart({
               )}
             </div>
 
-            {!isNewGuestMode ? (
-              <>
-                {selectedGuest ? (
-                  <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
-                    <User size={14} style={{ color: 'var(--color-primary)' }} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>{selectedGuest.full_name}</p>
-                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                        {selectedGuest.document_type.toUpperCase()} {selectedGuest.document_number}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => { onSetSelectedGuest(null); onSetGuestSearch('') }}
-                      className="text-[10px]"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
-                      Cambiar
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="relative">
-                      <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
-                      <input
-                        type="text"
-                        value={guestSearch}
-                        onChange={(e) => onSetGuestSearch(e.target.value)}
-                        placeholder="Nombre, documento o teléfono…"
-                        className="w-full pl-7 pr-2 py-1.5 rounded-lg border text-xs"
-                        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                      />
-                    </div>
-                    {guestResults.length > 0 && (
-                      <div className="rounded-lg overflow-hidden max-h-40 overflow-y-auto" style={{ border: '1px solid var(--border-default)' }}>
-                        {guestResults.map((g) => (
-                          <button
-                            key={g.id}
-                            onClick={() => { onSetSelectedGuest(g); onSetGuestSearch(g.full_name) }}
-                            className="w-full text-left px-2 py-1.5 text-xs hover:opacity-80 border-b last:border-b-0"
-                            style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
-                          >
-                            <span className="font-medium">{g.full_name}</span>
-                            <span className="ml-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
-                              {g.document_type.toUpperCase()} {g.document_number}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            ) : (
+            {isNewGuestMode ? (
               <div className="space-y-1.5">
                 <input
                   type="text"
@@ -561,6 +548,60 @@ function Cart({
                   {creatingGuest ? 'Creando…' : 'Crear huésped'}
                 </button>
               </div>
+            ) : (
+              <>
+                {selectedGuest ? (
+                  <div className="flex items-center gap-2 p-2 rounded-lg" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}>
+                    <User size={14} style={{ color: 'var(--color-primary)' }} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate" style={{ color: 'var(--text-primary)' }}>{selectedGuest.full_name}</p>
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                        {selectedGuest.document_type.toUpperCase()} {selectedGuest.document_number}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { onSetSelectedGuest(null); onSetGuestSearch('') }}
+                      className="text-[10px]"
+                      style={{ color: 'var(--text-muted)' }}
+                    >
+                      Cambiar
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} />
+                      <input
+                        type="text"
+                        value={guestSearch}
+                        onChange={(e) => onSetGuestSearch(e.target.value)}
+                        placeholder="Nombre, documento o teléfono…"
+                        className="w-full pl-7 pr-2 py-1.5 rounded-lg border text-xs"
+                        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                      />
+                    </div>
+                    {guestResults.length > 0 && (
+                      <div className="rounded-lg overflow-hidden max-h-40 overflow-y-auto" style={{ border: '1px solid var(--border-default)' }}>
+                        {guestResults.map((g) => (
+                          <button
+                            key={g.id}
+                            type="button"
+                            onClick={() => { onSetSelectedGuest(g); onSetGuestSearch(g.full_name) }}
+                            className="w-full text-left px-2 py-1.5 text-xs hover:opacity-80 border-b last:border-b-0"
+                            style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
+                          >
+                            <span className="font-medium">{g.full_name}</span>
+                            <span className="ml-2 text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                              {g.document_type.toUpperCase()} {g.document_number}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
             )}
           </div>
         )}
@@ -603,12 +644,12 @@ function Cart({
 
 // ── Modal de cobro (para vista de Historial: cobrar venta pendiente) ──────────
 interface ChargeModalProps {
-  sale?: MinibarSale | null
-  open: boolean
-  total: number
-  saving: boolean
-  onClose: () => void
-  onConfirm: (method: MinibarSalePaymentMethod) => void
+  readonly sale?: MinibarSale | null
+  readonly open: boolean
+  readonly total: number
+  readonly saving: boolean
+  readonly onClose: () => void
+  readonly onConfirm: (method: MinibarSalePaymentMethod) => void
 }
 
 function ChargeModal({ sale, open, total, saving, onClose, onConfirm }: ChargeModalProps) {
@@ -635,10 +676,10 @@ function ChargeModal({ sale, open, total, saving, onClose, onConfirm }: ChargeMo
           </span>
         </div>
 
-        <div>
-          <label className="block text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+        <fieldset>
+          <legend className="block text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
             Método de pago
-          </label>
+          </legend>
           <div className="grid grid-cols-4 gap-2">
             {(['cash', 'transfer', 'card', 'credit'] as MinibarSalePaymentMethod[]).map((m) => {
               const Icon = METHOD_ICON[m]
@@ -646,6 +687,7 @@ function ChargeModal({ sale, open, total, saving, onClose, onConfirm }: ChargeMo
               return (
                 <button
                   key={m}
+                  type="button"
                   onClick={() => setMethod(m)}
                   className="flex flex-col items-center justify-center gap-1 p-3 rounded-lg border-2 transition-all"
                   style={{
@@ -676,11 +718,12 @@ function ChargeModal({ sale, open, total, saving, onClose, onConfirm }: ChargeMo
               Esta venta no tiene huésped asociado. Para cobrar a crédito, creala desde "Nueva venta".
             </p>
           )}
-        </div>
+        </fieldset>
       </div>
 
       <div className="flex justify-end gap-2 px-5 py-4 mt-2 border-t" style={{ borderColor: 'var(--border-default)' }}>
         <button
+          type="button"
           onClick={onClose}
           disabled={saving}
           className="px-4 py-2 rounded-lg text-sm font-medium border disabled:opacity-40"
@@ -689,6 +732,7 @@ function ChargeModal({ sale, open, total, saving, onClose, onConfirm }: ChargeMo
           Cancelar
         </button>
         <button
+          type="button"
           onClick={() => onConfirm(method)}
           disabled={saving || creditDisabledNoGuest}
           className="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
@@ -703,8 +747,8 @@ function ChargeModal({ sale, open, total, saving, onClose, onConfirm }: ChargeMo
 
 // ── Detalle de venta ──────────────────────────────────────────────────────────
 interface SaleDetailModalProps {
-  sale: MinibarSale | null
-  onClose: () => void
+  readonly sale: MinibarSale | null
+  readonly onClose: () => void
 }
 
 function SaleDetailModal({ sale, onClose }: SaleDetailModalProps) {
@@ -819,6 +863,7 @@ function SaleDetailModal({ sale, onClose }: SaleDetailModalProps) {
 
       <div className="flex justify-end px-5 py-3 border-t" style={{ borderColor: 'var(--border-default)' }}>
         <button
+          type="button"
           onClick={onClose}
           className="px-4 py-2 rounded-lg text-sm font-medium border"
           style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
@@ -832,9 +877,9 @@ function SaleDetailModal({ sale, onClose }: SaleDetailModalProps) {
 
 // ── Historial ─────────────────────────────────────────────────────────────────
 interface HistoryProps {
-  onPay: (sale: MinibarSale) => void
-  onCancel: (sale: MinibarSale) => void
-  onView: (sale: MinibarSale) => void
+  readonly onPay: (sale: MinibarSale) => void
+  readonly onCancel: (sale: MinibarSale) => void
+  readonly onView: (sale: MinibarSale) => void
 }
 
 function HistorySection({ onPay, onCancel, onView }: HistoryProps) {
@@ -854,6 +899,136 @@ function HistorySection({ onPay, onCancel, onView }: HistoryProps) {
   const { data, isLoading } = useMinibarSales(filters)
   const rows = data?.data ?? []
 
+  let tableContent
+  if (isLoading) {
+    tableContent = (
+      <div className="py-4"><SkeletonTable rows={5} cols={6} /></div>
+    )
+  } else if (rows.length === 0) {
+    tableContent = (
+      <div className="text-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>
+        Sin ventas registradas.
+      </div>
+    )
+  } else {
+    tableContent = (
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] text-sm">
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
+              <th className="px-3 py-2 text-left font-medium">N°</th>
+              <th className="px-3 py-2 text-left font-medium">Fecha</th>
+              <th className="px-3 py-2 text-left font-medium">Cliente</th>
+              <th className="px-3 py-2 text-left font-medium">Productos</th>
+              <th className="px-3 py-2 text-left font-medium">Vendedor</th>
+              <th className="px-3 py-2 text-right font-medium">Total</th>
+              <th className="px-3 py-2 text-left font-medium">Estado</th>
+              <th className="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((s) => {
+              const color = STATUS_COLOR[s.status]
+              const items = s.items ?? []
+              const firstItem = items[0]
+              const extraCount = items.length - 1
+              return (
+                <tr
+                  key={s.id}
+                  className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                  style={{ borderBottom: '1px solid var(--border-default)' }}
+                >
+                  <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {s.sale_number}
+                  </td>
+                  <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    {formatDateTime(s.created_at)}
+                  </td>
+                  <td className="px-3 py-2" style={{ color: 'var(--text-primary)' }}>
+                    {s.customer_name ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    {s.customer_document && (
+                      <span className="text-[11px] block" style={{ color: 'var(--text-muted)' }}>
+                        {s.customer_document}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-primary)' }}>
+                    {firstItem ? (
+                      <>
+                        <span>
+                          {firstItem.product_name}
+                          {firstItem.quantity > 1 && (
+                            <span style={{ color: 'var(--text-muted)' }}> ×{firstItem.quantity}</span>
+                          )}
+                        </span>
+                        {extraCount > 0 && (
+                          <span className="text-[11px] block" style={{ color: 'var(--text-muted)' }}>
+                            y {extraCount} más
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ color: 'var(--text-muted)' }}>—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-primary)' }}>
+                    {typeof s.registered_by === 'object' && s.registered_by?.name
+                      ? s.registered_by.name
+                      : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-primary)' }}>
+                    {formatCOP(Number(s.total))}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span
+                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{ background: color.bg, color: color.fg }}
+                    >
+                      {STATUS_LABEL[s.status]}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => onView(s)}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                        style={{ color: 'var(--text-secondary)' }}
+                        title="Ver detalle"
+                      >
+                        <FileText size={13} />
+                      </button>
+                      {s.status === 'pending' && (
+                        <button
+                          type="button"
+                          onClick={() => onPay(s)}
+                          className="px-2 py-1 rounded-lg text-xs font-medium text-white"
+                          style={{ background: 'var(--color-primary)' }}
+                        >
+                          Cobrar
+                        </button>
+                      )}
+                      {s.status !== 'cancelled' && (
+                        <button
+                          type="button"
+                          onClick={() => onCancel(s)}
+                          className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"
+                          title="Cancelar venta"
+                        >
+                          <XCircle size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   return (
     <div
       className="rounded-xl border"
@@ -867,18 +1042,19 @@ function HistorySection({ onPay, onCancel, onView }: HistoryProps) {
           className="flex gap-1 p-1 rounded-lg"
           style={{ background: 'var(--bg-input)' }}
         >
-          {([['', 'Todas'], ['pending', 'Pendientes'], ['paid', 'Pagadas'], ['cancelled', 'Canceladas']] as const).map(([k, l]) => (
+          {HISTORY_STATUS_FILTERS.map(({ key, label }) => (
             <button
-              key={k}
-              onClick={() => setStatusFilter(k as MinibarSaleStatus | '')}
+              key={key || 'all'}
+              type="button"
+              onClick={() => setStatusFilter(key)}
               className="px-3 py-1 rounded-md text-xs font-medium transition-all"
               style={
-                statusFilter === k
+                statusFilter === key
                   ? { background: 'var(--bg-surface)', color: 'var(--color-primary)', boxShadow: '0 1px 3px rgba(0,0,0,.08)' }
                   : { color: 'var(--text-secondary)' }
               }
             >
-              {l}
+              {label}
             </button>
           ))}
         </div>
@@ -917,125 +1093,7 @@ function HistorySection({ onPay, onCancel, onView }: HistoryProps) {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="py-4"><SkeletonTable rows={5} cols={6} /></div>
-      ) : rows.length === 0 ? (
-        <div className="text-center py-12 text-sm" style={{ color: 'var(--text-muted)' }}>
-          Sin ventas registradas.
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
-                <th className="px-3 py-2 text-left font-medium">N°</th>
-                <th className="px-3 py-2 text-left font-medium">Fecha</th>
-                <th className="px-3 py-2 text-left font-medium">Cliente</th>
-                <th className="px-3 py-2 text-left font-medium">Productos</th>
-                <th className="px-3 py-2 text-left font-medium">Vendedor</th>
-                <th className="px-3 py-2 text-right font-medium">Total</th>
-                <th className="px-3 py-2 text-left font-medium">Estado</th>
-                <th className="px-3 py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((s) => {
-                const color = STATUS_COLOR[s.status]
-                const items = s.items ?? []
-                const firstItem = items[0]
-                const extraCount = items.length - 1
-                return (
-                  <tr
-                    key={s.id}
-                    className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
-                    style={{ borderBottom: '1px solid var(--border-default)' }}
-                  >
-                    <td className="px-3 py-2 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      {s.sale_number}
-                    </td>
-                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      {formatDateTime(s.created_at)}
-                    </td>
-                    <td className="px-3 py-2" style={{ color: 'var(--text-primary)' }}>
-                      {s.customer_name ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                      {s.customer_document && (
-                        <span className="text-[11px] block" style={{ color: 'var(--text-muted)' }}>
-                          {s.customer_document}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-primary)' }}>
-                      {firstItem ? (
-                        <>
-                          <span>
-                            {firstItem.product_name}
-                            {firstItem.quantity > 1 && (
-                              <span style={{ color: 'var(--text-muted)' }}> ×{firstItem.quantity}</span>
-                            )}
-                          </span>
-                          {extraCount > 0 && (
-                            <span className="text-[11px] block" style={{ color: 'var(--text-muted)' }}>
-                              y {extraCount} más
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-xs" style={{ color: 'var(--text-primary)' }}>
-                      {typeof s.registered_by === 'object' && s.registered_by?.name
-                        ? s.registered_by.name
-                        : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold" style={{ color: 'var(--text-primary)' }}>
-                      {formatCOP(Number(s.total))}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                        style={{ background: color.bg, color: color.fg }}
-                      >
-                        {STATUS_LABEL[s.status]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-1 justify-end">
-                        <button
-                          onClick={() => onView(s)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-                          style={{ color: 'var(--text-secondary)' }}
-                          title="Ver detalle"
-                        >
-                          <FileText size={13} />
-                        </button>
-                        {s.status === 'pending' && (
-                          <button
-                            onClick={() => onPay(s)}
-                            className="px-2 py-1 rounded-lg text-xs font-medium text-white"
-                            style={{ background: 'var(--color-primary)' }}
-                          >
-                            Cobrar
-                          </button>
-                        )}
-                        {s.status !== 'cancelled' && (
-                          <button
-                            onClick={() => onCancel(s)}
-                            className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"
-                            title="Cancelar venta"
-                          >
-                            <XCircle size={13} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {tableContent}
     </div>
   )
 }
@@ -1050,10 +1108,10 @@ export default function MinibarSalesPage() {
   const { createMutation, payMutation, cancelMutation } = useMinibarSaleMutations()
 
   // ── Estado del carrito (sólo en memoria hasta cobrar/guardar) ─────────────
-  const [cart, setCart]                   = useState<CartItem[]>([])
-  const [customerName, setCustomerName]   = useState('')
-  const [customerDocument, setCustDoc]    = useState('')
-  const [notes, setNotes]                 = useState('')
+  const [cart, setCart]                         = useState<CartItem[]>([])
+  const [customerName, setCustomerName]         = useState('')
+  const [customerDocument, setCustomerDocument] = useState('')
+  const [notes, setNotes]                       = useState('')
 
   const [paymentMethod, setPaymentMethod] = useState<MinibarSalePaymentMethod>('cash')
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null)
@@ -1160,7 +1218,7 @@ export default function MinibarSalesPage() {
   const resetCart = () => {
     setCart([])
     setCustomerName('')
-    setCustDoc('')
+    setCustomerDocument('')
     setNotes('')
     setPaymentMethod('cash')
     setSelectedGuest(null)
@@ -1271,7 +1329,7 @@ export default function MinibarSalesPage() {
               creatingGuest={creatingGuest}
               guestError={guestError}
               onSetCustomerName={setCustomerName}
-              onSetCustomerDocument={setCustDoc}
+              onSetCustomerDocument={setCustomerDocument}
               onSetNotes={setNotes}
               onSetPaymentMethod={setPaymentMethod}
               onSetSelectedGuest={setSelectedGuest}

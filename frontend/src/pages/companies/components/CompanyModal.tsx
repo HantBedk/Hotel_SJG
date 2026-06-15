@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import type { Company } from '@/types'
 import { companySchema, validate, type CompanyInput } from '@/lib/validators'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
+import { cn } from '@/lib/cn'
 
 export interface CompanyFormData {
   name: string
@@ -15,32 +16,32 @@ export interface CompanyFormData {
 }
 
 interface Props {
-  company: Company | null
-  onSave: (data: CompanyFormData) => void
-  onClose: () => void
-  isSaving: boolean
+  readonly company: Company | null
+  readonly onSave: (data: CompanyFormData) => void
+  readonly onClose: () => void
+  readonly isSaving: boolean
 }
 
 export function CompanyModal({ company, onSave, onClose, isSaving }: Props) {
   const [form, setForm] = useState<CompanyFormData>({
-    name:         company?.name ?? '',
-    nit:          company?.nit ?? '',
-    address:      company?.address ?? '',
-    phone:        company?.phone ?? '',
-    email:        company?.email ?? '',
+    name: company?.name ?? '',
+    nit: company?.nit ?? '',
+    address: company?.address ?? '',
+    phone: company?.phone ?? '',
+    email: company?.email ?? '',
     contact_name: company?.contact_name ?? '',
-    notes:        company?.notes ?? '',
+    notes: company?.notes ?? '',
   })
 
   useEffect(() => {
     if (company) setForm({
-      name:         company.name,
-      nit:          company.nit,
-      address:      company.address ?? '',
-      phone:        company.phone ?? '',
-      email:        company.email ?? '',
+      name: company.name,
+      nit: company.nit,
+      address: company.address ?? '',
+      phone: company.phone ?? '',
+      email: company.email ?? '',
       contact_name: company.contact_name ?? '',
-      notes:        company.notes ?? '',
+      notes: company.notes ?? '',
     })
   }, [company])
 
@@ -52,27 +53,51 @@ export function CompanyModal({ company, onSave, onClose, isSaving }: Props) {
 
   const inputStyle = {
     background: 'var(--bg-input)',
-    border:     '1px solid var(--border-default)',
-    color:      'var(--text-primary)',
+    border: '1px solid var(--border-default)',
+    color: 'var(--text-primary)',
   }
   const inputClass = 'w-full px-3 py-2 rounded-lg text-sm border outline-none focus:ring-1 focus:ring-[var(--color-primary)]'
 
   const validation = useMemo(() => validate<CompanyInput>(companySchema, form), [form])
   const errors = validation.ok ? {} : validation.errors
-  const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose)
+  const dialogRef = useFocusTrap<HTMLDialogElement>(true, onClose)
+  const dialogLabel = company ? 'Editar empresa' : 'Nueva empresa'
+  const backdropClassName = 'absolute inset-0 border-0 p-0 cursor-default'
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (!dialog.open) dialog.showModal()
+    return () => {
+      if (dialog.open) dialog.close()
+    }
+  }, [dialogRef])
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    <dialog
+      ref={dialogRef}
+      aria-label={dialogLabel}
+      className={cn(
+        'app-modal fixed inset-0 z-50 m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
+        'flex items-center justify-center pointer-events-none p-4',
+      )}
     >
+      <button
+        type="button"
+        aria-label="Cerrar modal"
+        className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
+        onClick={onClose}
+      />
       <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={company ? 'Editar empresa' : 'Nueva empresa'}
-        className="w-full max-w-md rounded-2xl shadow-xl overflow-hidden"
+        className="relative z-10 pointer-events-auto w-full max-w-md rounded-2xl shadow-xl overflow-hidden"
         style={{ background: 'var(--bg-surface)' }}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
@@ -130,6 +155,6 @@ export function CompanyModal({ company, onSave, onClose, isSaving }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   )
 }

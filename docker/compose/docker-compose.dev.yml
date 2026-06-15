@@ -1,0 +1,34 @@
+# Frontend Vite con hot reload (opcional, junto con docker-compose.local.yml).
+#
+# Uso:
+#   docker compose -f docker-compose.yml -f docker/compose/docker-compose.local.yml -f docker/compose/docker-compose.dev.yml up -d --build
+#   scripts\docker-local.cmd dev
+
+services:
+  frontend:
+    image: node:24-alpine
+    container_name: hotel_frontend_dev
+    working_dir: /app
+    restart: unless-stopped
+    volumes:
+      - ../../frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "127.0.0.1:3007:3007"
+    environment:
+      VITE_API_PROXY: http://app
+      VITE_REVERB_HOST: localhost
+      VITE_REVERB_PORT: ${REVERB_HOST_PORT:-8081}
+      VITE_REVERB_SCHEME: http
+      VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-hotel_reverb_key}
+    command: sh -c "npm ci --allow-scripts esbuild && npm run dev -- --host 0.0.0.0 --port 3007"
+    depends_on:
+      app:
+        condition: service_started
+      reverb:
+        condition: service_started
+    networks:
+      - hotel-network
+
+volumes:
+  frontend_node_modules:

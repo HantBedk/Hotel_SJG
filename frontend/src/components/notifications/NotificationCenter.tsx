@@ -12,7 +12,20 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   reservation_alert: <Bell size={16} className="text-purple-500" />,
 }
 
-function NotifRow({ n, onRead, onNavigate }: { n: AppNotification; onRead: (id: string) => void; onNavigate: (url: string) => void }) {
+const NOTIF_SKELETON_KEYS = [
+  'notif-skeleton-a',
+  'notif-skeleton-b',
+  'notif-skeleton-c',
+  'notif-skeleton-d',
+] as const
+
+interface NotifRowProps {
+  readonly n: AppNotification
+  readonly onRead: (id: string) => void
+  readonly onNavigate: (url: string) => void
+}
+
+function NotifRow({ n, onRead, onNavigate }: NotifRowProps) {
   const icon = TYPE_ICONS[n.type] ?? <Bell size={16} className="text-slate-400" />
 
   return (
@@ -50,9 +63,52 @@ function NotifRow({ n, onRead, onNavigate }: { n: AppNotification; onRead: (id: 
   )
 }
 
+interface NotificationListBodyProps {
+  readonly isLoading: boolean
+  readonly notifications: AppNotification[]
+  readonly onRead: (id: string) => void
+  readonly onNavigate: (url: string) => void
+}
+
+function NotificationListBody({ isLoading, notifications, onRead, onNavigate }: NotificationListBodyProps) {
+  if (isLoading) {
+    return (
+      <div className="p-3 space-y-3">
+        {NOTIF_SKELETON_KEYS.map((key) => (
+          <div key={key} className="flex gap-3">
+            <Skeleton className="w-5 h-5 rounded-full flex-shrink-0" />
+            <div className="flex-1 space-y-1.5">
+              <Skeleton className="h-3 w-3/4 rounded" />
+              <Skeleton className="h-2.5 w-full rounded" />
+              <Skeleton className="h-2 w-1/3 rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  if (notifications.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-2">
+        <Bell size={32} style={{ color: 'var(--text-muted)' }} />
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin notificaciones</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="divide-y" style={{ borderColor: 'var(--border-default)' }}>
+      {notifications.map((n) => (
+        <NotifRow key={n.id} n={n} onRead={onRead} onNavigate={onNavigate} />
+      ))}
+    </div>
+  )
+}
+
 interface NotificationCenterProps {
-  open: boolean
-  onClose: () => void
+  readonly open: boolean
+  readonly onClose: () => void
 }
 
 export default function NotificationCenter({ open, onClose }: NotificationCenterProps) {
@@ -125,31 +181,12 @@ export default function NotificationCenter({ open, onClose }: NotificationCenter
 
       {/* Body */}
       <div className="overflow-y-auto flex-1">
-        {isLoading ? (
-          <div className="p-3 space-y-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex gap-3">
-                <Skeleton className="w-5 h-5 rounded-full flex-shrink-0" />
-                <div className="flex-1 space-y-1.5">
-                  <Skeleton className="h-3 w-3/4 rounded" />
-                  <Skeleton className="h-2.5 w-full rounded" />
-                  <Skeleton className="h-2 w-1/3 rounded" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : notifications.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-2">
-            <Bell size={32} style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin notificaciones</p>
-          </div>
-        ) : (
-          <div className="divide-y" style={{ borderColor: 'var(--border-default)' }}>
-            {notifications.map((n) => (
-              <NotifRow key={n.id} n={n} onRead={markRead} onNavigate={handleNavigate} />
-            ))}
-          </div>
-        )}
+        <NotificationListBody
+          isLoading={isLoading}
+          notifications={notifications}
+          onRead={markRead}
+          onNavigate={handleNavigate}
+        />
       </div>
     </div>
   )

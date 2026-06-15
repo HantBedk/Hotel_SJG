@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import toast from 'react-hot-toast'
 import {
   getCategoriesApi,
@@ -36,6 +37,7 @@ import {
   setLowStockThresholdApi,
   type HistoryFilters,
   type ItemFilters,
+  type RepairOrderFilters,
 } from '@/services/inventory.service'
 import type { Asset, InventoryItem, MinibarProduct } from '@/types'
 
@@ -46,7 +48,7 @@ const errMsg = (e: ApiError, fallback: string) => e?.response?.data?.message ?? 
 
 export function useInventoryCategories() {
   return useQuery({
-    queryKey: ['inventory-categories'],
+    queryKey: hotelQueryKey('inventory-categories'),
     queryFn: getCategoriesApi,
     staleTime: 5 * 60 * 1000,
   })
@@ -58,7 +60,7 @@ export function useCreateCategory() {
     mutationFn: createCategoryApi,
     onSuccess: () => {
       toast.success('Categoría creada.')
-      qc.invalidateQueries({ queryKey: ['inventory-categories'] })
+      qc.invalidateQueries({ queryKey: hotelQueryKey('inventory-categories') })
     },
     onError: (e: ApiError) => toast.error(errMsg(e, 'Error al crear categoría.')),
   })
@@ -68,14 +70,14 @@ export function useCreateCategory() {
 
 export function useInventoryItems(filters?: ItemFilters) {
   return useQuery({
-    queryKey: ['inventory-items', filters],
+    queryKey: hotelQueryKey('inventory-items', filters),
     queryFn: () => getItemsApi(filters),
   })
 }
 
 export function useInventoryItem(id: string) {
   return useQuery({
-    queryKey: ['inventory-item', id],
+    queryKey: hotelQueryKey('inventory-item', id),
     queryFn: () => getItemsApi().then(r => r),
     enabled: false,
   })
@@ -83,7 +85,7 @@ export function useInventoryItem(id: string) {
 
 export function useInventoryMutations() {
   const qc = useQueryClient()
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['inventory-items'] })
+  const invalidate = () => qc.invalidateQueries({ queryKey: hotelQueryKey('inventory-items') })
 
   const createMutation = useMutation({
     mutationFn: createItemApi,
@@ -136,14 +138,14 @@ export function useInventoryMutations() {
 
 export function useMinibarProducts() {
   return useQuery({
-    queryKey: ['minibar-products'],
+    queryKey: hotelQueryKey('minibar-products'),
     queryFn: getMinibarProductsApi,
   })
 }
 
 export function useRoomMinibars(roomId: string | null) {
   return useQuery({
-    queryKey: ['room-minibars', roomId],
+    queryKey: hotelQueryKey('room-minibars', roomId),
     queryFn: () => getRoomMinibarsApi(roomId as string),
     enabled: !!roomId,
   })
@@ -152,8 +154,8 @@ export function useRoomMinibars(roomId: string | null) {
 export function useMinibarProductMutations() {
   const qc = useQueryClient()
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['minibar-products'] })
-    qc.invalidateQueries({ queryKey: ['inventory-history'] })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('minibar-products') })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('inventory-history') })
   }
 
   const createMutation = useMutation({
@@ -179,8 +181,8 @@ export function useMinibarProductMutations() {
     mutationFn: restockRoomMinibarApi,
     onSuccess: (_data, vars) => {
       toast.success('Minibar repuesto.')
-      qc.invalidateQueries({ queryKey: ['room-minibars', vars.room_id] })
-      qc.invalidateQueries({ queryKey: ['inventory-history'] })
+      qc.invalidateQueries({ queryKey: hotelQueryKey('room-minibars', vars.room_id) })
+      qc.invalidateQueries({ queryKey: hotelQueryKey('inventory-history') })
     },
     onError: (e: ApiError) => toast.error(errMsg(e, 'Error al reponer minibar.')),
   })
@@ -192,14 +194,14 @@ export function useMinibarProductMutations() {
 
 export function useMinibars() {
   return useQuery({
-    queryKey: ['minibars'],
+    queryKey: hotelQueryKey('minibars'),
     queryFn: getMinibarsApi,
   })
 }
 
 export function useMinibarMutations() {
   const qc = useQueryClient()
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['minibars'] })
+  const invalidate = () => qc.invalidateQueries({ queryKey: hotelQueryKey('minibars') })
 
   const createMutation = useMutation({
     mutationFn: createMinibarApi,
@@ -227,14 +229,14 @@ export function useMinibarMutations() {
 
 export function useAssets(filters?: { status?: string; search?: string }) {
   return useQuery({
-    queryKey: ['assets', filters],
+    queryKey: hotelQueryKey('assets', filters),
     queryFn: () => getAssetsApi(filters),
   })
 }
 
 export function useAssetMutations() {
   const qc = useQueryClient()
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['assets'] })
+  const invalidate = () => qc.invalidateQueries({ queryKey: hotelQueryKey('assets') })
 
   const createMutation = useMutation({
     mutationFn: createAssetApi,
@@ -261,7 +263,7 @@ export function useAssetMutations() {
 
 export function useMaintenances(filters?: { status?: string; asset_id?: string }) {
   return useQuery({
-    queryKey: ['maintenances', filters],
+    queryKey: hotelQueryKey('maintenances', filters),
     queryFn: () => getMaintenancesApi(filters),
   })
 }
@@ -269,8 +271,8 @@ export function useMaintenances(filters?: { status?: string; asset_id?: string }
 export function useMaintenanceMutations() {
   const qc = useQueryClient()
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: ['maintenances'] })
-    qc.invalidateQueries({ queryKey: ['assets'] })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('maintenances') })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('assets') })
   }
 
   const addMutation = useMutation({
@@ -302,16 +304,21 @@ export function useMaintenanceMutations() {
 
 // ── Repair orders ─────────────────────────────────────────────────────────────
 
-export function useRepairOrders(filters?: { status?: string }) {
+export function useRepairOrders(filters?: RepairOrderFilters, options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: ['repair-orders', filters],
+    queryKey: hotelQueryKey('repair-orders', filters),
     queryFn: () => getRepairOrdersApi(filters),
+    enabled: options?.enabled ?? true,
   })
 }
 
 export function useRepairOrderMutations() {
   const qc = useQueryClient()
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['repair-orders'] })
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: hotelQueryKey('repair-orders') })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('rooms') })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('dashboard') })
+  }
 
   const createMutation = useMutation({
     mutationFn: createRepairOrderApi,
@@ -340,7 +347,7 @@ export function useRepairOrderMutations() {
 
 export function useInventoryHistory(filters?: HistoryFilters) {
   return useQuery({
-    queryKey: ['inventory-history', filters],
+    queryKey: hotelQueryKey('inventory-history', filters),
     queryFn:  () => getInventoryHistoryApi(filters),
     staleTime: 30_000,
   })
@@ -350,7 +357,7 @@ export function useInventoryHistory(filters?: HistoryFilters) {
 
 export function useLowStockThreshold() {
   return useQuery({
-    queryKey: ['low-stock-threshold'],
+    queryKey: hotelQueryKey('low-stock-threshold'),
     queryFn:  getLowStockThresholdApi,
     staleTime: 60_000,
   })
@@ -362,7 +369,7 @@ export function useSetLowStockThreshold() {
     mutationFn: setLowStockThresholdApi,
     onSuccess: () => {
       toast.success('Umbral de stock bajo guardado.')
-      qc.invalidateQueries({ queryKey: ['low-stock-threshold'] })
+      qc.invalidateQueries({ queryKey: hotelQueryKey('low-stock-threshold') })
     },
     onError: (e: ApiError) => toast.error(errMsg(e, 'Error al guardar umbral.')),
   })

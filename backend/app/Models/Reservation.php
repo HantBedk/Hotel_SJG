@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToHotel;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,9 +13,14 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Reservation extends Model
 {
-    use HasUuids, SoftDeletes;
+    use HasUuids, SoftDeletes, BelongsToHotel;
+
+    private const ACTIVE_STATUSES = ['pending', 'confirmed'];
+
+    private const NON_BLOCKING_STATUSES = ['cancelled', 'no_show', 'checked_in'];
 
     protected $fillable = [
+        'hotel_id',
         'group_id',
         'billing_mode',
         'guest_id',
@@ -77,14 +84,77 @@ class Reservation extends Model
         return $this->hasMany(ReservationPayment::class);
     }
 
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
-        return $query->whereIn('status', ['pending', 'confirmed']);
+        return $query->whereIn('status', self::ACTIVE_STATUSES);
     }
 
-    public function scopeUpcoming($query, int $hours = 24)
+    public function scopeUpcoming(Builder $query, int $hours = 24): Builder
     {
-        return $query->whereIn('status', ['pending', 'confirmed'])
+        return $query->active()
             ->whereBetween('start_date', [now()->toDateString(), now()->addHours($hours)->toDateString()]);
+    }
+
+    public function scopeInDateRange(Builder $query, ?string $from = null, ?string $to = null): Builder
+    {
+        if ($from !== null) {
+            $query->where('end_date', '>=', $from);
+        }
+
+        if ($to !== null) {
+            $query->where('start_date', '<=', $to);
+        }
+
+        return $query;
+    }
+
+    public function scopeSearch(Builder $query, string $term): Builder
+    {
+        $pattern = '%' . $term . '%';
+
+        return $query->whereHas('guest', function (Builder $guestQuery) use ($pattern) {
+            $guestQuery->where(function (Builder $q) use ($pattern) {
+                $q->whereRaw('full_name ILIKE ?', [$pattern])
+                  ->orWhereRaw('document_number ILIKE ?', [$pattern]);
+            });
+        });
+    }
+
+    public function scopeOverlappingRoom(
+        Builder $query,
+        string $roomId,
+        string $startDate,
+        string $endDate,
+        ?string $excludeId = null,
+    ): Builder {
+        $query->where('room_id', $roomId)
+            ->whereNotIn('status', self::NON_BLOCKING_STATUSES)
+            ->where('start_date', '<', $endDate)
+            ->where('end_date', '>', $startDate);
+
+        if ($excludeId !== null) {
+            $query->where('id', '!=', $excludeId);
+        }
+
+        return $query;
+    }
+
+    public function scopeOverlappingHouse(
+        Builder $query,
+        string $houseId,
+        string $startDate,
+        string $endDate,
+        ?string $excludeId = null,
+    ): Builder {
+        $query->where('house_id', $houseId)
+            ->whereNotIn('status', self::NON_BLOCKING_STATUSES)
+            ->where('start_date', '<', $endDate)
+            ->where('end_date', '>', $startDate);
+
+        if ($excludeId !== null) {
+            $query->where('id', '!=', $excludeId);
+        }
+
+        return $query;
     }
 }

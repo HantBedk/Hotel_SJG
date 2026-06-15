@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import {
   getIncomeDailyApi,
   getIncomeSummaryApi,
@@ -7,7 +8,7 @@ import {
 
 export function useIncomeSummary(params: IncomeRangeParams) {
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['income', 'summary', params],
+    queryKey: hotelQueryKey('income', 'summary', params),
     queryFn:  () => getIncomeSummaryApi(params),
     refetchInterval: 60_000,
     staleTime: 30_000,
@@ -17,7 +18,7 @@ export function useIncomeSummary(params: IncomeRangeParams) {
 
 export function useIncomeDaily(params: IncomeRangeParams) {
   const { data, isLoading } = useQuery({
-    queryKey: ['income', 'daily', params],
+    queryKey: hotelQueryKey('income', 'daily', params),
     queryFn:  () => getIncomeDailyApi(params),
     refetchInterval: 60_000,
     staleTime: 30_000,

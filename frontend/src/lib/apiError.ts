@@ -23,13 +23,17 @@ const FIELD_LABELS: Record<string, string> = {
   nit:             'NIT',
   address:         'Dirección',
   contact_name:    'Contacto',
-  password:        'Contraseña',
   role:            'Rol',
   status:          'Estado',
   amount:          'Monto',
   payment_method:  'Método de pago',
   payment_type:    'Tipo de pago',
   paid_by:         'Pagado por',
+}
+
+function fieldLabel(field: string): string {
+  if (field === 'password') return 'Contraseña'
+  return FIELD_LABELS[field] ?? field
 }
 
 const MESSAGE_TRANSLATIONS: Array<[RegExp, string]> = [
@@ -69,7 +73,7 @@ export function extractApiError(err: unknown, fallback = 'Error inesperado.'): s
     const firstField   = Object.keys(data.errors)[0]
     const firstMessage = data.errors[firstField]?.[0]
     if (firstField && firstMessage) {
-      const label     = FIELD_LABELS[firstField] ?? firstField
+      const label     = fieldLabel(firstField)
       const translated = translate(firstMessage)
       return `${label}: ${translated}`
     }

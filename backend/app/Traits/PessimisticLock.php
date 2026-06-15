@@ -2,6 +2,7 @@
 
 namespace App\Traits;
 
+use App\Exceptions\ConcurrencyConflictException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 
@@ -35,9 +36,9 @@ trait PessimisticLock
             ->findOrFail($model->getKey());
 
         if ($fresh->{$statusField} !== $expectedStatus) {
-            throw new \RuntimeException(
-                "Conflicto de concurrencia: la habitación ya no está en estado '{$expectedStatus}'. " .
-                "Estado actual: '{$fresh->{$statusField}}'. Recarga e intenta de nuevo."
+            throw ConcurrencyConflictException::unexpectedStatus(
+                $expectedStatus,
+                (string) $fresh->{$statusField},
             );
         }
 

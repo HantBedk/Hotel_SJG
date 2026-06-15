@@ -3,10 +3,11 @@ import { getSettingsApi } from '@/services/settings.service'
 
 const DEFAULT_CHECK_IN  = '14:00'
 const DEFAULT_CHECK_OUT = '12:00'
+const HHMM_PATTERN = /^(\d{1,2}):(\d{2})/
 
 function normalizeHHMM(value: string | undefined, fallback: string): string {
   if (!value) return fallback
-  const m = value.match(/^(\d{1,2}):(\d{2})/)
+  const m = HHMM_PATTERN.exec(value)
   if (!m) return fallback
   const hh = m[1].padStart(2, '0')
   return `${hh}:${m[2]}`

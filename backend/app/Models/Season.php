@@ -2,14 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToHotel;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 class Season extends Model
 {
-    use HasUuids;
+    use HasUuids, BelongsToHotel;
 
-    protected $fillable = ['name', 'start_date', 'end_date', 'multiplier', 'active'];
+    protected $fillable = ['hotel_id', 'name', 'start_date', 'end_date', 'multiplier', 'active'];
 
     protected function casts(): array
     {

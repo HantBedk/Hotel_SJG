@@ -4,6 +4,12 @@ import { useNotifications } from '@/hooks/useNotifications'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import type { AppNotification } from '@/types'
 
+function notificationSeverityColor(severity: AppNotification['severity']): string {
+  if (severity === 'critical') return '#DC2626'
+  if (severity === 'warning') return '#D97706'
+  return 'var(--color-primary)'
+}
+
 /**
  * Muestra notificaciones críticas/warning marcadas como is_modal=true.
  * El usuario debe leerlas explícitamente para cerrarlas. El registro
@@ -13,7 +19,7 @@ export default function NotificationModal() {
   const { notifications, markRead } = useNotifications()
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
 
-  const pending = (notifications as AppNotification[]).filter(
+  const pending = notifications.filter(
     (n) => n.is_modal && !n.is_read && !dismissed.has(n.id),
   )
 
@@ -27,11 +33,7 @@ export default function NotificationModal() {
 
   if (!current) return null
 
-  const severityColor = current.severity === 'critical'
-    ? '#DC2626'
-    : current.severity === 'warning'
-      ? '#D97706'
-      : 'var(--color-primary)'
+  const severityColor = notificationSeverityColor(current.severity)
 
   const handleAcknowledge = () => {
     markRead(current.id)

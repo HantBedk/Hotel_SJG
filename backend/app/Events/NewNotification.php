@@ -3,6 +3,7 @@
 namespace App\Events;
 
 use App\Models\Notification;
+use App\Support\TenantContext;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
@@ -17,7 +18,10 @@ class NewNotification implements ShouldBroadcast
 
     public function broadcastOn(): array
     {
-        return [new PrivateChannel('hotel.notifications')];
+        $hotelId = TenantContext::id()
+            ?? ($this->notification->payload['hotel_id'] ?? null);
+
+        return $hotelId ? [new PrivateChannel("hotel.{$hotelId}.notifications")] : [];
     }
 
     public function broadcastAs(): string

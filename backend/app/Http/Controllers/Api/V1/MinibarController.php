@@ -11,6 +11,7 @@ use App\Models\MinibarRestockLog;
 use App\Models\Room;
 use App\Models\RoomMinibar;
 use App\Models\Setting;
+use App\Support\HotelInventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +33,7 @@ class MinibarController extends Controller
             ->get()
             ->map(function (MinibarProduct $p) {
                 $catalogStock = $p->inventoryItem
-                    ? (int) $p->inventoryItem->current_stock
+                    ? HotelInventoryService::forItem($p->inventoryItem)->current_stock
                     : (int) $p->stock_quantity;
                 $inRooms = (int) ($p->room_minibar_total ?? 0);
                 $p->total_stock = $catalogStock + $inRooms;
@@ -202,7 +203,9 @@ class MinibarController extends Controller
             foreach ($template as $row) {
                 $productId = $row['minibar_product_id'] ?? null;
                 $qty       = (int) ($row['quantity'] ?? 0);
-                if (!$productId || $qty <= 0) continue;
+                if (!$productId || $qty <= 0) {
+                    continue;
+                }
 
                 RoomMinibar::updateOrCreate(
                     ['room_id' => $data['room_id'], 'minibar_product_id' => $productId],
@@ -264,13 +267,14 @@ class MinibarController extends Controller
 
             if ($product->inventory_item_id) {
                 $item = InventoryItem::lockForUpdate()->findOrFail($product->inventory_item_id);
+                $hotelInv = HotelInventoryService::forItem($item);
                 abort_if(
-                    $item->current_stock < $data['quantity'],
+                    $hotelInv->current_stock < $data['quantity'],
                     409,
-                    'Stock insuficiente en el catálogo (' . $item->current_stock . ' disponibles).'
+                    'Stock insuficiente en el catálogo (' . $hotelInv->current_stock . ' disponibles).'
                 );
 
-                $item->decrement('current_stock', $data['quantity']);
+                $hotelInv->decrement('current_stock', $data['quantity']);
 
                 InventoryTransaction::create([
                     'inventory_item_id'   => $item->id,
@@ -350,7 +354,7 @@ class MinibarController extends Controller
             // Devolver al origen del stock (inverso al restock):
             if ($product->inventory_item_id) {
                 $item = InventoryItem::lockForUpdate()->findOrFail($product->inventory_item_id);
-                $item->increment('current_stock', $data['quantity']);
+                HotelInventoryService::forItem($item)->increment('current_stock', $data['quantity']);
 
                 InventoryTransaction::create([
                     'inventory_item_id'   => $item->id,

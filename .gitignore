@@ -2,28 +2,39 @@
 .env
 .env.*
 !.env.example
+!**/.env.example
 !config/env.vps.example
 
 # Dependencies
 backend/vendor/
+backend/vendor/composer/tmp-*
 frontend/node_modules/
 
-# Laravel generated
+# Laravel generated / runtime
 backend/bootstrap/cache/*.php
+backend/storage/.app_key
+backend/storage/.seeded
 backend/storage/app/backups/
 backend/storage/app/comprobantes/
 backend/storage/logs/
-backend/storage/.seeded
 backend/public/hot
+backend/public/app/
+backend/public/storage
+.phpunit.result.cache
 
 # React build output (built inside Docker)
 frontend/dist/
+
+# TypeScript incremental build
+*.tsbuildinfo
 
 # Docker volumes
 postgres_data/
 
 # Logs de build locales
 build.log
+
+# Scripts de depuración local (no versionar)
 scripts/debug/
 
 # Planning docs (never committed)
@@ -44,8 +55,11 @@ frontend/.gitignore
 Thumbs.db
 desktop.ini
 
-# IDE
+# IDE — compartir solo configuración de equipo
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tailwind.css-data.json
 *.swp
 *.swo

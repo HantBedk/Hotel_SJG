@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { hotelQueryKey, useHotelQueryKey } from '@/lib/hotelQueryKey'
 import {
   createAdminRoomApi,
   createAdminUserApi,
@@ -45,12 +46,13 @@ import type { AdminUserPayload, ExtraService, House, Room, RoomType, Season } fr
 // ── Hotel ─────────────────────────────────────────────────────────────────────
 
 export function useHotelInfo() {
-  return useQuery({ queryKey: ['admin', 'hotel'], queryFn: getHotelInfoApi })
+  const queryKey = useHotelQueryKey('admin', 'hotel')
+  return useQuery({ queryKey, queryFn: getHotelInfoApi })
 }
 
 export function useHotelMutations() {
   const qc = useQueryClient()
-  const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'hotel'] })
+  const inv = () => qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'hotel') })
 
   const update = useMutation({ mutationFn: updateHotelInfoApi, onSuccess: inv })
   const uploadLogo = useMutation({ mutationFn: uploadLogoApi, onSuccess: inv })
@@ -61,14 +63,14 @@ export function useHotelMutations() {
 // ── Room types ────────────────────────────────────────────────────────────────
 
 export function useAdminRoomTypes() {
-  return useQuery({ queryKey: ['admin', 'room-types'], queryFn: getAdminRoomTypesApi })
+  return useQuery({ queryKey: hotelQueryKey('admin', 'room-types'), queryFn: getAdminRoomTypesApi })
 }
 
 export function useRoomTypeMutations() {
   const qc = useQueryClient()
   const inv = () => {
-    qc.invalidateQueries({ queryKey: ['admin', 'room-types'] })
-    qc.invalidateQueries({ queryKey: ['admin', 'rooms'] })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'room-types') })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'rooms') })
   }
 
   const create = useMutation({ mutationFn: (d: Partial<RoomType>) => createRoomTypeApi(d), onSuccess: inv })
@@ -89,12 +91,12 @@ export function useRoomTypeMutations() {
 // ── Houses ────────────────────────────────────────────────────────────────────
 
 export function useAdminHouses() {
-  return useQuery({ queryKey: ['admin', 'houses'], queryFn: getAdminHousesApi })
+  return useQuery({ queryKey: hotelQueryKey('admin', 'houses'), queryFn: getAdminHousesApi })
 }
 
 export function useHouseMutations() {
   const qc = useQueryClient()
-  const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'houses'] })
+  const inv = () => qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'houses') })
 
   const create = useMutation({ mutationFn: (d: { name: string; price: number; active?: boolean }) => createHouseApi(d), onSuccess: inv })
   const update = useMutation({
@@ -109,12 +111,17 @@ export function useHouseMutations() {
 // ── Rooms ─────────────────────────────────────────────────────────────────────
 
 export function useAdminRooms() {
-  return useQuery({ queryKey: ['admin', 'rooms'], queryFn: getAdminRoomsApi })
+  return useQuery({ queryKey: hotelQueryKey('admin', 'rooms'), queryFn: getAdminRoomsApi })
 }
 
 export function useAdminRoomMutations() {
   const qc = useQueryClient()
-  const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'rooms'] })
+  const inv = () => {
+    qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'rooms') })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('rooms') })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('dashboard') })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('activity-logs') })
+  }
 
   const create = useMutation({
     mutationFn: (d: Parameters<typeof createAdminRoomApi>[0]) => createAdminRoomApi(d),
@@ -132,12 +139,12 @@ export function useAdminRoomMutations() {
 // ── Seasons ───────────────────────────────────────────────────────────────────
 
 export function useAdminSeasons() {
-  return useQuery({ queryKey: ['admin', 'seasons'], queryFn: getAdminSeasonsApi })
+  return useQuery({ queryKey: hotelQueryKey('admin', 'seasons'), queryFn: getAdminSeasonsApi })
 }
 
 export function useSeasonMutations() {
   const qc = useQueryClient()
-  const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'seasons'] })
+  const inv = () => qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'seasons') })
 
   const create = useMutation({ mutationFn: (d: Partial<Season>) => createSeasonApi(d), onSuccess: inv })
   const update = useMutation({
@@ -152,12 +159,12 @@ export function useSeasonMutations() {
 // ── Extra services ────────────────────────────────────────────────────────────
 
 export function useAdminExtraServices() {
-  return useQuery({ queryKey: ['admin', 'extra-services'], queryFn: getAdminExtraServicesApi })
+  return useQuery({ queryKey: hotelQueryKey('admin', 'extra-services'), queryFn: getAdminExtraServicesApi })
 }
 
 export function useExtraServiceMutations() {
   const qc = useQueryClient()
-  const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'extra-services'] })
+  const inv = () => qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'extra-services') })
 
   const create = useMutation({ mutationFn: (d: { name?: string; price?: number; description?: string | null; active?: boolean }) => createExtraServiceApi(d as Partial<ExtraService>), onSuccess: inv })
   const update = useMutation({
@@ -172,12 +179,12 @@ export function useExtraServiceMutations() {
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 export function useAdminUsers() {
-  return useQuery({ queryKey: ['admin', 'users'], queryFn: getAdminUsersApi })
+  return useQuery({ queryKey: hotelQueryKey('admin', 'users'), queryFn: getAdminUsersApi })
 }
 
 export function useAdminUserMutations() {
   const qc = useQueryClient()
-  const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'users'] })
+  const inv = () => qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'users') })
 
   const create = useMutation({ mutationFn: (d: AdminUserPayload) => createAdminUserApi(d), onSuccess: inv })
   const update = useMutation({
@@ -192,16 +199,16 @@ export function useAdminUserMutations() {
 // ── Roles & permissions ───────────────────────────────────────────────────────
 
 export function useAdminRoles() {
-  return useQuery({ queryKey: ['admin', 'roles'], queryFn: getAdminRolesApi })
+  return useQuery({ queryKey: hotelQueryKey('admin', 'roles'), queryFn: getAdminRolesApi })
 }
 
 export function useAdminPermissions() {
-  return useQuery({ queryKey: ['admin', 'permissions'], queryFn: getAdminPermissionsApi })
+  return useQuery({ queryKey: hotelQueryKey('admin', 'permissions'), queryFn: getAdminPermissionsApi })
 }
 
 export function useRolePermissionMutations() {
   const qc = useQueryClient()
-  const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'roles'] })
+  const inv = () => qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'roles') })
 
   const update = useMutation({
     mutationFn: ({ roleId, permissions }: { roleId: string; permissions: string[] }) =>
@@ -215,12 +222,12 @@ export function useRolePermissionMutations() {
 // ── Backups ───────────────────────────────────────────────────────────────────
 
 export function useBackups() {
-  return useQuery({ queryKey: ['admin', 'backups'], queryFn: getBackupsApi })
+  return useQuery({ queryKey: hotelQueryKey('admin', 'backups'), queryFn: getBackupsApi })
 }
 
 export function useBackupPreview(enabled = true) {
   return useQuery({
-    queryKey: ['admin', 'backup-preview'],
+    queryKey: hotelQueryKey('admin', 'backup-preview'),
     queryFn:  getBackupPreviewApi,
     enabled,
     staleTime: 0,
@@ -229,7 +236,7 @@ export function useBackupPreview(enabled = true) {
 
 export function useBackupMutations() {
   const qc = useQueryClient()
-  const inv = () => qc.invalidateQueries({ queryKey: ['admin', 'backups'] })
+  const inv = () => qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'backups') })
 
   const create = useMutation({ mutationFn: createBackupApi, onSuccess: inv })
   const restore = useMutation({ mutationFn: restoreBackupApi, onSuccess: inv })
@@ -239,7 +246,7 @@ export function useBackupMutations() {
 }
 
 export function useBackupSettings() {
-  return useQuery({ queryKey: ['admin', 'backup-settings'], queryFn: getBackupSettingsApi })
+  return useQuery({ queryKey: hotelQueryKey('admin', 'backup-settings'), queryFn: getBackupSettingsApi })
 }
 
 export function useWipeDatabase() {
@@ -254,6 +261,6 @@ export function useSaveBackupSettings() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: saveBackupSettingsApi,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'backup-settings'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'backup-settings') }),
   })
 }

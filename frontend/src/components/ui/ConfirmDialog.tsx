@@ -2,15 +2,15 @@ import { AlertTriangle } from 'lucide-react'
 import { Modal } from './Modal'
 
 interface ConfirmDialogProps {
-  open: boolean
-  title: string
-  message: React.ReactNode
-  confirmLabel?: string
-  cancelLabel?: string
-  variant?: 'danger' | 'primary'
-  loading?: boolean
-  onConfirm: () => void
-  onClose: () => void
+  readonly open: boolean
+  readonly title: string
+  readonly message: React.ReactNode
+  readonly confirmLabel?: string
+  readonly cancelLabel?: string
+  readonly variant?: 'danger' | 'primary'
+  readonly loading?: boolean
+  readonly onConfirm: () => void
+  readonly onClose: () => void
 }
 
 export function ConfirmDialog({

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Building2, Hotel, Layers, Calendar, Package, Settings, Users, Shield, Database } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import HotelTab        from './tabs/HotelTab'
+import HotelesTab      from './tabs/HotelesTab'
 import HabitacionesTab from './tabs/HabitacionesTab'
 import CasasTiposTab   from './tabs/CasasTiposTab'
 import TemporadasTab   from './tabs/TemporadasTab'
@@ -12,7 +13,8 @@ import PermisosTab     from './tabs/PermisosTab'
 import BackupsTab      from './tabs/BackupsTab'
 
 const ALL_TABS = [
-  { key: 'hotel',       label: 'Hotel',        icon: Hotel,     permission: 'manage_settings' },
+  { key: 'hotels-list', label: 'Hoteles',       icon: Building2, permission: 'view_hotels' },
+  { key: 'hotel',       label: 'Hotel activo', icon: Hotel,     permission: 'manage_settings' },
   { key: 'rooms',       label: 'Habitaciones', icon: Building2, permission: 'manage_settings' },
   { key: 'houses',      label: 'Tipos de habitación', icon: Layers,   permission: 'manage_settings' },
   { key: 'seasons',     label: 'Temporadas',   icon: Calendar,  permission: 'manage_settings' },
@@ -36,6 +38,7 @@ export default function SettingsPage() {
   const [active, setActive] = useState<TabKey>(() => tabs[0]?.key ?? 'config')
 
   const TAB_CONTENT: Record<TabKey, React.ReactNode> = {
+    'hotels-list': <HotelesTab />,
     hotel:       <HotelTab />,
     rooms:       <HabitacionesTab />,
     houses:      <CasasTiposTab />,

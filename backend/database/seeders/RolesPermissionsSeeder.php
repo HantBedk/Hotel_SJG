@@ -26,6 +26,8 @@ class RolesPermissionsSeeder extends Seeder
         'trigger_backup',
         'restore_backup',
         'view_reports',
+        'view_hotels',
+        'manage_hotels',
     ];
 
     private const ROLES = [
@@ -45,10 +47,12 @@ class RolesPermissionsSeeder extends Seeder
             'manage_users',
             'trigger_backup', 'restore_backup',
             'view_reports',
+            'view_hotels',
         ],
         'receptionist' => [
             'view_dashboard',
             'view_rooms',
+            'view_reservations',
             'manage_reservations',
             'check_in', 'check_out',
             'view_inventory',

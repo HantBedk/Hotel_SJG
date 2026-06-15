@@ -1,5 +1,5 @@
 import api from '@/lib/axios'
-import type { Guest, GuestCompanion, Stay } from '@/types'
+import type { ApiResponse, Guest, GuestCompanion, Stay } from '@/types'
 
 export interface GuestFilters {
   search?: string
@@ -8,22 +8,12 @@ export interface GuestFilters {
   per_page?: number
 }
 
-export const getGuestsApi = async (
-  filters?: string | GuestFilters
-): Promise<{ data: Guest[]; meta: unknown }> => {
-  const params = typeof filters === 'string'
-    ? (filters ? { search: filters } : {})
-    : (filters ?? {})
-  const res = await api.get('/guests', { params })
-  return res.data.data
+export interface GuestsListResult {
+  data: Guest[]
+  meta: unknown
 }
 
-export const getGuestApi = async (id: string): Promise<Guest> => {
-  const res = await api.get(`/guests/${id}`)
-  return res.data.data
-}
-
-export const createGuestApi = async (payload: {
+export interface CreateGuestPayload {
   full_name: string
   document_type: string
   document_number: string
@@ -35,50 +25,89 @@ export const createGuestApi = async (payload: {
   birth_date?: string
   notes?: string
   companions?: Partial<GuestCompanion>[]
-}): Promise<Guest> => {
-  const clean = Object.fromEntries(
-    Object.entries(payload).filter(([, v]) => v !== '' && v !== undefined)
-  )
-  const res = await api.post('/guests', clean)
-  return res.data.data
 }
 
-export const updateGuestApi = async (id: string, payload: Partial<Guest>): Promise<Guest> => {
-  const clean = Object.fromEntries(
-    Object.entries(payload).filter(([, v]) => v !== '' && v !== undefined)
-  )
-  const res = await api.put(`/guests/${id}`, clean)
-  return res.data.data
+function resolveGuestFilters(filters?: string | GuestFilters): GuestFilters {
+  if (typeof filters === 'string') {
+    if (!filters) return {}
+    return { search: filters }
+  }
+  return filters ?? {}
 }
 
-export const deleteGuestApi = async (id: string): Promise<void> => {
+function stripPayloadFields<T extends object>(
+  payload: T,
+  options: { readonly stripNull?: boolean } = {},
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([, value]) => {
+      if (value === '' || value === undefined) return false
+      if (options.stripNull && value === null) return false
+      return true
+    }),
+  )
+}
+
+function extractGuestList(payload: GuestsListResult | Guest[]): Guest[] {
+  if (Array.isArray(payload)) return payload
+  return payload.data ?? []
+}
+
+export async function getGuestsApi(
+  filters?: string | GuestFilters,
+): Promise<GuestsListResult> {
+  const { data } = await api.get<ApiResponse<GuestsListResult>>('/guests', {
+    params: resolveGuestFilters(filters),
+  })
+  return data.data
+}
+
+export async function getGuestApi(id: string): Promise<Guest> {
+  const { data } = await api.get<ApiResponse<Guest>>(`/guests/${id}`)
+  return data.data
+}
+
+export async function createGuestApi(payload: CreateGuestPayload): Promise<Guest> {
+  const { data } = await api.post<ApiResponse<Guest>>('/guests', stripPayloadFields(payload))
+  return data.data
+}
+
+export async function updateGuestApi(id: string, payload: Partial<Guest>): Promise<Guest> {
+  const { data } = await api.put<ApiResponse<Guest>>(`/guests/${id}`, stripPayloadFields(payload))
+  return data.data
+}
+
+export async function deleteGuestApi(id: string): Promise<void> {
   await api.delete(`/guests/${id}`)
 }
 
-export const searchGuestsApi = async (term: string): Promise<Guest[]> => {
-  const res = await api.get('/guests', { params: { search: term } })
-  return res.data.data.data ?? res.data.data
+export async function searchGuestsApi(term: string): Promise<Guest[]> {
+  const { data } = await api.get<ApiResponse<GuestsListResult | Guest[]>>('/guests', {
+    params: { search: term },
+  })
+  return extractGuestList(data.data)
 }
 
-export const getGuestStaysApi = async (id: string): Promise<Stay[]> => {
-  const res = await api.get(`/guests/${id}/stays`)
-  return res.data.data
+export async function getGuestStaysApi(id: string): Promise<Stay[]> {
+  const { data } = await api.get<ApiResponse<Stay[]>>(`/guests/${id}/stays`)
+  return data.data
 }
 
-export const findGuestByDocumentApi = async (document: string): Promise<Guest | null> => {
-  const res = await api.get('/guests', { params: { document: document.trim() } })
-  const raw = res.data.data
-  const guests: Guest[] = Array.isArray(raw) ? raw : (raw.data ?? [])
-  return guests.length > 0 ? guests[0] : null
+export async function findGuestByDocumentApi(document: string): Promise<Guest | null> {
+  const { data } = await api.get<ApiResponse<GuestsListResult | Guest[]>>('/guests', {
+    params: { document: document.trim() },
+  })
+  const guests = extractGuestList(data.data)
+  return guests.at(0) ?? null
 }
 
-export const addCompanionApi = async (
+export async function addCompanionApi(
   guestId: string,
   payload: Partial<GuestCompanion>,
-): Promise<GuestCompanion> => {
-  const clean = Object.fromEntries(
-    Object.entries(payload).filter(([, v]) => v !== '' && v !== undefined && v !== null),
+): Promise<GuestCompanion> {
+  const { data } = await api.post<ApiResponse<GuestCompanion>>(
+    `/guests/${guestId}/companions`,
+    stripPayloadFields(payload, { stripNull: true }),
   )
-  const res = await api.post(`/guests/${guestId}/companions`, clean)
-  return res.data.data
+  return data.data
 }

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vscode-css-languageservice/main/docs/customData.schema.json",
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@custom-variant",
+      "description": "Tailwind CSS v4: registra una variante personalizada (p. ej. dark con data-theme)."
+    },
+    {
+      "name": "@theme",
+      "description": "Tailwind CSS v4: personalización del tema."
+    },
+    {
+      "name": "@utility",
+      "description": "Tailwind CSS v4: utilidad personalizada."
+    },
+    {
+      "name": "@apply",
+      "description": "Tailwind CSS v4: aplica clases de utilidad en CSS."
+    },
+    {
+      "name": "@source",
+      "description": "Tailwind CSS v4: fuentes de contenido para escaneo."
+    },
+    {
+      "name": "@variant",
+      "description": "Tailwind CSS v4: alias de variante."
+    },
+    {
+      "name": "@plugin",
+      "description": "Tailwind CSS v4: plugin de Tailwind."
+    }
+  ]
+}

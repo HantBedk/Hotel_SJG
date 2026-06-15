@@ -1,0 +1,26 @@
+# Override para desarrollo local (Windows/Mac/Linux).
+# Evita conflicto con Laragon/IIS en el puerto 80.
+#
+# Uso (desde la raíz del proyecto):
+#   docker compose -f docker-compose.yml -f docker/compose/docker-compose.local.yml up -d --build
+#   scripts\docker-local.cmd
+
+services:
+  app:
+    ports: !override
+      - "127.0.0.1:${HTTP_PORT:-8080}:80"
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_URL=http://localhost:${HTTP_PORT:-8080}
+      - SANCTUM_STATEFUL_DOMAINS=localhost,127.0.0.1,localhost:${HTTP_PORT:-8080},127.0.0.1:${HTTP_PORT:-8080},localhost:3007,127.0.0.1:3007
+      - FRONTEND_ORIGINS=http://localhost:${HTTP_PORT:-8080},http://127.0.0.1:${HTTP_PORT:-8080},http://localhost:3007,http://127.0.0.1:3007
+    build:
+      args:
+        VITE_REVERB_PORT: 0
+        VITE_REVERB_SCHEME: http
+        VITE_REVERB_HOST:
+
+  reverb:
+    ports: !override
+      - "127.0.0.1:${REVERB_HOST_PORT:-8081}:8080"

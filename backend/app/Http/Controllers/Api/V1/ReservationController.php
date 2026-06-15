@@ -42,19 +42,14 @@ class ReservationController extends Controller
             $query->where('room_id', $roomId);
         }
 
-        if ($from = $request->query('from')) {
-            $query->where('end_date', '>=', $from);
-        }
-
-        if ($to = $request->query('to')) {
-            $query->where('start_date', '<=', $to);
+        $from = $request->query('from');
+        $to   = $request->query('to');
+        if ($from || $to) {
+            $query->inDateRange($from, $to);
         }
 
         if ($search = $request->query('search')) {
-            $query->whereHas('guest', fn($q) =>
-                $q->where('full_name', 'ilike', "%{$search}%")
-                  ->orWhere('document_number', 'ilike', "%{$search}%")
-            );
+            $query->search($search);
         }
 
         $reservations = $query->paginate($this->perPage($request, 20));
@@ -130,6 +125,7 @@ class ReservationController extends Controller
         ActivityLog::record('reservation.created', $request->user()->id, [
             'reservation_id' => $reservation->id,
             'guest_name'     => $reservation->guest?->full_name,
+            'room_number'    => $reservation->room?->number,
             'start_date'     => $data['start_date'],
             'end_date'       => $data['end_date'],
             'agreed_price'   => $data['agreed_price'],
@@ -200,6 +196,7 @@ class ReservationController extends Controller
         ActivityLog::record('reservation.group_created', $request->user()->id, [
             'group_id'      => $groupId,
             'room_count'    => count($data['room_ids']),
+            'rooms'         => Room::whereIn('id', $data['room_ids'])->pluck('number')->values()->all(),
             'billing_mode'  => $data['billing_mode'],
             'start_date'    => $data['start_date'],
             'end_date'      => $data['end_date'],
@@ -230,44 +227,7 @@ class ReservationController extends Controller
         ]);
 
         DB::transaction(function () use ($reservation, $data) {
-            $newRoomId   = $data['room_id'] ?? $reservation->room_id;
-            $newStart    = $data['start_date'] ?? $reservation->start_date->toDateString();
-            $newEnd      = $data['end_date'] ?? $reservation->end_date->toDateString();
-
-            if ($newRoomId && ($newRoomId !== $reservation->room_id
-                || $newStart !== $reservation->start_date->toDateString()
-                || $newEnd !== $reservation->end_date->toDateString())
-            ) {
-                $this->assertNoOverlap($newRoomId, $newStart, $newEnd, $reservation->id);
-            }
-
-            // Recalculate nights if dates changed
-            if (isset($data['start_date']) || isset($data['end_date'])) {
-                $start  = Carbon::parse($newStart);
-                $end    = Carbon::parse($newEnd);
-                $data['nights'] = max(1, (int) $start->diffInDays($end));
-            }
-
-            // Release old room if room changed
-            if (array_key_exists('room_id', $data) && $data['room_id'] !== $reservation->room_id) {
-                if ($reservation->room_id) {
-                    $oldRoom = Room::find($reservation->room_id);
-                    if ($oldRoom && $oldRoom->status === 'reserved') {
-                        $oldRoom->update(['status' => 'available']);
-                        broadcast(new RoomStatusChanged($oldRoom->refresh()))->toOthers();
-                    }
-                }
-                if ($data['room_id']) {
-                    $newRoom = Room::find($data['room_id']);
-                    if ($newRoom && $newRoom->status === 'available') {
-                        $newRoom->update(['status' => 'reserved']);
-                        broadcast(new RoomStatusChanged($newRoom->refresh()))->toOthers();
-                    }
-                }
-            }
-
-            $reservation->update($data);
-            broadcast(new ReservationStatusChanged($reservation->load('guest', 'room')))->toOthers();
+            $this->performReservationUpdate($reservation, $data);
         });
 
         $reservation->load(['guest', 'company', 'room.roomType', 'house', 'createdBy']);
@@ -443,6 +403,7 @@ class ReservationController extends Controller
             'stay_id'        => $stay->id,
             'guest_name'     => $stay->guest?->full_name,
             'room_ids'       => $data['room_ids'],
+            'rooms'          => Room::whereIn('id', $data['room_ids'])->pluck('number')->values()->all(),
             'check_in'       => $stay->check_in_datetime,
             'check_out'      => $stay->check_out_datetime,
         ]);
@@ -554,6 +515,80 @@ class ReservationController extends Controller
         ]);
     }
 
+    private function performReservationUpdate(Reservation $reservation, array &$data): void
+    {
+        $newRoomId = $data['room_id'] ?? $reservation->room_id;
+        $newStart  = $data['start_date'] ?? $reservation->start_date->toDateString();
+        $newEnd    = $data['end_date'] ?? $reservation->end_date->toDateString();
+
+        $this->assertUpdateOverlapIfNeeded($reservation, $newRoomId, $newStart, $newEnd);
+        $this->recalculateNightsIfNeeded($data, $newStart, $newEnd);
+        $this->syncRoomsOnUpdate($reservation, $data);
+
+        $reservation->update($data);
+        broadcast(new ReservationStatusChanged($reservation->load('guest', 'room')))->toOthers();
+    }
+
+    private function assertUpdateOverlapIfNeeded(
+        Reservation $reservation,
+        ?string $newRoomId,
+        string $newStart,
+        string $newEnd,
+    ): void {
+        if (!$newRoomId) {
+            return;
+        }
+
+        $scheduleChanged = $newRoomId !== $reservation->room_id
+            || $newStart !== $reservation->start_date->toDateString()
+            || $newEnd !== $reservation->end_date->toDateString();
+
+        if (!$scheduleChanged) {
+            return;
+        }
+
+        $this->assertNoOverlap($newRoomId, $newStart, $newEnd, $reservation->id);
+    }
+
+    private function recalculateNightsIfNeeded(array &$data, string $newStart, string $newEnd): void
+    {
+        if (!isset($data['start_date']) && !isset($data['end_date'])) {
+            return;
+        }
+
+        $start = Carbon::parse($newStart);
+        $end   = Carbon::parse($newEnd);
+        $data['nights'] = max(1, (int) $start->diffInDays($end));
+    }
+
+    private function syncRoomsOnUpdate(Reservation $reservation, array $data): void
+    {
+        if (!array_key_exists('room_id', $data) || $data['room_id'] === $reservation->room_id) {
+            return;
+        }
+
+        $this->syncRoomReservationChange($reservation->room_id, $data['room_id'] ?? null);
+    }
+
+    private function syncRoomReservationChange(?string $oldRoomId, ?string $newRoomId): void
+    {
+        if ($oldRoomId) {
+            $oldRoom = Room::find($oldRoomId);
+            if ($oldRoom && $oldRoom->status === 'reserved') {
+                $oldRoom->update(['status' => 'available']);
+                broadcast(new RoomStatusChanged($oldRoom->refresh()))->toOthers();
+            }
+        }
+
+        if ($newRoomId) {
+            $newRoom = Room::find($newRoomId);
+            if ($newRoom && $newRoom->status === 'available') {
+                $newRoom->update(['status' => 'reserved']);
+                broadcast(new RoomStatusChanged($newRoom->refresh()))->toOthers();
+            }
+        }
+    }
+
     private function paymentStatusFor(float $totalPaid, float $agreedPrice): string
     {
         return match (true) {
@@ -565,29 +600,19 @@ class ReservationController extends Controller
 
     private function assertNoOverlap(string $roomId, string $startDate, string $endDate, ?string $excludeId = null): void
     {
-        $query = Reservation::where('room_id', $roomId)
-            ->whereNotIn('status', ['cancelled', 'no_show', 'checked_in'])
-            ->where('start_date', '<', $endDate)
-            ->where('end_date', '>', $startDate);
-
-        if ($excludeId) {
-            $query->where('id', '!=', $excludeId);
-        }
-
-        abort_if($query->exists(), 409, 'La habitación ya tiene una reserva en ese rango de fechas.');
+        abort_if(
+            Reservation::overlappingRoom($roomId, $startDate, $endDate, $excludeId)->exists(),
+            409,
+            'La habitación ya tiene una reserva en ese rango de fechas.',
+        );
     }
 
     private function assertNoHouseOverlap(string $houseId, string $startDate, string $endDate, ?string $excludeId = null): void
     {
-        $query = Reservation::where('house_id', $houseId)
-            ->whereNotIn('status', ['cancelled', 'no_show', 'checked_in'])
-            ->where('start_date', '<', $endDate)
-            ->where('end_date', '>', $startDate);
-
-        if ($excludeId) {
-            $query->where('id', '!=', $excludeId);
-        }
-
-        abort_if($query->exists(), 409, 'La casa ya tiene una reserva en ese rango de fechas.');
+        abort_if(
+            Reservation::overlappingHouse($houseId, $startDate, $endDate, $excludeId)->exists(),
+            409,
+            'La casa ya tiene una reserva en ese rango de fechas.',
+        );
     }
 }

@@ -10,6 +10,7 @@ use App\Models\MinibarProduct;
 use App\Models\MinibarRestockLog;
 use App\Models\MinibarSale;
 use App\Models\MinibarSaleItem;
+use App\Support\HotelInventoryService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -176,14 +177,15 @@ class MinibarSaleController extends Controller
                 if ($product->inventory_item_id) {
                     $stockItem = InventoryItem::lockForUpdate()
                         ->findOrFail($product->inventory_item_id);
+                    $hotelInv  = HotelInventoryService::forItem($stockItem);
 
                     abort_if(
-                        $stockItem->current_stock < $item->quantity,
+                        $hotelInv->current_stock < $item->quantity,
                         409,
-                        'Stock insuficiente para "' . $product->name . '" (' . $stockItem->current_stock . ' disponibles).',
+                        'Stock insuficiente para "' . $product->name . '" (' . $hotelInv->current_stock . ' disponibles).',
                     );
 
-                    $stockItem->decrement('current_stock', $item->quantity);
+                    $hotelInv->decrement('current_stock', $item->quantity);
 
                     InventoryTransaction::create([
                         'inventory_item_id' => $stockItem->id,
@@ -258,7 +260,7 @@ class MinibarSaleController extends Controller
                     if ($product->inventory_item_id) {
                         $stockItem = InventoryItem::lockForUpdate()
                             ->findOrFail($product->inventory_item_id);
-                        $stockItem->increment('current_stock', $item->quantity);
+                        HotelInventoryService::forItem($stockItem)->increment('current_stock', $item->quantity);
 
                         InventoryTransaction::create([
                             'inventory_item_id' => $stockItem->id,

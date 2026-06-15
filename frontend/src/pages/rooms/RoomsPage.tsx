@@ -3,6 +3,7 @@ import { LogIn, X } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useRooms } from '@/hooks/useRooms'
 import { useReverb } from '@/hooks/useReverb'
+import { useHotelStore } from '@/store/hotelStore'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { RoomCard } from './components/RoomCard'
 import { RoomStatusModal } from './components/RoomStatusModal'
@@ -20,6 +21,18 @@ const FILTERS: { key: RoomStatus | 'all'; label: string }[] = [
   { key: 'maintenance', label: 'Mantenimiento' },
 ]
 
+const ROOM_SKELETON_KEYS = [
+  'room-skeleton-1', 'room-skeleton-2', 'room-skeleton-3', 'room-skeleton-4',
+  'room-skeleton-5', 'room-skeleton-6', 'room-skeleton-7', 'room-skeleton-8',
+  'room-skeleton-9', 'room-skeleton-10', 'room-skeleton-11', 'room-skeleton-12',
+  'room-skeleton-13', 'room-skeleton-14',
+] as const
+
+function selectionSummaryText(count: number): string {
+  if (count === 1) return '1 habitación seleccionada'
+  return `${count} habitaciones seleccionadas`
+}
+
 export default function RoomsPage() {
   const { hasPermission } = useAuth()
   const canEdit = hasPermission('manage_rooms') || hasPermission('check_in')
@@ -35,8 +48,10 @@ export default function RoomsPage() {
     syncRoomStatus,
   } = useRooms(filter === 'all' ? undefined : filter)
 
+  const currentHotelId = useHotelStore((s) => s.currentHotelId)
+
   useReverb<{ id: string; status: RoomStatus }>({
-    channel: 'hotel.rooms',
+    channel: currentHotelId ? `hotel.${currentHotelId}.rooms` : 'hotel.rooms',
     event:   'room.status.changed',
     onEvent: ({ id, status }) => {
       syncRoomStatus(id, status)
@@ -45,7 +60,7 @@ export default function RoomsPage() {
         setSelectedRooms(prev => prev.filter(r => r.id !== id))
       }
     },
-    enabled: true,
+    enabled: !!currentHotelId,
   })
 
   const handleConfirm = (status: RoomStatus, notes?: string) => {
@@ -71,6 +86,42 @@ export default function RoomsPage() {
     setSelectedRooms([])
   }
 
+  let gridContent
+  if (isLoading) {
+    gridContent = (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        {ROOM_SKELETON_KEYS.map((key) => <SkeletonCard key={key} />)}
+      </div>
+    )
+  } else if (rooms.length === 0) {
+    gridContent = (
+      <div
+        className="rounded-xl p-12 text-center"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+      >
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          No hay habitaciones con ese estado.
+        </p>
+      </div>
+    )
+  } else {
+    gridContent = (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        {rooms.map((room) => (
+          <RoomCard
+            key={room.id}
+            room={room}
+            canEdit={canEdit}
+            onChangeStatus={setEditing}
+            onCheckIn={canEdit ? (r) => openWizard([r]) : undefined}
+            isSelected={selectedRooms.some((r) => r.id === room.id)}
+            onSelect={canEdit && room.status === 'available' ? toggleSelect : undefined}
+          />
+        ))}
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5 pb-20">
 
@@ -78,10 +129,11 @@ export default function RoomsPage() {
       <div className="flex flex-wrap gap-2">
         {FILTERS.map(({ key, label }) => {
           const isActive = filter === key
-          const cfg = key !== 'all' ? STATUS_CONFIG[key] : null
+          const cfg = key === 'all' ? null : STATUS_CONFIG[key]
           return (
             <button
               key={key}
+              type="button"
               onClick={() => setFilter(key)}
               className={cn(
                 'px-3 py-1.5 rounded-full text-xs font-medium border transition-all',
@@ -101,34 +153,7 @@ export default function RoomsPage() {
       </div>
 
       {/* Grid */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {Array.from({ length: 14 }).map((_, i) => <SkeletonCard key={i} />)}
-        </div>
-      ) : rooms.length === 0 ? (
-        <div
-          className="rounded-xl p-12 text-center"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
-        >
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            No hay habitaciones con ese estado.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {rooms.map((room) => (
-            <RoomCard
-              key={room.id}
-              room={room}
-              canEdit={canEdit}
-              onChangeStatus={setEditing}
-              onCheckIn={canEdit ? (r) => openWizard([r]) : undefined}
-              isSelected={selectedRooms.some(r => r.id === room.id)}
-              onSelect={canEdit && room.status === 'available' ? toggleSelect : undefined}
-            />
-          ))}
-        </div>
-      )}
+      {gridContent}
 
       {/* Status change modal */}
       {editing && (
@@ -155,12 +180,13 @@ export default function RoomsPage() {
           style={{ background: 'var(--bg-surface)', border: '2px solid var(--color-primary)' }}
         >
           <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-            {selectedRooms.length} habitación{selectedRooms.length !== 1 ? 'es' : ''} seleccionada{selectedRooms.length !== 1 ? 's' : ''}
+            {selectionSummaryText(selectedRooms.length)}
           </span>
           <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
             {selectedRooms.map(r => `Hab. ${r.number}`).join(', ')}
           </span>
           <button
+            type="button"
             onClick={() => openWizard(selectedRooms)}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold"
             style={{ background: 'var(--color-primary)', color: '#fff' }}
@@ -169,6 +195,7 @@ export default function RoomsPage() {
             Iniciar Check-in
           </button>
           <button
+            type="button"
             onClick={clearSelection}
             className="p-1.5 rounded-lg hover:opacity-70"
             style={{ color: 'var(--text-muted)' }}

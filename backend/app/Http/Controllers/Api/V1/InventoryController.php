@@ -6,11 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\InventoryCategory;
 use App\Models\InventoryItem;
 use App\Models\InventoryTransaction;
-use App\Models\MinibarConsumption;
-use App\Models\MinibarRestockLog;
 use App\Models\Notification;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\HotelInventoryService;
+use App\Support\InventoryHistoryBuilder;
+use App\Support\TenantContext;
 use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,7 @@ class InventoryController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        $hotelId = TenantContext::requireId();
         $query = InventoryItem::with('category')
             ->where('active', true)
             ->orderBy('name');
@@ -43,11 +45,15 @@ class InventoryController extends Controller
         }
 
         if ($request->boolean('low_stock')) {
-            $query->whereRaw('current_stock <= min_stock_threshold');
+            $query->whereHas('hotelInventories', fn ($q) => $q
+                ->where('hotel_id', $hotelId)
+                ->whereColumn('current_stock', '<=', 'min_stock_threshold'));
         }
 
         if (($minBelow = $request->query('min_stock_below')) !== null && is_numeric($minBelow)) {
-            $query->where('current_stock', '<=', (int) $minBelow);
+            $query->whereHas('hotelInventories', fn ($q) => $q
+                ->where('hotel_id', $hotelId)
+                ->where('current_stock', '<=', (int) $minBelow));
         }
 
         if ($days = (int) $request->query('expiring_in_days')) {
@@ -55,7 +61,12 @@ class InventoryController extends Controller
                 ->whereDate('expiry_date', '<=', now()->addDays($days));
         }
 
-        return response()->json(['success' => true, 'data' => $query->paginate($this->perPage($request, 30))]);
+        $paginator = $query->paginate($this->perPage($request, 30));
+        $paginator->getCollection()->transform(
+            fn ($item) => HotelInventoryService::attachStockData($item, $hotelId)
+        );
+
+        return response()->json(['success' => true, 'data' => $paginator]);
     }
 
     public function similar(Request $request): JsonResponse
@@ -76,14 +87,17 @@ class InventoryController extends Controller
             if ($brand) {
                 $q->orWhere(function ($q2) use ($brand, $pres) {
                     $q2->where('brand', 'ilike', "%{$brand}%");
-                    if ($pres) $q2->where('presentation', 'ilike', "%{$pres}%");
+                    if ($pres) {
+                        $q2->where('presentation', 'ilike', "%{$pres}%");
+                    }
                 });
             }
         });
 
         return response()->json([
             'success' => true,
-            'data'    => $query->limit(5)->get(['id', 'code', 'name', 'brand', 'presentation', 'current_stock', 'unit']),
+            'data'    => $query->limit(5)->get(['id', 'code', 'name', 'brand', 'presentation', 'unit'])
+                ->map(fn ($item) => HotelInventoryService::attachStockData($item)),
         ]);
     }
 
@@ -106,31 +120,38 @@ class InventoryController extends Controller
         ]);
 
         $item = DB::transaction(function () use ($data, $request) {
-            $last = InventoryItem::lockForUpdate()->orderByDesc('code')->first();
-            $num  = $last ? ((int) ltrim(substr($last->code, 5), '0') ?: 0) + 1 : 1;
-            $code = 'PROD-' . str_pad($num, 5, '0', STR_PAD_LEFT);
+            $code = $this->nextProductCode();
+
+            $stock        = (int) ($data['current_stock'] ?? 0);
+            $minThreshold = (int) ($data['min_stock_threshold'] ?? 5);
+            $location     = $data['location'] ?? null;
+            unset($data['current_stock'], $data['min_stock_threshold'], $data['location']);
 
             $item = InventoryItem::create(array_merge($data, [
-                'code'          => $code,
-                'unit'          => $data['unit'] ?? 'unidad',
-                'current_stock' => $data['current_stock'] ?? 0,
-                'min_stock_threshold' => $data['min_stock_threshold'] ?? 5,
+                'code' => $code,
+                'unit' => $data['unit'] ?? 'unidad',
             ]));
 
-            // Record initial stock as entry transaction
-            if (($item->current_stock ?? 0) > 0) {
+            $hotelInv = HotelInventoryService::forItem($item);
+            $hotelInv->update([
+                'min_stock_threshold' => $minThreshold,
+                'location'            => $location,
+            ]);
+
+            if ($stock > 0) {
                 InventoryTransaction::create([
                     'inventory_item_id' => $item->id,
                     'type'              => 'entry',
-                    'quantity'          => $item->current_stock,
+                    'quantity'          => $stock,
                     'unit_price'        => $item->cost_price,
-                    'total_value'       => $item->cost_price * $item->current_stock,
+                    'total_value'       => $item->cost_price * $stock,
                     'performed_by'      => $request->user()->id,
                     'notes'             => 'Stock inicial',
                 ]);
+                $hotelInv->update(['current_stock' => $stock]);
             }
 
-            return $item;
+            return HotelInventoryService::attachStockData($item->load('category'));
         });
 
         return response()->json(['success' => true, 'data' => $item->load('category'), 'message' => 'Producto creado.'], 201);
@@ -142,7 +163,11 @@ class InventoryController extends Controller
             'category',
             'transactions' => fn($q) => $q->with('performedBy', 'destinationRoom', 'destinationUser')->latest()->limit(20),
         ]);
-        return response()->json(['success' => true, 'data' => $inventoryItem]);
+
+        return response()->json([
+            'success' => true,
+            'data'    => HotelInventoryService::attachStockData($inventoryItem),
+        ]);
     }
 
     public function update(Request $request, InventoryItem $inventoryItem): JsonResponse
@@ -162,8 +187,21 @@ class InventoryController extends Controller
             'location'            => 'nullable|string|max:100',
         ]);
 
-        $inventoryItem->update($data);
-        return response()->json(['success' => true, 'data' => $inventoryItem->load('category'), 'message' => 'Producto actualizado.']);
+        $inventoryItem->update(collect($data)->except(['min_stock_threshold', 'location'])->all());
+
+        if (array_key_exists('min_stock_threshold', $data) || array_key_exists('location', $data)) {
+            $hotelInv = HotelInventoryService::forItem($inventoryItem);
+            $hotelInv->update(array_filter([
+                'min_stock_threshold' => $data['min_stock_threshold'] ?? null,
+                'location'            => $data['location'] ?? null,
+            ], fn ($v) => $v !== null));
+        }
+
+        return response()->json([
+            'success' => true,
+            'data'    => HotelInventoryService::attachStockData($inventoryItem->load('category')),
+            'message' => 'Producto actualizado.',
+        ]);
     }
 
     public function destroy(InventoryItem $inventoryItem): JsonResponse
@@ -182,6 +220,7 @@ class InventoryController extends Controller
         ]);
 
         DB::transaction(function () use ($inventoryItem, $data, $request) {
+            $hotelInv  = HotelInventoryService::forItem($inventoryItem);
             $unitPrice = $data['unit_price'] ?? $inventoryItem->cost_price;
 
             InventoryTransaction::create([
@@ -194,10 +233,14 @@ class InventoryController extends Controller
                 'notes'             => $data['notes'] ?? null,
             ]);
 
-            $inventoryItem->increment('current_stock', $data['quantity']);
+            $hotelInv->increment('current_stock', $data['quantity']);
         });
 
-        return response()->json(['success' => true, 'data' => $inventoryItem->refresh(), 'message' => 'Stock recargado.']);
+        return response()->json([
+            'success' => true,
+            'data'    => HotelInventoryService::attachStockData($inventoryItem->refresh()),
+            'message' => 'Stock recargado.',
+        ]);
     }
 
     public function adjust(Request $request, InventoryItem $inventoryItem): JsonResponse
@@ -208,7 +251,8 @@ class InventoryController extends Controller
         ]);
 
         DB::transaction(function () use ($inventoryItem, $data, $request) {
-            $diff = $data['new_stock'] - $inventoryItem->current_stock;
+            $hotelInv = HotelInventoryService::forItem($inventoryItem);
+            $diff     = $data['new_stock'] - $hotelInv->current_stock;
 
             InventoryTransaction::create([
                 'inventory_item_id' => $inventoryItem->id,
@@ -220,12 +264,13 @@ class InventoryController extends Controller
                 'notes'             => $data['notes'] ?? 'Ajuste de inventario',
             ]);
 
-            $inventoryItem->update(['current_stock' => $data['new_stock']]);
+            $hotelInv->update(['current_stock' => $data['new_stock']]);
         });
 
-        self::checkItemLowStock($inventoryItem->refresh());
+        $refreshed = HotelInventoryService::attachStockData($inventoryItem->refresh());
+        self::checkItemLowStock($refreshed);
 
-        return response()->json(['success' => true, 'data' => $inventoryItem->refresh(), 'message' => 'Stock ajustado.']);
+        return response()->json(['success' => true, 'data' => $refreshed, 'message' => 'Stock ajustado.']);
     }
 
     public function deliver(Request $request, InventoryItem $inventoryItem): JsonResponse
@@ -236,9 +281,10 @@ class InventoryController extends Controller
             'notes'               => 'nullable|string|max:255',
         ]);
 
-        abort_if($inventoryItem->current_stock < $data['quantity'], 409, 'Stock insuficiente.');
+        $hotelInv = HotelInventoryService::forItem($inventoryItem);
+        abort_if($hotelInv->current_stock < $data['quantity'], 409, 'Stock insuficiente.');
 
-        DB::transaction(function () use ($inventoryItem, $data, $request) {
+        DB::transaction(function () use ($inventoryItem, $data, $request, $hotelInv) {
             InventoryTransaction::create([
                 'inventory_item_id'  => $inventoryItem->id,
                 'type'               => 'exit_to_housekeeping',
@@ -250,12 +296,13 @@ class InventoryController extends Controller
                 'notes'              => $data['notes'] ?? null,
             ]);
 
-            $inventoryItem->decrement('current_stock', $data['quantity']);
+            $hotelInv->decrement('current_stock', $data['quantity']);
         });
 
-        self::checkItemLowStock($inventoryItem->refresh());
+        $refreshed = HotelInventoryService::attachStockData($inventoryItem->refresh());
+        self::checkItemLowStock($refreshed);
 
-        return response()->json(['success' => true, 'data' => $inventoryItem->refresh(), 'message' => 'Entrega registrada.']);
+        return response()->json(['success' => true, 'data' => $refreshed, 'message' => 'Entrega registrada.']);
     }
 
     public function transactions(Request $request, InventoryItem $inventoryItem): JsonResponse
@@ -271,117 +318,13 @@ class InventoryController extends Controller
     public function history(Request $request): JsonResponse
     {
         $search   = $request->query('search');
-        $source   = $request->query('source', 'all');   // all | inventory | minibar
+        $source   = $request->query('source', 'all');
         $dateFrom = $request->query('date_from');
         $dateTo   = $request->query('date_to');
         $perPage  = 60;
         $page     = max(1, (int) $request->query('page', 1));
 
-        $rows = collect();
-
-        // ── Inventory transactions ──────────────────────────────────────────
-        if ($source !== 'minibar') {
-            InventoryTransaction::with([
-                'item:id,name,code,presentation',
-                'performedBy:id,name',
-                'destinationRoom:id,number',
-                'destinationUser:id,name',
-            ])
-            ->when($search, fn($q) => $q->whereHas('item', fn($q2) =>
-                $q2->where('name', 'ilike', "%{$search}%")
-                   ->orWhere('code', 'ilike', "%{$search}%")))
-            ->when($dateFrom, fn($q) => $q->whereDate('created_at', '>=', $dateFrom))
-            ->when($dateTo,   fn($q) => $q->whereDate('created_at', '<=', $dateTo))
-            ->orderByDesc('created_at')
-            ->chunk(500, function ($txs) use (&$rows) {
-                $rows = $rows->merge($txs->map(fn($tx) => [
-                    'id'               => $tx->id,
-                    'source'           => 'inventory',
-                    'type'             => $tx->type,
-                    'item_name'        => $tx->item?->name ?? '—',
-                    'item_code'        => $tx->item?->code,
-                    'item_presentation'=> $tx->item?->presentation,
-                    'quantity'         => $tx->quantity,
-                    'unit_price'       => $tx->unit_price,
-                    'total_value'      => $tx->total_value,
-                    'performed_by'     => $tx->performedBy?->name,
-                    'destination'      => $tx->destinationRoom
-                                            ? 'Hab. ' . $tx->destinationRoom->number
-                                            : $tx->destinationUser?->name,
-                    'notes'            => $tx->notes,
-                    'occurred_at'      => $tx->created_at?->toIso8601String(),
-                ]));
-            });
-        }
-
-        // ── Minibar consumptions (ventas estadía) ───────────────────────────
-        if ($source !== 'inventory') {
-            MinibarConsumption::with([
-                'registeredBy:id,name',
-                'room:id,number',
-                'stay:id',
-            ])
-            ->when($search, fn($q) => $q->where('product_name', 'ilike', "%{$search}%"))
-            ->when($dateFrom, fn($q) => $q->whereDate('registered_at', '>=', $dateFrom))
-            ->when($dateTo,   fn($q) => $q->whereDate('registered_at', '<=', $dateTo))
-            ->orderByDesc('registered_at')
-            ->chunk(500, function ($mcs) use (&$rows) {
-                $rows = $rows->merge($mcs->map(fn($mc) => [
-                    'id'               => $mc->id,
-                    'source'           => 'minibar_consumption',
-                    'type'             => 'minibar_' . $mc->type,
-                    'item_name'        => $mc->product_name,
-                    'item_code'        => null,
-                    'item_presentation'=> null,
-                    'quantity'         => $mc->quantity,
-                    'unit_price'       => $mc->unit_price,
-                    'total_value'      => $mc->total,
-                    'performed_by'     => $mc->registeredBy?->name,
-                    'destination'      => $mc->room ? 'Hab. ' . $mc->room->number : null,
-                    'notes'            => $mc->stay_id ? "Estadía registrada" : null,
-                    'occurred_at'      => $mc->registered_at?->toIso8601String(),
-                ]));
-            });
-
-            // ── Minibar restocks (reposición de productos a la habitación) ──
-            MinibarRestockLog::with([
-                'performedBy:id,name',
-                'room:id,number',
-                'minibarProduct:id,presentation',
-            ])
-            ->when($search, fn($q) => $q->where('product_name', 'ilike', "%{$search}%"))
-            ->when($dateFrom, fn($q) => $q->whereDate('created_at', '>=', $dateFrom))
-            ->when($dateTo,   fn($q) => $q->whereDate('created_at', '<=', $dateTo))
-            ->orderByDesc('created_at')
-            ->chunk(500, function ($logs) use (&$rows) {
-                $rows = $rows->merge($logs->map(function ($log) {
-                    $qty = (int) $log->quantity;
-                    // Diferenciamos:
-                    //   - room_id NULL  → movimiento en el catálogo (alta inicial o ajuste).
-                    //   - room_id !NULL → movimiento contra una habitación (reposición o devolución).
-                    if ($log->room_id === null) {
-                        $type = $qty >= 0 ? 'minibar_catalog_entry' : 'minibar_catalog_adjustment';
-                    } else {
-                        $type = $qty >= 0 ? 'minibar_restock' : 'minibar_return';
-                    }
-                    return [
-                        'id'               => $log->id,
-                        'source'           => 'minibar',
-                        'type'             => $type,
-                        'item_name'        => $log->product_name,
-                        'item_code'        => null,
-                        'item_presentation'=> $log->minibarProduct?->presentation,
-                        'quantity'         => $qty,
-                        'unit_price'       => $log->unit_price,
-                        'total_value'      => $log->total_value,
-                        'performed_by'     => $log->performedBy?->name,
-                        'destination'      => $log->room ? 'Hab. ' . $log->room->number : 'Catálogo',
-                        'notes'            => $log->notes,
-                        'occurred_at'      => $log->created_at?->toIso8601String(),
-                    ];
-                }));
-            });
-        }
+        $rows = app(InventoryHistoryBuilder::class)->collect($source, $search, $dateFrom, $dateTo);
 
         $sorted = $rows->sortByDesc('occurred_at')->values();
         $total  = $sorted->count();
@@ -436,14 +379,23 @@ class InventoryController extends Controller
 
     private function fireImmediateLowStockAlerts(int $threshold): void
     {
+        $hotelId  = TenantContext::requireId();
         $staffIds = User::permission('manage_inventory')->pluck('id');
-        if ($staffIds->isEmpty()) return;
+        if ($staffIds->isEmpty()) {
+            return;
+        }
 
-        $lowItems = InventoryItem::where('active', true)
+        $lowItems = \App\Models\HotelInventory::where('hotel_id', $hotelId)
             ->where('current_stock', '<=', $threshold)
+            ->with('inventoryItem')
             ->get();
 
-        foreach ($lowItems as $item) {
+        foreach ($lowItems as $inv) {
+            $item = $inv->inventoryItem;
+            if (! $item?->active) {
+                continue;
+            }
+
             foreach ($staffIds as $userId) {
                 $exists = Notification::where('user_id', $userId)
                     ->where('type', 'low_stock')
@@ -451,13 +403,15 @@ class InventoryController extends Controller
                     ->whereDate('created_at', today())
                     ->exists();
 
-                if ($exists) continue;
+                if ($exists) {
+                    continue;
+                }
 
                 Notification::create([
                     'type'       => 'low_stock',
                     'title'      => "Stock bajo: {$item->name}",
-                    'message'    => "Quedan {$item->current_stock} unidad(es). Umbral configurado: {$threshold}.",
-                    'payload'    => ['item_id' => $item->id, 'code' => $item->code, 'threshold' => $threshold],
+                    'message'    => "Quedan {$inv->current_stock} unidad(es). Umbral configurado: {$threshold}.",
+                    'payload'    => ['item_id' => $item->id, 'code' => $item->code, 'threshold' => $threshold, 'hotel_id' => $hotelId],
                     'action_url' => '/inventory?tab=consumibles',
                     'user_id'    => $userId,
                 ]);
@@ -468,7 +422,15 @@ class InventoryController extends Controller
     public static function checkItemLowStock(InventoryItem $item): void
     {
         $threshold = Setting::get('inventory.low_stock_threshold', null);
-        if ($threshold === null || $item->current_stock > (int) $threshold) return;
+        $hotelId   = TenantContext::id();
+        if ($threshold === null || ! $hotelId) {
+            return;
+        }
+
+        $inv = HotelInventoryService::forItem($item, $hotelId);
+        if ($inv->current_stock > (int) $threshold) {
+            return;
+        }
 
         $staffIds = User::permission('manage_inventory')->pluck('id');
 
@@ -479,16 +441,29 @@ class InventoryController extends Controller
                 ->whereDate('created_at', today())
                 ->exists();
 
-            if ($exists) continue;
+            if ($exists) {
+                continue;
+            }
 
             Notification::create([
                 'type'       => 'low_stock',
                 'title'      => "Stock bajo: {$item->name}",
-                'message'    => "Quedan {$item->current_stock} unidad(es). Umbral configurado: {$threshold}.",
-                'payload'    => ['item_id' => $item->id, 'code' => $item->code, 'threshold' => (int) $threshold],
+                'message'    => "Quedan {$inv->current_stock} unidad(es). Umbral configurado: {$threshold}.",
+                'payload'    => ['item_id' => $item->id, 'code' => $item->code, 'threshold' => (int) $threshold, 'hotel_id' => $hotelId],
                 'action_url' => '/inventory?tab=consumibles',
                 'user_id'    => $userId,
             ]);
         }
+    }
+
+    private function nextProductCode(): string
+    {
+        $last = InventoryItem::lockForUpdate()->orderByDesc('code')->first();
+        $num  = 1;
+        if ($last) {
+            $num = (int) ltrim(substr($last->code, 5), '0') + 1;
+        }
+
+        return 'PROD-' . str_pad($num, 5, '0', STR_PAD_LEFT);
     }
 }

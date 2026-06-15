@@ -1,9 +1,15 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command, mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  // Dev: proxy al backend. Por defecto `php artisan serve` (CLI tiene pdo_pgsql).
+  // Laragon Apache: VITE_API_PROXY=http://localhost/Hotel/backend/public
+  const apiTarget = env.VITE_API_PROXY ?? 'http://127.0.0.1:8000'
+
+  return {
   // En build, Nginx sirve desde /var/www/html/public/app/ (los chunks dinámicos
   // de Vite necesitan este prefijo). En dev no hay Nginx, así que servimos en '/'.
   base: command === 'build' ? '/app/' : '/',
@@ -23,8 +29,8 @@ export default defineConfig(({ command }) => ({
       output: {
         entryFileNames: 'assets/index.js',
         chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: (assetInfo) => {
-          if (assetInfo.name?.endsWith('.css')) return 'assets/index.css'
+        assetFileNames: ({ names }) => {
+          if (names[0]?.endsWith('.css')) return 'assets/index.css'
           return 'assets/[name]-[hash][extname]'
         },
         manualChunks: {
@@ -41,13 +47,13 @@ export default defineConfig(({ command }) => ({
     strictPort: true,
     proxy: {
       '/api': {
-        target: 'http://localhost',
+        target: apiTarget,
         changeOrigin: true,
       },
       '/sanctum': {
-        target: 'http://localhost',
+        target: apiTarget,
         changeOrigin: true,
       },
     },
   },
-}))
+}})

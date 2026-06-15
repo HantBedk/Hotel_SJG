@@ -81,6 +81,9 @@
   --transition-fast:   150ms ease;
   --transition-normal: 200ms ease;
   --transition-slow:   300ms ease;
+
+  /* Controles nativos del browser (select, date picker, scrollbars, autofill) */
+  color-scheme: light;
 }
 
 /* ── Dark mode ──────────────────────────────────────────────────────────────── */
@@ -115,19 +118,14 @@
 
   --sidebar-bg:   #060D18;
   --sidebar-text: #94A3B8;
+
+  color-scheme: dark;
 }
 
 /* ── Base styles ─────────────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
 }
-
-/* color-scheme indica al browser qué paleta usar para controles nativos:
-   dropdowns de <select>, calendarios de <input type="date">, scrollbars,
-   form autofill, etc. Sin esto el dropdown del select aparece blanco
-   en modo oscuro y rompe contraste con el resto de la UI. */
-:root              { color-scheme: light; }
-[data-theme="dark"] { color-scheme: dark; }
 
 html {
   font-family: var(--font-sans);
@@ -199,6 +197,29 @@ button.icon-sm, a.icon-sm {
   background-color: var(--bg-elevated);
   border-radius: var(--radius-md);
   animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes sidebar-brand-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sidebar-brand-fade-in {
+  animation: sidebar-brand-fade-in 0.28s ease-out both;
+}
+
+.app-modal:not([open]) {
+  display: none !important;
+}
+
+.app-modal::backdrop {
+  background: rgba(0, 0, 0, 0.4);
 }
 
 /* ── Touch targets (A11y) — mínimo 44×44px en móvil ────────────────────── */

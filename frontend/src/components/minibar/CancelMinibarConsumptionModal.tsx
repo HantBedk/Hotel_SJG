@@ -4,11 +4,11 @@ import { formatCOP } from '@/lib/format'
 import type { MinibarConsumption } from '@/types'
 
 interface Props {
-  open: boolean
-  onClose: () => void
-  consumption: MinibarConsumption | null
-  onConfirm: (reason: string) => Promise<unknown>
-  isPending?: boolean
+  readonly open: boolean
+  readonly onClose: () => void
+  readonly consumption: MinibarConsumption | null
+  readonly onConfirm: (reason: string) => Promise<unknown>
+  readonly isPending?: boolean
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -22,7 +22,7 @@ export function CancelMinibarConsumptionModal({ open, onClose, consumption, onCo
 
   if (!consumption) return null
 
-  const total = typeof consumption.total === 'string' ? parseFloat(consumption.total) : consumption.total
+  const total = typeof consumption.total === 'string' ? Number.parseFloat(consumption.total) : consumption.total
 
   const handleConfirm = async () => {
     if (reason.trim().length < 5) return
@@ -65,10 +65,15 @@ export function CancelMinibarConsumptionModal({ open, onClose, consumption, onCo
         </div>
 
         <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+          <label
+            htmlFor="cancel-minibar-reason"
+            className="block text-xs font-medium mb-1"
+            style={{ color: 'var(--text-secondary)' }}
+          >
             Motivo de la anulación <span style={{ color: '#EF4444' }}>*</span>
           </label>
           <textarea
+            id="cancel-minibar-reason"
             value={reason}
             onChange={e => setReason(e.target.value)}
             rows={3}

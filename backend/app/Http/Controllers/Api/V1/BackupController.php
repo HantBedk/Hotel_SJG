@@ -12,6 +12,7 @@ use App\Models\Room;
 use App\Models\Setting;
 use App\Models\Stay;
 use App\Models\User;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -26,6 +27,9 @@ class BackupController extends Controller
 
     /** Ruta dentro del container donde Docker monta la carpeta del PC del host. */
     private const SHARED_CONTAINER_PATH = '/var/www/html/backup';
+
+    /** ZIP de restauración (KB). Alineado con upload_max_filesize/post_max_size (50M) en docker/php/local.ini. */
+    private const MAX_RESTORE_UPLOAD_KB = 51_200;
 
     private function backupsDir(): string
     {
@@ -58,13 +62,17 @@ class BackupController extends Controller
 
         // Vacío = se usará la carpeta por defecto.
         if ($path === '') {
+            File::ensureDirectoryExists($defaultPath);
+            $exists   = File::isDirectory($defaultPath);
+            $writable = $exists && is_writable($defaultPath);
+
             return response()->json([
                 'success' => true,
                 'data'    => [
                     'using_default' => true,
                     'resolved_path' => $defaultPath,
-                    'exists'        => File::isDirectory($defaultPath) || true, // se crea on-demand
-                    'writable'      => true,
+                    'exists'        => $exists,
+                    'writable'      => $writable,
                     'message'       => 'Se usará la carpeta por defecto: ' . $defaultPath,
                 ],
             ]);
@@ -277,10 +285,8 @@ class BackupController extends Controller
         $deleted = 0;
         foreach (File::files($dir) as $f) {
             $name = $f->getFilename();
-            if (preg_match('/^backup_[\d_-]+\.zip$/', $name)) {
-                if (@unlink($f->getPathname())) {
-                    $deleted++;
-                }
+            if (preg_match('/^backup_[\d_-]+\.zip$/', $name) && @unlink($f->getPathname())) {
+                $deleted++;
             }
         }
 
@@ -293,7 +299,9 @@ class BackupController extends Controller
 
     public function restore(Request $request): JsonResponse
     {
-        $request->validate(['file' => 'required|file|mimes:zip|max:102400']);
+        $request->validate([
+            'file' => 'required|file|mimes:zip|max:' . self::MAX_RESTORE_UPLOAD_KB,
+        ]);
 
         $db     = config('database.connections.pgsql');
         $upload = $request->file('file');
@@ -306,7 +314,7 @@ class BackupController extends Controller
         $za = new ZipArchive();
         if ($za->open($zipFull) !== true) {
             @unlink($zipFull);
-            return response()->json(['success' => false, 'message' => 'No se pudo abrir el ZIP.'], 422);
+            $this->restoreFailed('No se pudo abrir el ZIP.');
         }
 
         $sqlName = null;
@@ -321,7 +329,7 @@ class BackupController extends Controller
         if (! $sqlName) {
             $za->close();
             @unlink($zipFull);
-            return response()->json(['success' => false, 'message' => 'El ZIP no contiene un archivo SQL.'], 422);
+            $this->restoreFailed('El ZIP no contiene un archivo SQL.');
         }
 
         $sqlPath = $tmpDir . '/restore.sql';
@@ -346,10 +354,17 @@ class BackupController extends Controller
         @unlink($sqlPath);
 
         if (! $result->successful()) {
-            return response()->json(['success' => false, 'message' => 'Error al restaurar: ' . $result->errorOutput()], 500);
+            $this->restoreFailed('Error al restaurar: ' . $result->errorOutput(), 500);
         }
 
         return response()->json(['success' => true, 'message' => 'Base de datos restaurada exitosamente.']);
+    }
+
+    private function restoreFailed(string $message, int $status = 422): never
+    {
+        throw new HttpResponseException(
+            response()->json(['success' => false, 'message' => $message], $status),
+        );
     }
 
     public function wipeDatabase(Request $request): JsonResponse
@@ -401,9 +416,15 @@ class BackupController extends Controller
                 DB::table('users')->insert($row);
 
                 $user = User::find($row['id']);
-                if (! $user) continue;
-                if (! empty($roles))       $user->syncRoles($roles);
-                if (! empty($permissions)) $user->syncPermissions($permissions);
+                if (! $user) {
+                    continue;
+                }
+                if (! empty($roles)) {
+                    $user->syncRoles($roles);
+                }
+                if (! empty($permissions)) {
+                    $user->syncPermissions($permissions);
+                }
             }
         } catch (\Throwable $e) {
             return response()->json([

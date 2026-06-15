@@ -1,18 +1,24 @@
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
+import { useHotelStore } from '@/store/hotelStore'
 import { loginApi, logoutApi, getMeApi } from '@/services/auth.service'
 import { disconnectEcho } from '@/hooks/useReverb'
 import type { LoginPayload } from '@/types'
 
 export function useAuth() {
-  const { setAuth, clearAuth, isAuthenticated, user, hasPermission, hasRole } = useAuthStore()
+  const { setAuth, clearAuth, isAuthenticated, user, hasPermission, hasAnyPermission, hasRole } = useAuthStore()
   const queryClient = useQueryClient()
 
   const login = async (payload: LoginPayload) => {
     const res = await loginApi(payload)
     if (res.success && res.data) {
       setAuth(res.data.user, res.data.token)
+      useHotelStore.getState().setFromAuth({
+        hotels:            res.data.user.hotels ?? [],
+        can_switch_hotel:  res.data.user.can_switch_hotel ?? false,
+        current_hotel_id:  res.data.user.current_hotel_id,
+      })
     }
     return res
   }
@@ -22,6 +28,7 @@ export function useAuth() {
       await logoutApi()
     } finally {
       disconnectEcho()
+      useHotelStore.getState().reset()
       clearAuth()
       // El cache de React Query guarda datos del usuario anterior (logs,
       // dashboard, etc.). Si no se limpia, al iniciar sesión otro rol los
@@ -31,7 +38,7 @@ export function useAuth() {
     }
   }
 
-  return { login, logout, isAuthenticated, user, hasPermission, hasRole }
+  return { login, logout, isAuthenticated, user, hasPermission, hasAnyPermission, hasRole }
 }
 
 // On app mount: if a token exists in the store, validate it via /me.
@@ -56,8 +63,14 @@ export function useAuthBootstrap() {
       try {
         const res = await getMeApi()
         if (cancelled) return
-        if (res.success && res.data) setUser(res.data)
-        else clearAuth()
+        if (res.success && res.data) {
+          setUser(res.data)
+          useHotelStore.getState().setFromAuth({
+            hotels:            res.data.hotels ?? [],
+            can_switch_hotel:  res.data.can_switch_hotel ?? false,
+            current_hotel_id:  res.data.current_hotel_id,
+          })
+        } else clearAuth()
       } catch {
         if (!cancelled) clearAuth()
       } finally {

@@ -6,6 +6,28 @@ import { CompanyModal, CompanyFormData } from './components/CompanyModal'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import type { Company } from '@/types'
 
+const COMPANY_SKELETON_KEYS = [
+  'company-skeleton-a',
+  'company-skeleton-b',
+  'company-skeleton-c',
+  'company-skeleton-d',
+  'company-skeleton-e',
+] as const
+
+const TABLE_HEADERS = [
+  { key: 'name', label: 'Razón social' },
+  { key: 'nit', label: 'NIT' },
+  { key: 'contact', label: 'Contacto' },
+  { key: 'phone', label: 'Teléfono' },
+  { key: 'email', label: 'Email' },
+  { key: 'actions', label: '' },
+] as const
+
+function emptyCompaniesMessage(search: string): string {
+  if (search.length >= 2) return 'No se encontraron empresas.'
+  return 'Sin empresas registradas.'
+}
+
 export default function CompaniesPage() {
   const { hasPermission } = useAuth()
   const canEdit = hasPermission('manage_reservations')
@@ -40,6 +62,89 @@ export default function CompaniesPage() {
     deleteCompany(id, { onSuccess: () => setDeleting(null) })
   }
 
+  let listContent: React.ReactNode
+  if (isLoading) {
+    listContent = (
+      <div className="p-4 space-y-3">
+        {COMPANY_SKELETON_KEYS.map((key) => <SkeletonCard key={key} />)}
+      </div>
+    )
+  } else if (companies.length === 0) {
+    listContent = (
+      <div className="p-12 text-center">
+        <Building2 size={32} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+          {emptyCompaniesMessage(search)}
+        </p>
+      </div>
+    )
+  } else {
+    listContent = (
+      <table className="w-full text-sm">
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--border-default)' }}>
+            {TABLE_HEADERS.map((h) => (
+              <th key={h.key} className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+                {h.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {companies.map((company) => (
+            <tr
+              key={company.id}
+              className="hover:opacity-90 transition-opacity"
+              style={{ borderBottom: '1px solid var(--border-default)' }}
+            >
+              <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>
+                {company.name}
+              </td>
+              <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
+                {company.nit}
+              </td>
+              <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
+                {company.contact_name ?? '—'}
+              </td>
+              <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
+                {company.phone ?? '—'}
+              </td>
+              <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
+                {company.email ?? '—'}
+              </td>
+              <td className="px-4 py-3">
+                {canEdit && (
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setModal({ company })}
+                      className="p-1.5 rounded hover:opacity-80"
+                      style={{ color: 'var(--text-muted)' }}
+                      aria-label="Editar"
+                    >
+                      <Edit2 size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(company.id)}
+                      disabled={isDeleting}
+                      className="p-1.5 rounded hover:opacity-80 transition-colors"
+                      style={{ color: deleting === company.id ? 'var(--status-occupied)' : 'var(--text-muted)' }}
+                      aria-label={deleting === company.id ? 'Confirmar eliminación' : 'Eliminar'}
+                      title={deleting === company.id ? 'Haz clic de nuevo para confirmar' : 'Eliminar'}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )
+  }
+
   return (
     <div className="space-y-5">
 
@@ -58,6 +163,7 @@ export default function CompaniesPage() {
         </div>
         {canEdit && (
           <button
+            type="button"
             onClick={() => setModal({ company: null })}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
             style={{ background: 'var(--color-primary)', color: '#fff' }}
@@ -72,79 +178,7 @@ export default function CompaniesPage() {
         className="rounded-xl overflow-hidden"
         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
       >
-        {isLoading ? (
-          <div className="p-4 space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
-          </div>
-        ) : companies.length === 0 ? (
-          <div className="p-12 text-center">
-            <Building2 size={32} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              {search.length >= 2 ? 'No se encontraron empresas.' : 'Sin empresas registradas.'}
-            </p>
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-default)' }}>
-                {['Razón social', 'NIT', 'Contacto', 'Teléfono', 'Email', ''].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {companies.map((company) => (
-                <tr
-                  key={company.id}
-                  className="hover:opacity-90 transition-opacity"
-                  style={{ borderBottom: '1px solid var(--border-default)' }}
-                >
-                  <td className="px-4 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {company.name}
-                  </td>
-                  <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
-                    {company.nit}
-                  </td>
-                  <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
-                    {company.contact_name ?? '—'}
-                  </td>
-                  <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
-                    {company.phone ?? '—'}
-                  </td>
-                  <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
-                    {company.email ?? '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    {canEdit && (
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          onClick={() => setModal({ company })}
-                          className="p-1.5 rounded hover:opacity-80"
-                          style={{ color: 'var(--text-muted)' }}
-                          aria-label="Editar"
-                        >
-                          <Edit2 size={15} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(company.id)}
-                          disabled={isDeleting}
-                          className="p-1.5 rounded hover:opacity-80 transition-colors"
-                          style={{ color: deleting === company.id ? 'var(--status-occupied)' : 'var(--text-muted)' }}
-                          aria-label={deleting === company.id ? 'Confirmar eliminación' : 'Eliminar'}
-                          title={deleting === company.id ? 'Haz clic de nuevo para confirmar' : 'Eliminar'}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        {listContent}
       </div>
 
       {modal !== null && (

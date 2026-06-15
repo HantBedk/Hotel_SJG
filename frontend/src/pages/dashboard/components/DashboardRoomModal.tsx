@@ -6,6 +6,11 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useReservations } from '@/hooks/useReservations'
+import { useRepairOrders } from '@/hooks/useInventory'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
+import { roomHasOpenMaintenanceOrder } from '@/lib/roomMaintenance'
+import { formatDateShort } from '@/lib/formatDate'
+import { cn } from '@/lib/cn'
 import type { Reservation, Room, RoomStatus, Stay } from '@/types'
 
 interface Housekeeper { id: string; name: string }
@@ -20,16 +25,16 @@ interface AddPaymentPayload {
 }
 
 interface Props {
-  room: Room | null
-  stay?: Stay | null
-  housekeepers: Housekeeper[]
-  isChangingStatus: boolean
-  onChangeStatus: (id: string, status: RoomStatus, notes?: string) => void
-  onStartCheckIn: (room: Room) => void
-  onStartCheckOut?: (stay: Stay) => void
-  onAddPayment?: (payload: AddPaymentPayload) => void
-  onSelectReservation?: (reservation: Reservation) => void
-  onClose: () => void
+  readonly room: Room | null
+  readonly stay?: Stay | null
+  readonly housekeepers: Housekeeper[]
+  readonly isChangingStatus: boolean
+  readonly onChangeStatus: (id: string, status: RoomStatus, notes?: string) => void
+  readonly onStartCheckIn: (room: Room) => void
+  readonly onStartCheckOut?: (stay: Stay) => void
+  readonly onAddPayment?: (payload: AddPaymentPayload) => void
+  readonly onSelectReservation?: (reservation: Reservation) => void
+  readonly onClose: () => void
 }
 
 interface PaymentForm {
@@ -57,10 +62,6 @@ const STATUS_META: Record<RoomStatus, { label: string; color: string; bg: string
   blocked:     { label: 'Bloqueada',    color: '#94A3B8', bg: '#F1F5F9', Icon: XCircle },
 }
 
-function formatDateShort(iso: string): string {
-  return new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
-}
-
 export function DashboardRoomModal({
   room, stay, housekeepers, isChangingStatus,
   onChangeStatus, onStartCheckIn, onStartCheckOut, onAddPayment,
@@ -80,7 +81,39 @@ export function DashboardRoomModal({
     setPayForm(EMPTY_PAYMENT)
   }, [room?.id])
 
+  const dialogRef = useFocusTrap<HTMLDialogElement>(!!room, onClose)
+  const backdropClassName = 'absolute inset-0 border-0 p-0 cursor-default'
+
+  useEffect(() => {
+    if (!room) return
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (!dialog.open) dialog.showModal()
+    return () => {
+      if (dialog.open) dialog.close()
+    }
+  }, [room, dialogRef])
+
+  useEffect(() => {
+    if (!room) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [room?.id])
+
+  const { data: maintenanceOrders } = useRepairOrders(
+    { room_id: room?.id ?? '' },
+    { enabled: !!room && room.status === 'maintenance' },
+  )
+
   if (!room) return null
+
+  const hasOpenMaintenanceOrder = roomHasOpenMaintenanceOrder(
+    room,
+    maintenanceOrders?.data,
+  )
 
   const meta = STATUS_META[room.status] ?? STATUS_META.available
   const canCheckIn  = hasPermission('check_in')
@@ -96,7 +129,7 @@ export function DashboardRoomModal({
 
   const handleSubmitPayment = () => {
     if (!stay || !onAddPayment) return
-    const amount = parseFloat(payForm.amount)
+    const amount = Number.parseFloat(payForm.amount)
     if (!amount || amount <= 0) return
     onAddPayment({
       stayId: stay.id,
@@ -119,17 +152,23 @@ export function DashboardRoomModal({
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
+    <dialog
+      ref={dialogRef}
+      aria-label={`Habitación ${room.number}`}
+      className={cn(
+        'app-modal fixed inset-0 z-[60] m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
+        'flex items-center justify-center pointer-events-none p-4',
+      )}
     >
+      <button
+        type="button"
+        aria-label="Cerrar modal"
+        className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
+        onClick={onClose}
+      />
       <div
-        className="w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col"
+        className="relative z-10 pointer-events-auto w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col"
         style={{ background: 'var(--bg-surface)', maxHeight: '90vh' }}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
@@ -382,7 +421,7 @@ export function DashboardRoomModal({
                     />
                   )}
                   <ActionButton
-                    onClick={() => go('/inventory?tab=reparaciones')}
+                    onClick={() => go(`/inventory?tab=reparaciones&room_id=${room.id}`)}
                     disabled={!canManage}
                     icon={<AlertTriangle size={15} />}
                     label="Reportar incidente / mantenimiento"
@@ -392,15 +431,13 @@ export function DashboardRoomModal({
 
               {/* RESERVADA */}
               {room.status === 'reserved' && (
-                <>
-                  <ActionButton
-                    onClick={() => go('/reservations')}
-                    disabled={!canCheckIn}
-                    icon={<Calendar size={15} />}
-                    label="Ver reserva y hacer check-in"
-                    primary
-                  />
-                </>
+                <ActionButton
+                  onClick={() => go('/reservations')}
+                  disabled={!canCheckIn}
+                  icon={<Calendar size={15} />}
+                  label="Ver reserva y hacer check-in"
+                  primary
+                />
               )}
 
               {/* LIMPIEZA */}
@@ -410,10 +447,11 @@ export function DashboardRoomModal({
                     className="rounded-lg p-3 space-y-2"
                     style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
                   >
-                    <label className="text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                    <label htmlFor="room-housekeeper" className="text-[11px] font-medium" style={{ color: 'var(--text-secondary)' }}>
                       Asignar a quien limpió
                     </label>
                     <select
+                      id="room-housekeeper"
                       value={housekeeperId}
                       onChange={(e) => setHousekeeperId(e.target.value)}
                       className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
@@ -465,17 +503,28 @@ export function DashboardRoomModal({
               {/* MANTENIMIENTO */}
               {room.status === 'maintenance' && (
                 <>
+                  {hasOpenMaintenanceOrder && (
+                    <div
+                      className="rounded-xl p-3 flex items-start gap-2 text-xs"
+                      style={{ background: '#FFF7ED', border: '1px solid #FDBA74', color: '#9A3412' }}
+                    >
+                      <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                      <p>
+                        Cierre la orden de mantenimiento en Inventario para poder liberar la habitación.
+                      </p>
+                    </div>
+                  )}
                   <ActionButton
                     onClick={() => onChangeStatus(room.id, 'available')}
-                    disabled={!canManage || isChangingStatus}
+                    disabled={!canManage || isChangingStatus || hasOpenMaintenanceOrder}
                     icon={<CheckCircle2 size={15} />}
                     label="Marcar como disponible"
                     primary
                   />
                   <ActionButton
-                    onClick={() => go('/inventory?tab=reparaciones')}
+                    onClick={() => go(`/inventory?tab=reparaciones&room_id=${room.id}`)}
                     icon={<Wrench size={15} />}
-                    label="Ver órdenes de reparación"
+                    label="Ver orden de mantenimiento"
                   />
                 </>
               )}
@@ -533,13 +582,13 @@ export function DashboardRoomModal({
           </div>
         </div>
       </div>
-    </div>
+    </dialog>
   )
 }
 
 interface ReservationPickerInlineProps {
-  roomId: string
-  onSelect: (reservation: Reservation) => void
+  readonly roomId: string
+  readonly onSelect: (reservation: Reservation) => void
 }
 
 const RES_STATUS_META: Record<'pending' | 'confirmed', { label: string; color: string; bg: string }> = {
@@ -559,6 +608,62 @@ function ReservationPickerInline({ roomId, onSelect }: ReservationPickerInlinePr
       return new Date(a.start_date).getTime() - new Date(b.start_date).getTime()
     })
 
+  let listContent
+  if (isLoading) {
+    listContent = (
+      <div className="flex items-center justify-center py-4">
+        <RefreshCw size={14} className="animate-spin" style={{ color: 'var(--text-muted)' }} />
+      </div>
+    )
+  } else if (list.length === 0) {
+    listContent = (
+      <div className="py-4 text-center">
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          No hay reservas pendientes para asignar.
+        </p>
+      </div>
+    )
+  } else {
+    listContent = (
+      <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+        {list.map((r) => {
+          const meta = RES_STATUS_META[r.status as 'pending' | 'confirmed']
+          const isPreferred = r.room_id === roomId
+          return (
+            <button
+              key={r.id}
+              onClick={() => onSelect(r)}
+              className="w-full text-left rounded-lg p-2.5 transition-opacity hover:opacity-80"
+              style={{
+                background: 'var(--bg-surface)',
+                border: isPreferred ? '1px solid var(--color-primary)' : '1px solid var(--border-default)',
+              }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                    {r.guest?.full_name ?? r.company?.name ?? '—'}
+                  </p>
+                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    {formatDateShort(r.start_date)} → {formatDateShort(r.end_date)}
+                    {r.nights ? ` · ${r.nights}n` : ''}
+                    {r.room?.number && ` · Hab. ${r.room.number}`}
+                  </p>
+                </div>
+                <span
+                  className="px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0"
+                  style={{ background: meta.bg, color: meta.color }}
+                >
+                  {meta.label}
+                </span>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+
   return (
     <div
       className="rounded-lg p-2 space-y-2"
@@ -575,64 +680,17 @@ function ReservationPickerInline({ roomId, onSelect }: ReservationPickerInlinePr
         )}
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-4">
-          <RefreshCw size={14} className="animate-spin" style={{ color: 'var(--text-muted)' }} />
-        </div>
-      ) : list.length === 0 ? (
-        <div className="py-4 text-center">
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            No hay reservas pendientes para asignar.
-          </p>
-        </div>
-      ) : (
-        <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
-          {list.map((r) => {
-            const meta = RES_STATUS_META[r.status as 'pending' | 'confirmed']
-            const isPreferred = r.room_id === roomId
-            return (
-              <button
-                key={r.id}
-                onClick={() => onSelect(r)}
-                className="w-full text-left rounded-lg p-2.5 transition-opacity hover:opacity-80"
-                style={{
-                  background: 'var(--bg-surface)',
-                  border: isPreferred ? '1px solid var(--color-primary)' : '1px solid var(--border-default)',
-                }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-                      {r.guest?.full_name ?? r.company?.name ?? '—'}
-                    </p>
-                    <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                      {formatDateShort(r.start_date)} → {formatDateShort(r.end_date)}
-                      {r.nights ? ` · ${r.nights}n` : ''}
-                      {r.room?.number && ` · Hab. ${r.room.number}`}
-                    </p>
-                  </div>
-                  <span
-                    className="px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0"
-                    style={{ background: meta.bg, color: meta.color }}
-                  >
-                    {meta.label}
-                  </span>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {listContent}
     </div>
   )
 }
 
 interface ActionButtonProps {
-  onClick: () => void
-  disabled?: boolean
-  icon: React.ReactNode
-  label: string
-  primary?: boolean
+  readonly onClick: () => void
+  readonly disabled?: boolean
+  readonly icon: React.ReactNode
+  readonly label: string
+  readonly primary?: boolean
 }
 
 function ActionButton({ onClick, disabled, icon, label, primary }: ActionButtonProps) {
@@ -654,16 +712,16 @@ function ActionButton({ onClick, disabled, icon, label, primary }: ActionButtonP
 }
 
 interface PaymentInlineFormProps {
-  form: PaymentForm
-  balance: number
-  hasCompany: boolean
-  onChange: (form: PaymentForm) => void
-  onSubmit: () => void
-  onCancel: () => void
+  readonly form: PaymentForm
+  readonly balance: number
+  readonly hasCompany: boolean
+  readonly onChange: (form: PaymentForm) => void
+  readonly onSubmit: () => void
+  readonly onCancel: () => void
 }
 
 function PaymentInlineForm({ form, balance, hasCompany, onChange, onSubmit, onCancel }: PaymentInlineFormProps) {
-  const amount = parseFloat(form.amount)
+  const amount = Number.parseFloat(form.amount)
   const isValid = !!amount && amount > 0
   const exceedsBalance = isValid && balance > 0 && amount > balance
 
@@ -753,11 +811,11 @@ function PaymentInlineForm({ form, balance, hasCompany, onChange, onSubmit, onCa
 }
 
 interface MaintenanceInlineFormProps {
-  reason: string
-  isSubmitting: boolean
-  onChange: (reason: string) => void
-  onSubmit: () => void
-  onCancel: () => void
+  readonly reason: string
+  readonly isSubmitting: boolean
+  readonly onChange: (reason: string) => void
+  readonly onSubmit: () => void
+  readonly onCancel: () => void
 }
 
 function MaintenanceInlineForm({ reason, isSubmitting, onChange, onSubmit, onCancel }: MaintenanceInlineFormProps) {

@@ -17,11 +17,15 @@ use App\Models\Payment;
 use App\Models\Room;
 use App\Models\RoomMinibar;
 use App\Models\Setting;
+use App\Support\HotelInventoryService;
+use App\Support\RoomCleaningNotifier;
+use App\Support\TenantContext;
 use App\Models\Stay;
 use App\Models\StayGuest;
 use App\Models\StayRoom;
 use App\Models\User;
 use App\Traits\Paginates;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -37,11 +41,11 @@ class StayController extends Controller
             ->orderByDesc('check_in_datetime');
 
         if ($status = $request->query('status')) {
-            $query->where('status', $status);
+            $query->byStatus($status);
         }
 
         if ($companyId = $request->query('company_id')) {
-            $query->where('company_id', $companyId);
+            $query->forCompany($companyId);
         }
 
         $stays = $query->paginate($this->perPage($request, 20));
@@ -109,7 +113,7 @@ class StayController extends Controller
             $stay = Stay::create([
                 'guest_id'           => $data['guest_id'],
                 'company_id'         => $data['company_id'] ?? null,
-                'status'             => 'active',
+                'status'             => Stay::STATUS_ACTIVE,
                 'check_in_datetime'  => $checkIn,
                 'check_out_datetime' => $checkOut,
                 'total_amount'       => $totalAmount,
@@ -205,9 +209,12 @@ class StayController extends Controller
             // evitar contar dos veces el mismo movimiento.
         });
 
+        $stay->load(['guest', 'stayRooms.room']);
+
         ActivityLog::record('stay.checkout', $request->user()->id, [
             'stay_id'    => $stay->id,
             'guest_name' => $stay->guest?->full_name,
+            'rooms'      => $stay->stayRooms->pluck('room.number')->filter()->values()->all(),
             'total'      => (float) $stay->refresh()->total_amount,
         ]);
 
@@ -219,6 +226,11 @@ class StayController extends Controller
                 'new_status'  => 'cleaning',
                 'reason'      => 'checkout',
             ]);
+
+            RoomCleaningNotifier::notify(
+                $room,
+                'Check-out realizado. Pendiente de limpieza.',
+            );
         }
 
         return response()->json(['success' => true, 'data' => $stay->refresh(), 'message' => 'Checkout realizado.']);
@@ -314,9 +326,12 @@ class StayController extends Controller
 
         $stay->refresh();
 
+        $stay->load(['stayRooms.room']);
+
         ActivityLog::record('stay.extended', $request->user()->id, [
             'stay_id'             => $stay->id,
             'guest_name'          => $stay->guest?->full_name,
+            'rooms'               => $stay->stayRooms->pluck('room.number')->filter()->values()->all(),
             'new_check_out'       => $newCheckOut->toDateTimeString(),
             'new_nights'          => $newNights,
         ]);
@@ -415,10 +430,36 @@ class StayController extends Controller
                 $records[] = $consumption;
             }
             $stay->increment('total_amount', $batchTotal);
-            return $records;
+            return ['records' => $records, 'batch_total' => $batchTotal];
         });
 
-        return response()->json(['success' => true, 'data' => $records, 'message' => 'Consumos registrados.'], 201);
+        $stay->loadMissing('guest');
+
+        $roomNumbersById = Room::query()
+            ->whereIn('id', collect($records['records'])->pluck('room_id')->unique())
+            ->pluck('number', 'id');
+
+        $items = collect($records['records'])->map(fn ($c) => [
+            'product_name' => $c->product_name,
+            'quantity'     => $c->quantity,
+            'type'         => $c->type,
+            'room_number'  => $roomNumbersById[$c->room_id] ?? null,
+            'total'        => (float) $c->total,
+        ])->values()->all();
+
+        ActivityLog::record('stay.minibar', $request->user()->id, [
+            'stay_id'    => $stay->id,
+            'guest_name' => $stay->guest?->full_name,
+            'rooms'      => collect($items)->pluck('room_number')->filter()->unique()->values()->all(),
+            'items'      => $items,
+            'total'      => (float) $records['batch_total'],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $records['records'],
+            'message' => 'Consumos registrados.',
+        ], 201);
     }
 
     /**
@@ -429,7 +470,9 @@ class StayController extends Controller
     private function deductMinibarStock(MinibarProduct $product, MinibarConsumption $consumption, string $userId): void
     {
         $qty = (int) $consumption->quantity;
-        if ($qty <= 0) return;
+        if ($qty <= 0) {
+            return;
+        }
 
         $rm = RoomMinibar::lockForUpdate()
             ->where('room_id', $consumption->room_id)
@@ -446,7 +489,7 @@ class StayController extends Controller
             if ($product->inventory_item_id) {
                 $item = InventoryItem::lockForUpdate()->find($product->inventory_item_id);
                 if ($item) {
-                    $item->decrement('current_stock', $fromCatalog);
+                    HotelInventoryService::forItem($item)->decrement('current_stock', $fromCatalog);
                     InventoryTransaction::create([
                         'inventory_item_id' => $item->id,
                         'type'              => 'sale',
@@ -472,10 +515,14 @@ class StayController extends Controller
     private function restoreMinibarStock(MinibarConsumption $consumption, string $userId): void
     {
         $qty = (int) $consumption->quantity;
-        if ($qty <= 0) return;
+        if ($qty <= 0) {
+            return;
+        }
 
         $product = MinibarProduct::where('name', $consumption->product_name)->first();
-        if (! $product) return;
+        if (! $product) {
+            return;
+        }
 
         // Reponemos al RoomMinibar si existe entrada (ahí se descontó primero).
         $rm = RoomMinibar::lockForUpdate()
@@ -489,7 +536,7 @@ class StayController extends Controller
             if ($product->inventory_item_id) {
                 $item = InventoryItem::lockForUpdate()->find($product->inventory_item_id);
                 if ($item) {
-                    $item->increment('current_stock', $qty);
+                    HotelInventoryService::forItem($item)->increment('current_stock', $qty);
                     InventoryTransaction::create([
                         'inventory_item_id' => $item->id,
                         'type'              => 'adjustment',
@@ -543,6 +590,7 @@ class StayController extends Controller
         ActivityLog::record('stay.minibar_cancelled', $user->id, [
             'stay_id'      => $stay->id,
             'room_id'      => $roomId,
+            'room_number'  => Room::find($roomId)?->number,
             'product_name' => $productName,
             'quantity'     => $quantity,
             'amount'       => $amount,
@@ -588,8 +636,9 @@ class StayController extends Controller
         $stay->load(['guest', 'company', 'stayRooms.room.roomType', 'services.extraService', 'minibarConsumptions', 'payments']);
 
         if (!$stay->receipt_number) {
+            $hotelId   = TenantContext::requireId();
             $yearMonth = now()->format('Ym');
-            $seqKey    = "receipt_seq_{$yearMonth}";
+            $seqKey    = "receipt_seq_{$hotelId}_{$yearMonth}";
 
             DB::transaction(function () use ($seqKey, $stay, $yearMonth) {
                 $current    = (int) Setting::get($seqKey, 0);
@@ -625,12 +674,12 @@ class StayController extends Controller
         $ivaAmount  = $ivaEnabled ? round($subtotal * ($ivaPct / 100), 2) : 0;
         $total      = $subtotal + $ivaAmount;
 
-        $hotel      = Hotel::first();
+        $hotel      = TenantContext::hotel() ?? $stay->hotel;
         $hotelName  = $hotel?->name  ?? Setting::get('hotel_name', 'Hotel');
         $hotelPhone = $hotel?->phone ?? Setting::get('hotel_phone', '');
         $hotelAddr  = $hotel?->address ?? Setting::get('hotel_address', '');
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.receipt', compact(
+        $pdf = Pdf::loadView('pdf.receipt', compact(
             'stay', 'compNumber', 'roomLines', 'serviceLines', 'minibarLines',
             'roomsTotal', 'servicesTotal', 'minibarTotal', 'lateFee',
             'subtotal', 'ivaPct', 'ivaAmount', 'total',
@@ -656,12 +705,12 @@ class StayController extends Controller
             'stayGuests.guest',
         ]);
 
-        $hotel      = Hotel::first();
+        $hotel      = TenantContext::hotel() ?? $stay->hotel;
         $hotelName  = $hotel?->name  ?? Setting::get('hotel_name', 'Hotel');
         $hotelPhone = $hotel?->phone ?? Setting::get('hotel_phone', '');
         $hotelAddr  = $hotel?->address ?? Setting::get('hotel_address', '');
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.checkin', compact(
+        $pdf = Pdf::loadView('pdf.checkin', compact(
             'stay', 'hotelName', 'hotelPhone', 'hotelAddr'
         ));
 
@@ -721,13 +770,28 @@ class StayController extends Controller
             broadcast(new RoomStatusChanged($toRoom->refresh()))->toOthers();
         });
 
+        $fromRoom = Room::find($data['from_room_id']);
+
+        if ($fromRoom?->status === 'cleaning') {
+            RoomCleaningNotifier::notify(
+                $fromRoom,
+                'Liberada tras transferencia de huésped. Pendiente de limpieza.',
+                $request->user()->id,
+            );
+        }
+
         $stay->load(['guest', 'stayRooms.room', 'transfers']);
 
+        $fromRoom = Room::find($data['from_room_id']);
+        $toRoom   = Room::find($data['to_room_id']);
+
         ActivityLog::record('stay.transfer', $request->user()->id, [
-            'stay_id'      => $stay->id,
-            'from_room_id' => $data['from_room_id'],
-            'to_room_id'   => $data['to_room_id'],
-            'reason'       => $data['reason'] ?? null,
+            'stay_id'          => $stay->id,
+            'from_room_id'     => $data['from_room_id'],
+            'to_room_id'       => $data['to_room_id'],
+            'from_room_number' => $fromRoom?->number,
+            'to_room_number'   => $toRoom?->number,
+            'reason'           => $data['reason'] ?? null,
         ]);
 
         return response()->json(['success' => true, 'data' => $stay, 'message' => 'Transferencia realizada.']);
@@ -772,8 +836,11 @@ class StayController extends Controller
             return $payment;
         });
 
+        $stay->loadMissing('stayRooms.room:id,number');
+
         ActivityLog::record('stay.payment', $request->user()->id, [
             'stay_id' => $stay->id,
+            'rooms'   => $stay->stayRooms->pluck('room.number')->filter()->values()->all(),
             'amount'  => (float) $data['amount'],
             'method'  => $data['payment_method'],
             'type'    => $data['payment_type'],
@@ -804,8 +871,11 @@ class StayController extends Controller
             $stay->decrement('paid_amount', $amount);
         });
 
+        $stay->loadMissing('stayRooms.room:id,number');
+
         ActivityLog::record('stay.payment_cancelled', $user->id, [
             'stay_id'    => $stay->id,
+            'rooms'      => $stay->stayRooms->pluck('room.number')->filter()->values()->all(),
             'payment_id' => $payment->id,
             'amount'     => $amount,
             'method'     => $payment->payment_method,
@@ -896,9 +966,12 @@ class StayController extends Controller
             return $stayService;
         });
 
+        $stay->loadMissing(['guest', 'stayRooms.room:id,number']);
+
         ActivityLog::record('stay.service', $request->user()->id, [
             'stay_id'      => $stay->id,
             'guest_name'   => $stay->guest?->full_name,
+            'rooms'        => $stay->stayRooms->pluck('room.number')->filter()->values()->all(),
             'service_name' => $service->name,
             'quantity'     => $data['quantity'],
             'total'        => $total,

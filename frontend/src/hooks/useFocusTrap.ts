@@ -43,10 +43,10 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(active: boo
       )
       if (list.length === 0) return
       const firstEl = list[0]
-      const lastEl = list[list.length - 1]
+      const lastEl = list.at(-1)
       if (e.shiftKey && document.activeElement === firstEl) {
         e.preventDefault()
-        lastEl.focus()
+        lastEl?.focus()
       } else if (!e.shiftKey && document.activeElement === lastEl) {
         e.preventDefault()
         firstEl.focus()
@@ -56,7 +56,7 @@ export function useFocusTrap<T extends HTMLElement = HTMLDivElement>(active: boo
     document.addEventListener('keydown', handleKey)
     return () => {
       document.removeEventListener('keydown', handleKey)
-      if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus()
+      previouslyFocused?.focus()
     }
   }, [active])
 

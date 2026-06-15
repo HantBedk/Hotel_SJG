@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import toast from 'react-hot-toast'
 import {
   cancelMinibarSaleApi,
@@ -18,7 +19,7 @@ const KEY = 'minibar-sales'
 
 export function useMinibarSales(filters?: MinibarSalesFilters) {
   return useQuery({
-    queryKey: [KEY, filters],
+    queryKey: hotelQueryKey(KEY, filters),
     queryFn: () => getMinibarSalesApi(filters),
     staleTime: 15_000,
   })
@@ -26,7 +27,7 @@ export function useMinibarSales(filters?: MinibarSalesFilters) {
 
 export function useMinibarSale(id: string | null) {
   return useQuery({
-    queryKey: [KEY, 'detail', id],
+    queryKey: hotelQueryKey(KEY, 'detail', id),
     queryFn: () => getMinibarSaleApi(id as string),
     enabled: !!id,
   })
@@ -35,10 +36,10 @@ export function useMinibarSale(id: string | null) {
 export function useMinibarSaleMutations() {
   const qc = useQueryClient()
   const invalidate = () => {
-    qc.invalidateQueries({ queryKey: [KEY] })
-    qc.invalidateQueries({ queryKey: ['minibar-products'] })
-    qc.invalidateQueries({ queryKey: ['inventory-items'] })
-    qc.invalidateQueries({ queryKey: ['inventory-history'] })
+    qc.invalidateQueries({ queryKey: hotelQueryKey(KEY) })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('minibar-products') })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('inventory-items') })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('inventory-history') })
   }
 
   const createMutation = useMutation({

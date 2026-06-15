@@ -19,7 +19,7 @@ services:
       - ./backend/database:/var/www/html/database
       - ./backend/resources:/var/www/html/resources
       - ./backend/storage:/var/www/html/storage
-      - ./backend/bootstrap/cache:/var/www/html/bootstrap/cache
+      # bootstrap/cache NO se monta: evita packages.php del host (dev) vs vendor --no-dev
       # Carpeta del PC donde se guardan los backups automáticos.
       # Configurable vía BACKUP_HOST_PATH en .env. Si no se define, usa ./backup
       # dentro del proyecto. Funciona en Windows (D:\…), Linux (/mnt/…), etc.

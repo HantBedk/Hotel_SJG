@@ -2,8 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Stay;
+use App\Models\Hotel;
 use App\Models\Suggestion;
+use App\Support\TenantContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -14,21 +15,24 @@ class GenerateSuggestions extends Command
 
     public function handle(): void
     {
-        // Remove today's undismissed suggestions (idempotent)
-        Suggestion::whereDate('created_at', today())
-            ->where('dismissed', false)
-            ->delete();
+        foreach (Hotel::orderBy('name')->get() as $hotel) {
+            TenantContext::set($hotel->id);
 
-        $this->suggestMinibarRestock();
-        $this->suggestPriceAdjustment();
-        $this->suggestCorporateRates();
+            Suggestion::whereDate('created_at', today())
+                ->where('dismissed', false)
+                ->delete();
+
+            $this->suggestMinibarRestock($hotel->id);
+            $this->suggestPriceAdjustment($hotel->id);
+            $this->suggestCorporateRates($hotel->id);
+        }
+
+        TenantContext::set(null);
 
         $this->info('Suggestions generated.');
     }
 
-    // ── Recurring guests with frequent minibar consumption ────────────────────
-
-    private function suggestMinibarRestock(): void
+    private function suggestMinibarRestock(string $hotelId): void
     {
         $recurringGuests = DB::table('stays')
             ->join('minibar_consumptions', 'stays.id', '=', 'minibar_consumptions.stay_id')
@@ -40,6 +44,7 @@ class GenerateSuggestions extends Command
                 DB::raw('SUM(minibar_consumptions.quantity) as total_items'),
                 DB::raw("string_agg(DISTINCT minibar_consumptions.product_name, ', ') as products")
             )
+            ->where('stays.hotel_id', $hotelId)
             ->where('stays.status', 'checked_out')
             ->groupBy('stays.guest_id', 'guests.full_name')
             ->having(DB::raw('COUNT(DISTINCT stays.id)'), '>=', 3)
@@ -64,14 +69,14 @@ class GenerateSuggestions extends Command
         }
     }
 
-    // ── Occupancy patterns → price adjustment ─────────────────────────────────
-
-    private function suggestPriceAdjustment(): void
+    private function suggestPriceAdjustment(string $hotelId): void
     {
-        // Days of week with high historical occupancy (>80%)
-        $totalRooms = DB::table('rooms')->where('is_active', true)->count();
+        $totalRooms = DB::table('rooms')->where('hotel_id', $hotelId)->where('is_active', true)->count();
 
-        if ($totalRooms === 0) return;
+        if ($totalRooms === 0)
+        {
+            return;
+        }
 
         $highDays = DB::table('stay_rooms')
             ->join('stays', 'stay_rooms.stay_id', '=', 'stays.id')
@@ -79,6 +84,7 @@ class GenerateSuggestions extends Command
                 DB::raw("EXTRACT(DOW FROM stay_rooms.check_in_date::date) as dow"),
                 DB::raw('COUNT(*) as bookings')
             )
+            ->where('stays.hotel_id', $hotelId)
             ->where('stays.status', 'checked_out')
             ->where('stay_rooms.created_at', '>=', now()->subMonths(3))
             ->groupBy('dow')
@@ -100,9 +106,7 @@ class GenerateSuggestions extends Command
         }
     }
 
-    // ── Frequent companies → corporate rate ───────────────────────────────────
-
-    private function suggestCorporateRates(): void
+    private function suggestCorporateRates(string $hotelId): void
     {
         $companies = DB::table('stays')
             ->join('companies', 'stays.company_id', '=', 'companies.id')
@@ -112,6 +116,7 @@ class GenerateSuggestions extends Command
                 DB::raw('COUNT(*) as stay_count'),
                 DB::raw('SUM(stays.total_amount) as total_revenue')
             )
+            ->where('stays.hotel_id', $hotelId)
             ->whereNotNull('stays.company_id')
             ->where('stays.status', 'checked_out')
             ->groupBy('stays.company_id', 'companies.name')

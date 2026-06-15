@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { getDashboardApi, getOccupancyHistoryApi } from '@/services/dashboard.service'
+import { useHotelQueryKey } from '@/lib/hotelQueryKey'
 
 export function useDashboard() {
+  const queryKey = useHotelQueryKey('dashboard')
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard'],
+    queryKey,
     queryFn:  getDashboardApi,
     refetchInterval: 60_000,
   })
@@ -12,8 +14,9 @@ export function useDashboard() {
 }
 
 export function useOccupancyHistory(period: 'weekly' | 'monthly') {
+  const queryKey = useHotelQueryKey('dashboard', 'occupancy-history', period)
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard', 'occupancy-history', period],
+    queryKey,
     queryFn:  () => getOccupancyHistoryApi(period),
     refetchInterval: 300_000,
   })

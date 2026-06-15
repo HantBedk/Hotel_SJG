@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\AssetMaintenance;
+use App\Models\HotelInventory;
 use App\Models\InventoryItem;
 use App\Models\Notification;
 use App\Models\Reservation;
@@ -11,6 +12,7 @@ use App\Models\Stay;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 class SendAdminAlertSummary extends Command
 {
@@ -25,11 +27,17 @@ class SendAdminAlertSummary extends Command
         }
 
         $adminIds = User::role(['admin', 'superadmin'])->pluck('id');
-        if ($adminIds->isEmpty()) return self::SUCCESS;
 
-        $lowStock = InventoryItem::where('active', true)
-            ->whereRaw('current_stock <= min_stock_threshold')
-            ->count();
+        if ($adminIds->isNotEmpty()) {
+            $this->sendSummaryIfNeeded($adminIds);
+        }
+
+        return self::SUCCESS;
+    }
+
+    private function sendSummaryIfNeeded(Collection $adminIds): void
+    {
+        $lowStock = HotelInventory::whereColumn('current_stock', '<=', 'min_stock_threshold')->count();
         $expiring = InventoryItem::where('active', true)
             ->whereNotNull('expiry_date')
             ->whereBetween('expiry_date', [today(), today()->addDays(7)])
@@ -46,15 +54,25 @@ class SendAdminAlertSummary extends Command
         $total = $lowStock + $expiring + $maintenances + $expiredReservations + ($pendingBalance > 0 ? 1 : 0);
         if ($total === 0) {
             $this->info('Sin alertas que reportar.');
-            return self::SUCCESS;
+            return;
         }
 
         $parts = [];
-        if ($lowStock > 0)            $parts[] = "{$lowStock} producto(s) con stock bajo";
-        if ($expiring > 0)            $parts[] = "{$expiring} próximos a vencer";
-        if ($maintenances > 0)        $parts[] = "{$maintenances} mantenimiento(s) cercanos";
-        if ($expiredReservations > 0) $parts[] = "{$expiredReservations} reserva(s) vencidas";
-        if ($pendingBalance > 0)      $parts[] = '$' . number_format($pendingBalance, 0, ',', '.') . ' por cobrar';
+        if ($lowStock > 0) {
+            $parts[] = "{$lowStock} producto(s) con stock bajo";
+        }
+        if ($expiring > 0) {
+            $parts[] = "{$expiring} próximos a vencer";
+        }
+        if ($maintenances > 0) {
+            $parts[] = "{$maintenances} mantenimiento(s) cercanos";
+        }
+        if ($expiredReservations > 0) {
+            $parts[] = "{$expiredReservations} reserva(s) vencidas";
+        }
+        if ($pendingBalance > 0) {
+            $parts[] = '$' . number_format($pendingBalance, 0, ',', '.') . ' por cobrar';
+        }
 
         $message = implode(' · ', $parts);
         $title   = 'Resumen diario · ' . now()->format('H:i');
@@ -66,7 +84,9 @@ class SendAdminAlertSummary extends Command
                 ->whereTime('created_at', '>=', now()->subHour())
                 ->exists();
 
-            if ($alreadySent) continue;
+            if ($alreadySent) {
+                continue;
+            }
 
             Notification::create([
                 'type'       => 'admin_summary',
@@ -75,11 +95,11 @@ class SendAdminAlertSummary extends Command
                 'severity'   => 'warning',
                 'is_modal'   => true,
                 'payload'    => [
-                    'low_stock'           => $lowStock,
-                    'expiring'            => $expiring,
-                    'maintenances'        => $maintenances,
-                    'expired_reservations'=> $expiredReservations,
-                    'pending_balance'     => $pendingBalance,
+                    'low_stock'            => $lowStock,
+                    'expiring'             => $expiring,
+                    'maintenances'         => $maintenances,
+                    'expired_reservations' => $expiredReservations,
+                    'pending_balance'      => $pendingBalance,
                 ],
                 'action_url' => '/',
                 'user_id'    => $userId,
@@ -87,23 +107,28 @@ class SendAdminAlertSummary extends Command
         }
 
         $this->info("Resumen enviado a {$adminIds->count()} admin(s).");
-        return self::SUCCESS;
     }
 
     private function isAtConfiguredHour(): bool
     {
         $configured = (string) Setting::get('hotel.admin_alert_hours', '06:00,20:00');
         $hours = array_map('trim', explode(',', $configured));
-        $now   = now()->format('H:i');
 
         foreach ($hours as $h) {
-            if (!$h) continue;
+            if (!$h) {
+                continue;
+            }
             // Tolera ±5 min para que el cron horario lo dispare
             try {
                 $target = Carbon::createFromFormat('H:i', $h);
-                if (abs($target->diffInMinutes(now(), false)) <= 5) return true;
-            } catch (\Throwable) { /* skip */ }
+                if (abs($target->diffInMinutes(now(), false)) <= 5) {
+                    return true;
+                }
+            } catch (\Throwable) {
+                // skip
+            }
         }
+
         return false;
     }
 }

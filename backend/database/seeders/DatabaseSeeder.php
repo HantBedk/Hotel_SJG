@@ -9,7 +9,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // Solo estructura base + 2 superadmins. Sin habitaciones, tipos,
-        // servicios ni categorías de ejemplo — el cliente crea todo.
+        // servicios ni categorías de ejemplo — el cliente los configura después.
         $this->call([
             HotelSeeder::class,
             RolesPermissionsSeeder::class,

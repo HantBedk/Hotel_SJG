@@ -1,17 +1,17 @@
 import { cn } from '@/lib/cn'
 
 interface SkeletonProps {
-  className?: string
-  width?: string | number
-  height?: string | number
-  style?: React.CSSProperties
+  readonly className?: string
+  readonly width?: string | number
+  readonly height?: string | number
+  readonly style?: React.CSSProperties
 }
 
-export function Skeleton({ className, width, height }: SkeletonProps) {
+export function Skeleton({ className, width, height, style }: SkeletonProps) {
   return (
     <div
       className={cn('skeleton', className)}
-      style={{ width, height }}
+      style={{ width, height, ...style }}
       aria-hidden="true"
     />
   )
@@ -34,14 +34,31 @@ export function SkeletonCard() {
   )
 }
 
-export function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
+interface SkeletonTableProps {
+  readonly rows?: number
+  readonly cols?: number
+}
+
+function buildSkeletonTableRows(rowCount: number, colCount: number) {
+  return Array.from({ length: rowCount }, (_, rowIndex) => ({
+    key: `skeleton-table-row-${rowIndex + 1}`,
+    colKeys: Array.from(
+      { length: colCount },
+      (_, colIndex) => `skeleton-table-r${rowIndex + 1}-c${colIndex + 1}`,
+    ),
+  }))
+}
+
+export function SkeletonTable({ rows = 5, cols = 4 }: SkeletonTableProps) {
+  const tableRows = buildSkeletonTableRows(rows, cols)
+
   return (
     <div className="space-y-2">
       <Skeleton className="h-10 w-full rounded-lg" />
-      {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex gap-4">
-          {Array.from({ length: cols }).map((_, j) => (
-            <Skeleton key={j} className="h-8 flex-1 rounded" />
+      {tableRows.map((row) => (
+        <div key={row.key} className="flex gap-4">
+          {row.colKeys.map((colKey) => (
+            <Skeleton key={colKey} className="h-8 flex-1 rounded" />
           ))}
         </div>
       ))}
@@ -49,14 +66,27 @@ export function SkeletonTable({ rows = 5, cols = 4 }: { rows?: number; cols?: nu
   )
 }
 
-export function SkeletonText({ lines = 3 }: { lines?: number }) {
+interface SkeletonTextProps {
+  readonly lines?: number
+}
+
+function buildSkeletonTextLines(lineCount: number) {
+  return Array.from({ length: lineCount }, (_, lineIndex) => ({
+    key: `skeleton-text-line-${lineIndex + 1}`,
+    width: lineIndex === lineCount - 1 ? '60%' : '100%',
+  }))
+}
+
+export function SkeletonText({ lines = 3 }: SkeletonTextProps) {
+  const textLines = buildSkeletonTextLines(lines)
+
   return (
     <div className="space-y-2">
-      {Array.from({ length: lines }).map((_, i) => (
+      {textLines.map((line) => (
         <Skeleton
-          key={i}
+          key={line.key}
           className="h-4 rounded"
-          style={{ width: i === lines - 1 ? '60%' : '100%' }}
+          style={{ width: line.width }}
         />
       ))}
     </div>

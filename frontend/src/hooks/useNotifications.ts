@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import toast from 'react-hot-toast'
 import {
   getNotificationsApi,
@@ -11,12 +12,12 @@ export function useNotifications() {
   const qc = useQueryClient()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['notifications'],
+    queryKey: hotelQueryKey('notifications'),
     queryFn: getNotificationsApi,
   })
 
   const { data: unreadCount = 0 } = useQuery({
-    queryKey: ['notifications-unread'],
+    queryKey: hotelQueryKey('notifications-unread'),
     queryFn: getUnreadCountApi,
     refetchInterval: 60_000,
   })
@@ -24,8 +25,8 @@ export function useNotifications() {
   const markReadMutation = useMutation({
     mutationFn: markReadApi,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['notifications'] })
-      qc.invalidateQueries({ queryKey: ['notifications-unread'] })
+      qc.invalidateQueries({ queryKey: hotelQueryKey('notifications') })
+      qc.invalidateQueries({ queryKey: hotelQueryKey('notifications-unread') })
     },
     onError: () => toast.error('Error al marcar notificación.'),
   })
@@ -33,8 +34,8 @@ export function useNotifications() {
   const markAllReadMutation = useMutation({
     mutationFn: markAllReadApi,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['notifications'] })
-      qc.invalidateQueries({ queryKey: ['notifications-unread'] })
+      qc.invalidateQueries({ queryKey: hotelQueryKey('notifications') })
+      qc.invalidateQueries({ queryKey: hotelQueryKey('notifications-unread') })
     },
     onError: () => toast.error('Error al marcar todas.'),
   })

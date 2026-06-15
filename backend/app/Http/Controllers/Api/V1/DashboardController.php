@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\AssetMaintenance;
+use App\Models\HotelInventory;
 use App\Models\InventoryItem;
 use App\Models\Room;
 use App\Models\Setting;
 use App\Models\Stay;
 use App\Models\StayRoom;
+use App\Support\TenantContext;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -46,9 +48,10 @@ class DashboardController extends Controller
 
         // Inventory alerts
         $expiryDays = (int) Setting::get('inventory.expiry_alert_days', 7);
-        $lowStock = InventoryItem::where('active', true)
-            ->whereRaw('current_stock <= min_stock_threshold')
-            ->count();
+        $hotelId    = TenantContext::id();
+        $lowStock   = $hotelId
+            ? HotelInventory::where('hotel_id', $hotelId)->whereColumn('current_stock', '<=', 'min_stock_threshold')->count()
+            : 0;
         $expiring = InventoryItem::where('active', true)
             ->whereNotNull('expiry_date')
             ->whereBetween('expiry_date', [today(), today()->addDays($expiryDays)])

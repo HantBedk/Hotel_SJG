@@ -1,9 +1,35 @@
 import api from '@/lib/axios'
-import type { ApiResponse, Room, RoomType, RoomStatus } from '@/types'
+import type { ApiResponse, Room, RoomStatus, RoomType } from '@/types'
+
+export interface CreateRoomPayload {
+  room_type_id: string
+  number: string
+  floor?: number | null
+  notes?: string | null
+}
+
+export interface UpdateRoomPayload {
+  room_type_id?: string
+  number?: string
+  floor?: number | null
+  notes?: string | null
+  is_active?: boolean
+}
+
+export interface UpdateRoomStatusPayload {
+  status: RoomStatus
+  notes?: string | null
+}
+
+export interface Housekeeper {
+  id: string
+  name: string
+}
 
 export async function getRoomsApi(status?: RoomStatus): Promise<Room[]> {
-  const params = status ? `?status=${status}` : ''
-  const { data } = await api.get<ApiResponse<Room[]>>(`/rooms${params}`)
+  const { data } = await api.get<ApiResponse<Room[]>>('/rooms', {
+    params: status ? { status } : undefined,
+  })
   return data.data
 }
 
@@ -12,31 +38,17 @@ export async function getRoomApi(id: string): Promise<Room> {
   return data.data
 }
 
-export async function createRoomApi(payload: {
-  room_type_id: string
-  number: string
-  floor?: number | null
-  notes?: string | null
-}): Promise<Room> {
+export async function createRoomApi(payload: CreateRoomPayload): Promise<Room> {
   const { data } = await api.post<ApiResponse<Room>>('/rooms', payload)
   return data.data
 }
 
-export async function updateRoomApi(id: string, payload: {
-  room_type_id?: string
-  number?: string
-  floor?: number | null
-  notes?: string | null
-  is_active?: boolean
-}): Promise<Room> {
+export async function updateRoomApi(id: string, payload: UpdateRoomPayload): Promise<Room> {
   const { data } = await api.put<ApiResponse<Room>>(`/rooms/${id}`, payload)
   return data.data
 }
 
-export async function updateRoomStatusApi(id: string, payload: {
-  status: RoomStatus
-  notes?: string | null
-}): Promise<Room> {
+export async function updateRoomStatusApi(id: string, payload: UpdateRoomStatusPayload): Promise<Room> {
   const { data } = await api.patch<ApiResponse<Room>>(`/rooms/${id}/status`, payload)
   return data.data
 }
@@ -49,8 +61,6 @@ export async function getRoomTypesApi(): Promise<RoomType[]> {
   const { data } = await api.get<ApiResponse<RoomType[]>>('/room-types')
   return data.data
 }
-
-export interface Housekeeper { id: string; name: string }
 
 export async function getHousekeepersApi(): Promise<Housekeeper[]> {
   const { data } = await api.get<ApiResponse<Housekeeper[]>>('/housekeepers')

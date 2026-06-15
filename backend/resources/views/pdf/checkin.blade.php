@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<title>Comprobante de check-in</title>
 <style>
   body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #333; margin: 20px 30px; }
   h1 { font-size: 18px; margin: 0 0 4px; }

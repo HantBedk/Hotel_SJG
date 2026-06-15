@@ -4,6 +4,8 @@ import { Package, Wrench, ShoppingCart, AlertTriangle, ClipboardList, History } 
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useReverb } from '@/hooks/useReverb'
+import { useHotelStore } from '@/store/hotelStore'
+import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import { useAuth } from '@/hooks/useAuth'
 import ConsumiblesTab from './tabs/ConsumiblesTab'
 import ActivosTab from './tabs/ActivosTab'
@@ -48,6 +50,7 @@ export default function InventoryPage() {
     ALL_VALID_TABS.has(initialTab) ? (initialTab as TabKey) : 'consumibles',
   )
   const queryClient = useQueryClient()
+  const currentHotelId = useHotelStore((s) => s.currentHotelId)
 
   // Reaccionar a cambios de ?tab (back/forward del navegador)
   useEffect(() => {
@@ -65,14 +68,15 @@ export default function InventoryPage() {
   }
 
   useReverb<NotificationEvent>({
-    channel: 'hotel.notifications',
+    channel: currentHotelId ? `hotel.${currentHotelId}.notifications` : 'hotel.notifications',
     event:   'notification.created',
     onEvent: (data) => {
       if (!INVENTORY_ALERT_TYPES.has(data.type)) return
       toast(data.title, { icon: '⚠️', duration: 6000 })
-      queryClient.invalidateQueries({ queryKey: ['inventory-items'] })
-      queryClient.invalidateQueries({ queryKey: ['maintenances'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('inventory-items') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('maintenances') })
     },
+    enabled: !!currentHotelId,
   })
 
   return (

@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useAuthStore } from '@/store/authStore'
+import { useHotelStore } from '@/store/hotelStore'
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -17,6 +18,10 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  const hotelId = useHotelStore.getState().currentHotelId
+  if (hotelId) {
+    config.headers['X-Hotel-Id'] = hotelId
+  }
   return config
 })
 
@@ -28,8 +33,8 @@ api.interceptors.response.use(
 
     if (status === 401 && !url.endsWith('/me')) {
       useAuthStore.getState().clearAuth()
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
+      if (globalThis.location.pathname !== '/login') {
+        globalThis.location.href = '/login'
       }
     }
 

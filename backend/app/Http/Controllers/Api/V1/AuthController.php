@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use App\Models\ActivityLog;
 use App\Models\Notification;
 use App\Models\User;
+use App\Support\AuthUserPayload;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,13 +46,7 @@ class AuthController extends Controller
 
         return $this->success([
             'token' => $token,
-            'user'  => [
-                'id'          => $user->id,
-                'name'        => $user->name,
-                'email'       => $user->email,
-                'roles'       => $user->getRoleNames(),
-                'permissions' => $user->getAllPermissions()->pluck('name'),
-            ],
+            'user'  => AuthUserPayload::build($user->load('roles', 'permissions', 'hotels')),
         ], 'Sesión iniciada.');
     }
 
@@ -116,14 +111,8 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $user = $request->user()->load('roles', 'permissions');
+        $user = $request->user()->load('roles', 'permissions', 'hotels');
 
-        return $this->success([
-            'id'          => $user->id,
-            'name'        => $user->name,
-            'email'       => $user->email,
-            'roles'       => $user->getRoleNames(),
-            'permissions' => $user->getAllPermissions()->pluck('name'),
-        ]);
+        return $this->success(AuthUserPayload::build($user));
     }
 }

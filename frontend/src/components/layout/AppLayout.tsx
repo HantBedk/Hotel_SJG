@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import HotelSwitchOverlay from './HotelSwitchOverlay'
 import NotificationModal from '@/components/notifications/NotificationModal'
+import { useHotelStore } from '@/store/hotelStore'
+import { cn } from '@/lib/cn'
 
 const PAGE_TITLES: Record<string, string> = {
   '/':             'Dashboard',
@@ -22,6 +25,9 @@ const DARK_MODE_KEY = 'hotel_dark_mode'
 
 export default function AppLayout() {
   const location = useLocation()
+  const currentHotelId = useHotelStore((s) => s.currentHotelId)
+  const isSwitchingHotel = useHotelStore((s) => s.isSwitchingHotel)
+  const hotels = useHotelStore((s) => s.hotels)
   const [collapsed, setCollapsed]     = useState(false)
   const [mobileOpen, setMobileOpen]   = useState(false)
   const [darkMode, setDarkMode] = useState(
@@ -29,6 +35,7 @@ export default function AppLayout() {
   )
 
   const title = PAGE_TITLES[location.pathname] ?? 'Hotel Manager'
+  const switchingHotelName = hotels.find((h) => h.id === currentHotelId)?.name
 
   // Close mobile sidebar on navigation
   useEffect(() => {
@@ -44,7 +51,7 @@ export default function AppLayout() {
   }, [mobileOpen])
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
+    document.documentElement.dataset.theme = darkMode ? 'dark' : 'light'
     localStorage.setItem(DARK_MODE_KEY, String(darkMode))
   }, [darkMode])
 
@@ -80,7 +87,6 @@ export default function AppLayout() {
         <Header
           title={title}
           onToggleSidebar={() => {
-            // On large screens toggle collapse; on mobile open drawer
             if (window.innerWidth >= 1024) {
               setCollapsed((c) => !c)
             } else {
@@ -92,10 +98,18 @@ export default function AppLayout() {
         />
 
         <main
-          className="flex-1 overflow-y-auto p-4 md:p-6"
+          className="relative flex-1 overflow-y-auto p-4 md:p-6"
           style={{ background: 'var(--bg-base)' }}
         >
-          <Outlet />
+          <HotelSwitchOverlay show={isSwitchingHotel} hotelName={switchingHotelName} />
+          <div
+            className={cn(
+              'transition-opacity duration-300 ease-out',
+              isSwitchingHotel ? 'opacity-40 pointer-events-none select-none' : 'opacity-100',
+            )}
+          >
+            <Outlet key={currentHotelId ?? 'no-hotel'} />
+          </div>
         </main>
       </div>
 

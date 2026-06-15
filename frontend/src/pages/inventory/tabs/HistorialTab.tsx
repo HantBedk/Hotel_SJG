@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ElementType } from 'react'
 import { Search, Filter, ChevronLeft, ChevronRight, ArrowDownCircle, ArrowUpCircle, SlidersHorizontal, ShoppingBag } from 'lucide-react'
 import { useInventoryHistory } from '@/hooks/useInventory'
 import { SkeletonText } from '@/components/ui/Skeleton'
@@ -40,6 +40,29 @@ function fmtMoney(v: string | null) {
   return `$${Number(v).toLocaleString('es-CO')}`
 }
 
+function movementTypeIcon(source: string, sign: '+' | '-' | '±'): ElementType {
+  if (source === 'minibar_consumption') return ShoppingBag
+  if (sign === '+') return ArrowDownCircle
+  if (sign === '±') return SlidersHorizontal
+  return ArrowUpCircle
+}
+
+function quantityColor(isEntry: boolean, isAdj: boolean): string {
+  if (isEntry) return '#16a34a'
+  if (isAdj) return '#d97706'
+  return '#dc2626'
+}
+
+function quantityPrefix(isEntry: boolean, isAdj: boolean, quantity: number): string {
+  if (isEntry) return '+'
+  if (isAdj) return quantity >= 0 ? '+' : ''
+  return '-'
+}
+
+function movementCountSuffix(total: number): string {
+  return total === 1 ? '' : 's'
+}
+
 /* ── Component ────────────────────────────────────────────────────────────── */
 
 export default function HistorialTab() {
@@ -62,6 +85,108 @@ export default function HistorialTab() {
   const meta      = data?.meta
 
   const resetPage = () => setPage(1)
+
+  let tableBodyContent
+  if (isLoading) {
+    tableBodyContent = (
+      <div className="p-5"><SkeletonText lines={8} /></div>
+    )
+  } else if (movements.length === 0) {
+    tableBodyContent = (
+      <div className="flex flex-col items-center justify-center py-16 gap-2">
+        <SlidersHorizontal size={32} style={{ color: 'var(--text-muted)' }} />
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin movimientos para los filtros seleccionados.</p>
+      </div>
+    )
+  } else {
+    tableBodyContent = (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
+              <th className="text-left px-4 py-3 font-medium">Fecha y hora</th>
+              <th className="text-left px-4 py-3 font-medium">Tipo</th>
+              <th className="text-left px-4 py-3 font-medium">Producto</th>
+              <th className="text-right px-4 py-3 font-medium">Cantidad</th>
+              <th className="text-right px-4 py-3 font-medium">Valor total</th>
+              <th className="text-left px-4 py-3 font-medium">Realizado por</th>
+              <th className="text-left px-4 py-3 font-medium">Destino / Hab.</th>
+              <th className="text-left px-4 py-3 font-medium">Notas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {movements.map((m) => {
+              const typeMeta = TYPE_META[m.type] ?? {
+                label: m.type,
+                color: 'var(--text-secondary)',
+                bg: 'var(--bg-main)',
+                sign: '±' as const,
+              }
+              const isEntry = typeMeta.sign === '+'
+              const isAdj = typeMeta.sign === '±'
+              const TypeIcon = movementTypeIcon(m.source, typeMeta.sign)
+
+              return (
+                <tr
+                  key={m.id}
+                  style={{ borderBottom: '1px solid var(--border-default)' }}
+                  className="hover:opacity-90 transition-opacity"
+                >
+                  <td className="px-4 py-3 whitespace-nowrap font-mono" style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
+                    {fmtDate(m.occurred_at)}
+                  </td>
+
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                      style={{ background: typeMeta.bg, color: typeMeta.color }}
+                    >
+                      <TypeIcon size={9} />
+                      {typeMeta.label}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{m.item_name}</p>
+                    {m.item_code && (
+                      <p className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.item_code}</p>
+                    )}
+                    {m.item_presentation && (
+                      <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.item_presentation}</p>
+                    )}
+                  </td>
+
+                  <td
+                    className="px-4 py-3 text-right font-semibold tabular-nums"
+                    style={{ color: quantityColor(isEntry, isAdj) }}
+                  >
+                    {quantityPrefix(isEntry, isAdj, m.quantity)}
+                    {Math.abs(m.quantity)}
+                  </td>
+
+                  <td className="px-4 py-3 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>
+                    {fmtMoney(m.total_value)}
+                  </td>
+
+                  <td className="px-4 py-3" style={{ color: 'var(--text-primary)' }}>
+                    {m.performed_by ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                  </td>
+
+                  <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
+                    {m.destination ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                  </td>
+
+                  <td className="px-4 py-3 max-w-[160px]" style={{ color: 'var(--text-muted)' }}>
+                    <span className="line-clamp-2">{m.notes ?? '—'}</span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -127,6 +252,7 @@ export default function HistorialTab() {
 
         {(search || dateFrom || dateTo || source !== 'all') && (
           <button
+            type="button"
             onClick={() => { setSearch(''); setSource('all'); setDateFrom(''); setDateTo(''); resetPage() }}
             className="text-xs"
             style={{ color: 'var(--color-primary)' }}
@@ -141,129 +267,31 @@ export default function HistorialTab() {
         className="rounded-xl overflow-hidden"
         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
       >
-        {isLoading ? (
-          <div className="p-5"><SkeletonText lines={8} /></div>
-        ) : movements.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-2">
-            <SlidersHorizontal size={32} style={{ color: 'var(--text-muted)' }} />
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Sin movimientos para los filtros seleccionados.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-muted)' }}>
-                  <th className="text-left px-4 py-3 font-medium">Fecha y hora</th>
-                  <th className="text-left px-4 py-3 font-medium">Tipo</th>
-                  <th className="text-left px-4 py-3 font-medium">Producto</th>
-                  <th className="text-right px-4 py-3 font-medium">Cantidad</th>
-                  <th className="text-right px-4 py-3 font-medium">Valor total</th>
-                  <th className="text-left px-4 py-3 font-medium">Realizado por</th>
-                  <th className="text-left px-4 py-3 font-medium">Destino / Hab.</th>
-                  <th className="text-left px-4 py-3 font-medium">Notas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {movements.map((m) => {
-                  const meta = TYPE_META[m.type] ?? { label: m.type, color: 'var(--text-secondary)', bg: 'var(--bg-main)', sign: '±' as const }
-                  const isEntry = meta.sign === '+'
-                  const isAdj   = meta.sign === '±'
+        {tableBodyContent}
 
-                  return (
-                    <tr
-                      key={m.id}
-                      style={{ borderBottom: '1px solid var(--border-default)' }}
-                      className="hover:opacity-90 transition-opacity"
-                    >
-                      {/* Fecha */}
-                      <td className="px-4 py-3 whitespace-nowrap font-mono" style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
-                        {fmtDate(m.occurred_at)}
-                      </td>
-
-                      {/* Tipo */}
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                          style={{ background: meta.bg, color: meta.color }}
-                        >
-                          {m.source === 'minibar_consumption'
-                            ? <ShoppingBag size={9} />
-                            : isEntry
-                              ? <ArrowDownCircle size={9} />
-                              : isAdj
-                                ? <SlidersHorizontal size={9} />
-                                : <ArrowUpCircle size={9} />
-                          }
-                          {meta.label}
-                        </span>
-                      </td>
-
-                      {/* Producto */}
-                      <td className="px-4 py-3">
-                        <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{m.item_name}</p>
-                        {m.item_code && (
-                          <p className="font-mono text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.item_code}</p>
-                        )}
-                        {m.item_presentation && (
-                          <p className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{m.item_presentation}</p>
-                        )}
-                      </td>
-
-                      {/* Cantidad */}
-                      <td className="px-4 py-3 text-right font-semibold tabular-nums" style={{
-                        color: isEntry ? '#16a34a' : isAdj ? '#d97706' : '#dc2626',
-                      }}>
-                        {isEntry ? '+' : isAdj ? (m.quantity >= 0 ? '+' : '') : '-'}
-                        {Math.abs(m.quantity)}
-                      </td>
-
-                      {/* Valor */}
-                      <td className="px-4 py-3 text-right tabular-nums" style={{ color: 'var(--text-secondary)' }}>
-                        {fmtMoney(m.total_value)}
-                      </td>
-
-                      {/* Realizado por */}
-                      <td className="px-4 py-3" style={{ color: 'var(--text-primary)' }}>
-                        {m.performed_by ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                      </td>
-
-                      {/* Destino */}
-                      <td className="px-4 py-3" style={{ color: 'var(--text-secondary)' }}>
-                        {m.destination ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                      </td>
-
-                      {/* Notas */}
-                      <td className="px-4 py-3 max-w-[160px]" style={{ color: 'var(--text-muted)' }}>
-                        <span className="line-clamp-2">{m.notes ?? '—'}</span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* ── Paginación ───────────────────────────────────────────── */}
         {meta && meta.last_page > 1 && (
           <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: 'var(--border-default)' }}>
             <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              {meta.total} movimiento{meta.total !== 1 ? 's' : ''} · página {meta.current_page} de {meta.last_page}
+              {meta.total} movimiento{movementCountSuffix(meta.total)} · página {meta.current_page} de {meta.last_page}
             </p>
             <div className="flex gap-1">
               <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={meta.current_page <= 1}
                 className="p-1.5 rounded-lg disabled:opacity-30 hover:opacity-70 transition-opacity"
                 style={{ border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
+                aria-label="Página anterior"
               >
                 <ChevronLeft size={14} />
               </button>
               <button
-                onClick={() => setPage(p => Math.min(meta.last_page, p + 1))}
+                type="button"
+                onClick={() => setPage((p) => Math.min(meta.last_page, p + 1))}
                 disabled={meta.current_page >= meta.last_page}
                 className="p-1.5 rounded-lg disabled:opacity-30 hover:opacity-70 transition-opacity"
                 style={{ border: '1px solid var(--border-default)', color: 'var(--text-secondary)' }}
+                aria-label="Página siguiente"
               >
                 <ChevronRight size={14} />
               </button>

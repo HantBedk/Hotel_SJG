@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import toast from 'react-hot-toast'
 import {
   getCompaniesApi, createCompanyApi, updateCompanyApi, deleteCompanyApi, searchCompaniesApi,
@@ -10,7 +11,7 @@ export function useCompanies(search?: string) {
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['companies', search],
+    queryKey: hotelQueryKey('companies', search),
     queryFn:  () => getCompaniesApi(search),
   })
 
@@ -18,7 +19,7 @@ export function useCompanies(search?: string) {
     mutationFn: createCompanyApi,
     onSuccess: () => {
       toast.success('Empresa creada.')
-      queryClient.invalidateQueries({ queryKey: ['companies'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('companies') })
     },
     onError: (err: unknown) => toast.error(extractApiError(err, 'Error al crear empresa.')),
   })
@@ -28,7 +29,7 @@ export function useCompanies(search?: string) {
       updateCompanyApi(id, payload),
     onSuccess: () => {
       toast.success('Empresa actualizada.')
-      queryClient.invalidateQueries({ queryKey: ['companies'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('companies') })
     },
     onError: (err: unknown) => toast.error(extractApiError(err, 'Error al actualizar empresa.')),
   })
@@ -37,7 +38,7 @@ export function useCompanies(search?: string) {
     mutationFn: deleteCompanyApi,
     onSuccess: () => {
       toast.success('Empresa eliminada.')
-      queryClient.invalidateQueries({ queryKey: ['companies'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('companies') })
     },
     onError: (err: unknown) => toast.error(extractApiError(err, 'Error al eliminar empresa.')),
   })
@@ -56,7 +57,7 @@ export function useCompanies(search?: string) {
 
 export function useCompanySearch(term: string, enabled = true) {
   return useQuery({
-    queryKey: ['companies', 'search', term],
+    queryKey: hotelQueryKey('companies', 'search', term),
     queryFn:  () => searchCompaniesApi(term),
     enabled:  enabled && term.length >= 2,
     staleTime: 10_000,

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import toast from 'react-hot-toast'
 import {
   getReservationsApi,
@@ -20,15 +21,15 @@ export function useReservations(filters: ReservationFilters = {}) {
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['reservations', filters],
+    queryKey: hotelQueryKey('reservations', filters),
     queryFn:  () => getReservationsApi(filters),
   })
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['reservations'] })
-    queryClient.invalidateQueries({ queryKey: ['rooms'] })
-    queryClient.invalidateQueries({ queryKey: ['calendar'] })
-    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('reservations') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('rooms') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('calendar') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('dashboard') })
   }
 
   const createMutation = useMutation({
@@ -74,7 +75,7 @@ export function useReservations(filters: ReservationFilters = {}) {
     onSuccess: () => {
       toast.success('Check-in desde reserva realizado.')
       invalidate()
-      queryClient.invalidateQueries({ queryKey: ['stays'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('stays') })
     },
     onError: (e: { response?: { data?: { message?: string } } }) =>
       toast.error(e?.response?.data?.message ?? 'Error al hacer check-in.'),
@@ -93,8 +94,8 @@ export function useReservations(filters: ReservationFilters = {}) {
     onSuccess: () => {
       toast.success('Pago anulado. Queda en el historial.')
       invalidate()
-      queryClient.invalidateQueries({ queryKey: ['payments-history'] })
-      queryClient.invalidateQueries({ queryKey: ['income'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('payments-history') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('income') })
     },
     onError: (e: { response?: { data?: { message?: string } } }) =>
       toast.error(e?.response?.data?.message ?? 'Error al anular el pago.'),
@@ -121,7 +122,7 @@ export function useReservations(filters: ReservationFilters = {}) {
 
 export function useReservation(id: string) {
   return useQuery({
-    queryKey: ['reservations', id],
+    queryKey: hotelQueryKey('reservations', id),
     queryFn:  () => getReservationApi(id),
     enabled:  !!id,
   })

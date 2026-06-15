@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Save } from 'lucide-react'
 import { useSettings } from '@/hooks/useSettings'
+import type { SettingsMap } from '@/services/settings.service'
 import { SkeletonText } from '@/components/ui/Skeleton'
 import { cn } from '@/lib/cn'
 
@@ -8,7 +9,7 @@ const GROUPS = [
   { key: 'hotel',     label: 'Hotel' },
   { key: 'inventory', label: 'Inventario' },
   { key: 'system',    label: 'Sistema' },
-]
+] as const
 
 const LABELS: Record<string, string> = {
   'hotel.iva_enabled':              'IVA habilitado',
@@ -30,6 +31,192 @@ const LABELS: Record<string, string> = {
   'inventory.low_stock_threshold':  'Umbral de stock bajo',
 }
 
+function settingLabel(key: string): string {
+  return LABELS[key] ?? key
+}
+
+function settingBorderColor(isUnsaved: boolean): string {
+  if (isUnsaved) return '#F59E0B'
+  return 'var(--border-default)'
+}
+
+function segmentButtonStyle(selected: boolean): CSSProperties {
+  if (selected) {
+    return { background: 'var(--color-primary)', color: '#fff' }
+  }
+  return { background: 'transparent', color: 'var(--text-secondary)' }
+}
+
+function saveButtonLabel(isSaving: boolean): string {
+  if (isSaving) return 'Guardando…'
+  return 'Guardar cambios'
+}
+
+function groupNavStyle(active: boolean): CSSProperties {
+  if (active) {
+    return {
+      background: 'var(--color-primary-light)',
+      color: 'var(--color-primary)',
+      fontWeight: 600,
+    }
+  }
+  return {
+    background: 'transparent',
+    color: 'var(--text-secondary)',
+    fontWeight: 400,
+  }
+}
+
+interface BooleanSettingFieldProps {
+  readonly settingKey: string
+  readonly value: string
+  readonly isUnsaved: boolean
+  readonly onChange: (key: string, value: string) => void
+}
+
+function BooleanSettingField({ settingKey, value, isUnsaved, onChange }: BooleanSettingFieldProps) {
+  const activated = value === 'true'
+  const deactivated = value === 'false'
+
+  return (
+    <fieldset
+      id={settingKey}
+      className="border-0 p-0 m-0 min-w-0"
+    >
+      <legend className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+        {settingLabel(settingKey)}
+      </legend>
+      <div
+        className="inline-flex p-0.5 rounded-lg text-xs font-medium"
+        style={{
+          background: 'var(--bg-base)',
+          border: `1px solid ${settingBorderColor(isUnsaved)}`,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => onChange(settingKey, 'true')}
+          aria-pressed={activated}
+          className="px-3 py-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          style={segmentButtonStyle(activated)}
+        >
+          Activado
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(settingKey, 'false')}
+          aria-pressed={deactivated}
+          className="px-3 py-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          style={segmentButtonStyle(deactivated)}
+        >
+          Desactivado
+        </button>
+      </div>
+    </fieldset>
+  )
+}
+
+interface TextSettingFieldProps {
+  readonly settingKey: string
+  readonly value: string
+  readonly isUnsaved: boolean
+  readonly onChange: (key: string, value: string) => void
+}
+
+function TextSettingField({ settingKey, value, isUnsaved, onChange }: TextSettingFieldProps) {
+  return (
+    <>
+      <label htmlFor={settingKey} className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+        {settingLabel(settingKey)}
+      </label>
+      <input
+        id={settingKey}
+        type="text"
+        value={value ?? ''}
+        onChange={e => onChange(settingKey, e.target.value)}
+        className={cn('w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500')}
+        style={{
+          background: 'var(--bg-base)',
+          color: 'var(--text-primary)',
+          borderColor: settingBorderColor(isUnsaved),
+        }}
+      />
+    </>
+  )
+}
+
+function isBooleanSetting(value: string | undefined): boolean {
+  return value === 'true' || value === 'false'
+}
+
+interface SettingFieldProps {
+  readonly settingKey: string
+  readonly value: string
+  readonly isUnsaved: boolean
+  readonly onChange: (key: string, value: string) => void
+}
+
+function SettingField({ settingKey, value, isUnsaved, onChange }: SettingFieldProps) {
+  if (isBooleanSetting(value)) {
+    return (
+      <BooleanSettingField
+        settingKey={settingKey}
+        value={value}
+        isUnsaved={isUnsaved}
+        onChange={onChange}
+      />
+    )
+  }
+
+  return (
+    <TextSettingField
+      settingKey={settingKey}
+      value={value}
+      isUnsaved={isUnsaved}
+      onChange={onChange}
+    />
+  )
+}
+
+interface SettingsFormProps {
+  readonly data: SettingsMap
+  readonly unsaved: SettingsMap
+  readonly hasUnsaved: boolean
+  readonly isSaving: boolean
+  readonly onChange: (key: string, value: string) => void
+  readonly onSave: () => void
+}
+
+function SettingsForm({ data, unsaved, hasUnsaved, isSaving, onChange, onSave }: SettingsFormProps) {
+  return (
+    <>
+      {Object.entries(data).map(([key, value]) => (
+        <div key={key}>
+          <SettingField
+            settingKey={key}
+            value={value}
+            isUnsaved={key in unsaved}
+            onChange={onChange}
+          />
+        </div>
+      ))}
+
+      {hasUnsaved && (
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={isSaving}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
+          style={{ background: 'var(--color-primary)' }}
+        >
+          <Save size={14} />
+          {saveButtonLabel(isSaving)}
+        </button>
+      )}
+    </>
+  )
+}
+
 export default function ConfiguracionTab() {
   const [group, setGroup] = useState('hotel')
 
@@ -40,25 +227,20 @@ export default function ConfiguracionTab() {
 
   return (
     <div className="flex gap-4">
-      {/* Sub-tabs de grupo */}
       <nav className="w-32 flex-shrink-0 space-y-1">
         {GROUPS.map(({ key, label }) => (
           <button
             key={key}
+            type="button"
             onClick={() => setGroup(key)}
             className="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors"
-            style={{
-              background: group === key ? 'var(--color-primary-light)' : 'transparent',
-              color:      group === key ? 'var(--color-primary)'       : 'var(--text-secondary)',
-              fontWeight: group === key ? 600 : 400,
-            }}
+            style={groupNavStyle(group === key)}
           >
             {label}
           </button>
         ))}
       </nav>
 
-      {/* Campos */}
       <div
         className="flex-1 rounded-xl p-5 space-y-4"
         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
@@ -69,94 +251,21 @@ export default function ConfiguracionTab() {
             style={{ background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E' }}
           >
             <span>Cambios sin guardar</span>
-            <button onClick={handleDiscard} className="underline">Descartar</button>
+            <button type="button" onClick={handleDiscard} className="underline">Descartar</button>
           </div>
         )}
 
         {isLoading ? (
           <SkeletonText lines={5} />
         ) : (
-          <>
-            {Object.entries(data ?? {}).map(([key, value]) => {
-              const isBool = value === 'true' || value === 'false'
-              const boolOn = value === 'true'
-
-              return (
-                <div key={key}>
-                  <label htmlFor={key} className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-                    {LABELS[key] ?? key}
-                  </label>
-
-                  {isBool ? (
-                    <div
-                      id={key}
-                      role="group"
-                      className="inline-flex p-0.5 rounded-lg text-xs font-medium"
-                      style={{
-                        background:  'var(--bg-base)',
-                        border:      `1px solid ${unsaved[key] ? '#F59E0B' : 'var(--border-default)'}`,
-                      }}
-                    >
-                      {/* Segmented control: el botón seleccionado siempre usa el
-                          mismo tratamiento (primario sólido + texto blanco) sin
-                          importar si es "Activado" o "Desactivado", para que la
-                          señal visual de "yo soy el seleccionado" sea idéntica y
-                          se vea bien tanto en claro como en oscuro. */}
-                      <button
-                        type="button"
-                        onClick={() => handleChange(key, 'true')}
-                        aria-pressed={boolOn}
-                        className="px-3 py-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        style={{
-                          background: boolOn ? 'var(--color-primary)' : 'transparent',
-                          color:      boolOn ? '#fff'                 : 'var(--text-secondary)',
-                        }}
-                      >
-                        Activado
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleChange(key, 'false')}
-                        aria-pressed={!boolOn}
-                        className="px-3 py-1.5 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        style={{
-                          background: !boolOn ? 'var(--color-primary)' : 'transparent',
-                          color:      !boolOn ? '#fff'                 : 'var(--text-secondary)',
-                        }}
-                      >
-                        Desactivado
-                      </button>
-                    </div>
-                  ) : (
-                    <input
-                      id={key}
-                      type="text"
-                      value={value ?? ''}
-                      onChange={e => handleChange(key, e.target.value)}
-                      className={cn('w-full px-3 py-2 rounded-lg text-sm border focus:outline-none focus:ring-2 focus:ring-blue-500')}
-                      style={{
-                        background:  'var(--bg-base)',
-                        color:       'var(--text-primary)',
-                        borderColor: unsaved[key] ? '#F59E0B' : 'var(--border-default)',
-                      }}
-                    />
-                  )}
-                </div>
-              )
-            })}
-
-            {hasUnsaved && (
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white"
-                style={{ background: 'var(--color-primary)' }}
-              >
-                <Save size={14} />
-                {isSaving ? 'Guardando…' : 'Guardar cambios'}
-              </button>
-            )}
-          </>
+          <SettingsForm
+            data={data ?? {}}
+            unsaved={unsaved}
+            hasUnsaved={hasUnsaved}
+            isSaving={isSaving}
+            onChange={handleChange}
+            onSave={handleSave}
+          />
         )}
       </div>
     </div>

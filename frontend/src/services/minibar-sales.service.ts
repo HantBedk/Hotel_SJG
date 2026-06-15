@@ -1,5 +1,6 @@
 import api from '@/lib/axios'
 import type {
+  ApiResponse,
   MinibarSale,
   MinibarSalePaymentMethod,
   MinibarSaleStatus,
@@ -15,49 +16,56 @@ export interface MinibarSalesFilters {
   per_page?: number
 }
 
+export interface CreateMinibarSaleItem {
+  minibar_product_id: string
+  quantity: number
+}
+
 export interface CreateMinibarSalePayload {
   customer_name?: string | null
   customer_document?: string | null
   guest_id?: string | null
   notes?: string | null
-  items: { minibar_product_id: string; quantity: number }[]
+  items: CreateMinibarSaleItem[]
 }
 
-export const getMinibarSalesApi = async (
-  filters?: MinibarSalesFilters,
-): Promise<MinibarSalesPage> => {
-  const res = await api.get('/minibar-sales', { params: filters })
-  return res.data.data
+export interface PayMinibarSalePayload {
+  payment_method: MinibarSalePaymentMethod
+  guest_id?: string | null
 }
 
-export const getMinibarSaleApi = async (id: string): Promise<MinibarSale> => {
-  const res = await api.get(`/minibar-sales/${id}`)
-  return res.data.data
+export interface CancelMinibarSalePayload {
+  reason?: string
 }
 
-export const createMinibarSaleApi = async (
-  data: CreateMinibarSalePayload,
-): Promise<MinibarSale> => {
-  const res = await api.post('/minibar-sales', data)
-  return res.data.data
+export async function getMinibarSalesApi(filters?: MinibarSalesFilters): Promise<MinibarSalesPage> {
+  const { data } = await api.get<ApiResponse<MinibarSalesPage>>('/minibar-sales', { params: filters })
+  return data.data
 }
 
-export const payMinibarSaleApi = async (
+export async function getMinibarSaleApi(id: string): Promise<MinibarSale> {
+  const { data } = await api.get<ApiResponse<MinibarSale>>(`/minibar-sales/${id}`)
+  return data.data
+}
+
+export async function createMinibarSaleApi(payload: CreateMinibarSalePayload): Promise<MinibarSale> {
+  const { data } = await api.post<ApiResponse<MinibarSale>>('/minibar-sales', payload)
+  return data.data
+}
+
+export async function payMinibarSaleApi(id: string, payload: PayMinibarSalePayload): Promise<MinibarSale> {
+  const { data } = await api.post<ApiResponse<MinibarSale>>(`/minibar-sales/${id}/pay`, payload)
+  return data.data
+}
+
+export async function cancelMinibarSaleApi(
   id: string,
-  data: { payment_method: MinibarSalePaymentMethod; guest_id?: string | null },
-): Promise<MinibarSale> => {
-  const res = await api.post(`/minibar-sales/${id}/pay`, data)
-  return res.data.data
+  payload: CancelMinibarSalePayload = {},
+): Promise<MinibarSale> {
+  const { data } = await api.post<ApiResponse<MinibarSale>>(`/minibar-sales/${id}/cancel`, payload)
+  return data.data
 }
 
-export const cancelMinibarSaleApi = async (
-  id: string,
-  data: { reason?: string } = {},
-): Promise<MinibarSale> => {
-  const res = await api.post(`/minibar-sales/${id}/cancel`, data)
-  return res.data.data
-}
-
-export const deleteMinibarSaleApi = async (id: string): Promise<void> => {
+export async function deleteMinibarSaleApi(id: string): Promise<void> {
   await api.delete(`/minibar-sales/${id}`)
 }

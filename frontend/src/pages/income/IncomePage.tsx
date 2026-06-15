@@ -8,7 +8,9 @@ import {
 } from 'lucide-react'
 import { useIncomeDaily, useIncomeSummary } from '@/hooks/useIncome'
 import { usePaymentsHistory } from '@/hooks/useActivity'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { formatCOP } from '@/lib/format'
+import { cn } from '@/lib/cn'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { fetchIncomeReportHtml, type IncomeRangeParams } from '@/services/income.service'
 import type { PaymentFilters } from '@/services/activity.service'
@@ -37,8 +39,47 @@ const METHOD_ICON: Record<string, React.ElementType> = {
   credito:  Wallet,
 }
 
+const INCOME_KPI_SKELETON_KEYS = [
+  'income-kpi-a',
+  'income-kpi-b',
+  'income-kpi-c',
+  'income-kpi-d',
+] as const
+
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+function formatNightLabel(date: string | undefined): string {
+  if (!date) return '—'
+  if (date === todayIso()) return 'hoy'
+  return new Date(`${date}T12:00:00`).toLocaleDateString('es-CO', {
+    weekday: 'long', day: 'numeric', month: 'short',
+  })
+}
+
+function useDialogLifecycle(onClose: () => void) {
+  const dialogRef = useFocusTrap<HTMLDialogElement>(true, onClose)
+  const backdropClassName = 'absolute inset-0 border-0 p-0 cursor-default'
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (!dialog.open) dialog.showModal()
+    return () => {
+      if (dialog.open) dialog.close()
+    }
+  }, [dialogRef])
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  return { dialogRef, backdropClassName }
 }
 
 export default function IncomePage() {
@@ -73,9 +114,9 @@ export default function IncomePage() {
     const today = fmt(t)
     switch (preset) {
       case 'today':   return { from: today, to: today }
-      case 'week':    return { from: fmt(new Date(t.getTime() - 6 * 86400_000)),  to: today }
+      case 'week':    return { from: fmt(new Date(t.getTime() - 6 * 86_400_000)),  to: today }
       case 'month':   return { from: fmt(new Date(t.getFullYear(), t.getMonth(), 1)), to: today }
-      case 'last_30': return { from: fmt(new Date(t.getTime() - 29 * 86400_000)), to: today }
+      case 'last_30': return { from: fmt(new Date(t.getTime() - 29 * 86_400_000)), to: today }
       default:        return { from, to }
     }
   }, [preset, from, to])
@@ -116,16 +157,7 @@ export default function IncomePage() {
     win.print()
   }
 
-  // Cerrar el modal con Escape.
-  useEffect(() => {
-    if (!reportHtml) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setReportHtml(null)
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [reportHtml])
-
+  // Cerrar el modal: useFocusTrap en ReportPreviewModal maneja Escape.
   const changePreset = (next: Preset) => {
     setPreset(next)
     setSearchParams((prev) => {
@@ -162,16 +194,141 @@ export default function IncomePage() {
     setSelectedNightIdx(todayIdx >= 0 ? todayIdx : nights.length - 1)
   }, [summary?.period.from, summary?.period.to, nights.length])
 
-  const safeIdx        = Math.min(Math.max(selectedNightIdx, 0), Math.max(0, nights.length - 1))
-  const selectedNight  = nights[safeIdx]
-  const isToday        = selectedNight?.date === todayIso()
-  const nightLabel     = selectedNight
-    ? (isToday
-        ? 'hoy'
-        : new Date(selectedNight.date + 'T12:00:00').toLocaleDateString('es-CO', {
-            weekday: 'long', day: 'numeric', month: 'short',
-          }))
-    : '—'
+  const safeIdx = Math.min(Math.max(selectedNightIdx, 0), Math.max(0, nights.length - 1))
+  const selectedNight = nights[safeIdx]
+  const nightLabel = formatNightLabel(selectedNight?.date)
+
+  let kpiSectionContent
+  if (isLoading) {
+    kpiSectionContent = INCOME_KPI_SKELETON_KEYS.map((key) => <SkeletonCard key={key} />)
+  } else {
+    kpiSectionContent = (
+      <>
+        <KpiCard
+          label="Ingreso diario de habitaciones"
+          value={formatCOP(tonight?.room_revenue ?? 0)}
+          sub={`${tonight?.rooms_count ?? 0} habitaciones generando ingreso`}
+          icon={BedDouble}
+          color="#16A34A"
+          colorBg="#ECFDF5"
+        />
+        <KpiCard
+          label={`Pagos recibidos · ${PRESET_LABEL[preset]}`}
+          value={formatCOP(range?.payments_received ?? 0)}
+          sub={`${range?.payments_count ?? 0} pagos en el periodo`}
+          icon={Wallet}
+          color="var(--color-primary)"
+          colorBg="var(--color-primary-light)"
+        />
+        <KpiCard
+          label="Servicios cobrados"
+          value={formatCOP(range?.services_billed ?? 0)}
+          sub="Servicios extra aplicados"
+          icon={Sparkles}
+          color="#8B5CF6"
+          colorBg="#F5F3FF"
+        />
+        <KpiCard
+          label="Minibar"
+          value={formatCOP(range?.minibar_billed ?? 0)}
+          sub="Consumos registrados"
+          icon={ShoppingCart}
+          color="#F97316"
+          colorBg="#FFF7ED"
+        />
+      </>
+    )
+  }
+
+  let paymentsSectionContent
+  if (loadingPayments) {
+    paymentsSectionContent = (
+      <p className="text-xs py-8 text-center" style={{ color: 'var(--text-muted)' }}>Cargando…</p>
+    )
+  } else if (paymentsRows.length === 0) {
+    paymentsSectionContent = (
+      <p className="text-xs py-8 text-center" style={{ color: 'var(--text-muted)' }}>
+        No hay pagos que coincidan con los filtros.
+      </p>
+    )
+  } else {
+    paymentsSectionContent = (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr style={{ color: 'var(--text-muted)' }}>
+              <th className="text-left font-semibold py-2 px-2">Fecha</th>
+              <th className="text-left font-semibold py-2 px-2">Huésped</th>
+              <th className="text-left font-semibold py-2 px-2">Recepción</th>
+              <th className="text-left font-semibold py-2 px-2">Método</th>
+              <th className="text-left font-semibold py-2 px-2">Estado</th>
+              <th className="text-right font-semibold py-2 px-2">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paymentsRows.map((p) => {
+              const cancelled = !!p.cancelled_at
+              return (
+                <tr
+                  key={p.id}
+                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                  style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
+                  onClick={() => navigate(`/stays?id=${p.stay_id}`)}
+                >
+                  <td className="py-2 px-2 whitespace-nowrap">
+                    {new Date(p.payment_date).toLocaleString('es-CO', {
+                      day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+                    })}
+                  </td>
+                  <td className="py-2 px-2">
+                    <span className="font-medium">{p.guest_name ?? '—'}</span>
+                  </td>
+                  <td className="py-2 px-2" style={{ color: 'var(--text-secondary)' }}>
+                    {p.receptionist ?? '—'}
+                  </td>
+                  <td className="py-2 px-2">
+                    <span
+                      className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                      style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
+                    >
+                      {METHOD_LABEL[p.payment_method] ?? p.payment_method}
+                    </span>
+                  </td>
+                  <td className="py-2 px-2">
+                    {cancelled ? (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                        style={{ background: '#FEF2F2', color: '#DC2626' }}
+                        title={p.cancellation_reason ?? 'Anulado'}
+                      >
+                        Anulado
+                      </span>
+                    ) : (
+                      <span
+                        className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                        style={{ background: '#F0FDF4', color: '#16A34A' }}
+                      >
+                        Activo
+                      </span>
+                    )}
+                  </td>
+                  <td
+                    className="py-2 px-2 text-right font-bold tabular-nums"
+                    style={{
+                      color: cancelled ? '#9CA3AF' : '#16A34A',
+                      textDecoration: cancelled ? 'line-through' : undefined,
+                    }}
+                  >
+                    {formatCOP(Number(p.amount))}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-5">
@@ -248,44 +405,7 @@ export default function IncomePage() {
 
       {/* KPIs principales */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {isLoading ? (
-          Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
-        ) : (
-          <>
-            <KpiCard
-              label="Ingreso diario de habitaciones"
-              value={formatCOP(tonight?.room_revenue ?? 0)}
-              sub={`${tonight?.rooms_count ?? 0} habitaciones generando ingreso`}
-              icon={BedDouble}
-              color="#16A34A"
-              colorBg="#ECFDF5"
-            />
-            <KpiCard
-              label={`Pagos recibidos · ${PRESET_LABEL[preset]}`}
-              value={formatCOP(range?.payments_received ?? 0)}
-              sub={`${range?.payments_count ?? 0} pagos en el periodo`}
-              icon={Wallet}
-              color="var(--color-primary)"
-              colorBg="var(--color-primary-light)"
-            />
-            <KpiCard
-              label="Servicios cobrados"
-              value={formatCOP(range?.services_billed ?? 0)}
-              sub="Servicios extra aplicados"
-              icon={Sparkles}
-              color="#8B5CF6"
-              colorBg="#F5F3FF"
-            />
-            <KpiCard
-              label="Minibar"
-              value={formatCOP(range?.minibar_billed ?? 0)}
-              sub="Consumos registrados"
-              icon={ShoppingCart}
-              color="#F97316"
-              colorBg="#FFF7ED"
-            />
-          </>
-        )}
+        {kpiSectionContent}
       </div>
 
       {/* Layout principal */}
@@ -537,152 +657,102 @@ export default function IncomePage() {
           </div>
         </div>
 
-        {loadingPayments ? (
-          <p className="text-xs py-8 text-center" style={{ color: 'var(--text-muted)' }}>Cargando…</p>
-        ) : paymentsRows.length === 0 ? (
-          <p className="text-xs py-8 text-center" style={{ color: 'var(--text-muted)' }}>
-            No hay pagos que coincidan con los filtros.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr style={{ color: 'var(--text-muted)' }}>
-                  <th className="text-left font-semibold py-2 px-2">Fecha</th>
-                  <th className="text-left font-semibold py-2 px-2">Huésped</th>
-                  <th className="text-left font-semibold py-2 px-2">Recepción</th>
-                  <th className="text-left font-semibold py-2 px-2">Método</th>
-                  <th className="text-left font-semibold py-2 px-2">Estado</th>
-                  <th className="text-right font-semibold py-2 px-2">Monto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paymentsRows.map((p) => {
-                  const cancelled = !!p.cancelled_at
-                  return (
-                    <tr
-                      key={p.id}
-                      className="cursor-pointer hover:opacity-80 transition-opacity"
-                      style={{ borderTop: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
-                      onClick={() => navigate(`/stays?id=${p.stay_id}`)}
-                    >
-                      <td className="py-2 px-2 whitespace-nowrap">
-                        {new Date(p.payment_date).toLocaleString('es-CO', {
-                          day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-                        })}
-                      </td>
-                      <td className="py-2 px-2">
-                        <span className="font-medium">{p.guest_name ?? '—'}</span>
-                      </td>
-                      <td className="py-2 px-2" style={{ color: 'var(--text-secondary)' }}>
-                        {p.receptionist ?? '—'}
-                      </td>
-                      <td className="py-2 px-2">
-                        <span
-                          className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                          style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
-                        >
-                          {METHOD_LABEL[p.payment_method] ?? p.payment_method}
-                        </span>
-                      </td>
-                      <td className="py-2 px-2">
-                        {cancelled ? (
-                          <span
-                            className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                            style={{ background: '#FEF2F2', color: '#DC2626' }}
-                            title={p.cancellation_reason ?? 'Anulado'}
-                          >
-                            Anulado
-                          </span>
-                        ) : (
-                          <span
-                            className="px-2 py-0.5 rounded-full text-[10px] font-semibold"
-                            style={{ background: '#F0FDF4', color: '#16A34A' }}
-                          >
-                            Activo
-                          </span>
-                        )}
-                      </td>
-                      <td
-                        className="py-2 px-2 text-right font-bold tabular-nums"
-                        style={{
-                          color: cancelled ? '#9CA3AF' : '#16A34A',
-                          textDecoration: cancelled ? 'line-through' : undefined,
-                        }}
-                      >
-                        {formatCOP(Number(p.amount))}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        {paymentsSectionContent}
       </div>
 
-      {/* Modal: vista previa del reporte de ingresos */}
       {reportHtml && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: 'rgba(0,0,0,.55)' }}
-          onClick={() => setReportHtml(null)}
-        >
-          <div
-            className="w-full max-w-5xl rounded-xl shadow-2xl flex flex-col"
-            style={{ background: 'var(--bg-surface)', maxHeight: '92vh' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              className="flex items-center justify-between px-5 py-3 border-b"
-              style={{ borderColor: 'var(--border-default)' }}
-            >
-              <h2 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
-                Reporte de ingresos · {PRESET_LABEL[preset]}
-              </h2>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handlePrintReport}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
-                  style={{ background: 'var(--color-primary)' }}
-                  title="Imprimir o guardar como PDF"
-                >
-                  <Printer size={13} />
-                  Imprimir / Guardar PDF
-                </button>
-                <button
-                  onClick={() => setReportHtml(null)}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                  style={{ color: 'var(--text-secondary)' }}
-                  title="Cerrar (Esc)"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-            <div className="flex-1 overflow-hidden" style={{ background: '#f3f4f6' }}>
-              <iframe
-                ref={reportIframeRef}
-                title="Reporte de ingresos"
-                srcDoc={reportHtml}
-                className="w-full h-full border-0"
-                style={{ minHeight: '60vh' }}
-              />
-            </div>
-          </div>
-        </div>
+        <ReportPreviewModal
+          html={reportHtml}
+          presetLabel={PRESET_LABEL[preset]}
+          iframeRef={reportIframeRef}
+          onClose={() => setReportHtml(null)}
+          onPrint={handlePrintReport}
+        />
       )}
     </div>
   )
 }
 
+interface ReportPreviewModalProps {
+  readonly html: string
+  readonly presetLabel: string
+  readonly iframeRef: React.RefObject<HTMLIFrameElement | null>
+  readonly onClose: () => void
+  readonly onPrint: () => void
+}
+
+function ReportPreviewModal({ html, presetLabel, iframeRef, onClose, onPrint }: ReportPreviewModalProps) {
+  const { dialogRef, backdropClassName } = useDialogLifecycle(onClose)
+
+  return (
+    <dialog
+      ref={dialogRef}
+      aria-label={`Reporte de ingresos · ${presetLabel}`}
+      className={cn(
+        'app-modal fixed inset-0 z-50 m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
+        'flex items-center justify-center pointer-events-none p-4',
+      )}
+    >
+      <button
+        type="button"
+        aria-label="Cerrar modal"
+        className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
+        onClick={onClose}
+      />
+      <div
+        className="relative z-10 pointer-events-auto w-full max-w-5xl rounded-xl shadow-2xl flex flex-col"
+        style={{ background: 'var(--bg-surface)', maxHeight: '92vh' }}
+      >
+        <div
+          className="flex items-center justify-between px-5 py-3 border-b"
+          style={{ borderColor: 'var(--border-default)' }}
+        >
+          <h2 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+            Reporte de ingresos · {presetLabel}
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onPrint}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+              style={{ background: 'var(--color-primary)' }}
+              title="Imprimir o guardar como PDF"
+            >
+              <Printer size={13} />
+              Imprimir / Guardar PDF
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              style={{ color: 'var(--text-secondary)' }}
+              title="Cerrar (Esc)"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-hidden" style={{ background: '#f3f4f6' }}>
+          <iframe
+            ref={iframeRef}
+            title="Reporte de ingresos"
+            srcDoc={html}
+            className="w-full h-full border-0"
+            style={{ minHeight: '60vh' }}
+          />
+        </div>
+      </div>
+    </dialog>
+  )
+}
+
 interface KpiCardProps {
-  label: string
-  value: string
-  sub: string
-  icon: React.ElementType
-  color: string
-  colorBg: string
+  readonly label: string
+  readonly value: string
+  readonly sub: string
+  readonly icon: React.ElementType
+  readonly color: string
+  readonly colorBg: string
 }
 
 function KpiCard({ label, value, sub, icon: Icon, color, colorBg }: KpiCardProps) {

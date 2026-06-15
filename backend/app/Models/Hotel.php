@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Storage;
 
 class Hotel extends Model
@@ -30,9 +33,14 @@ class Hotel extends Model
 
     public function getLogoUrlAttribute(): ?string
     {
-        return $this->logo_path
-            ? Storage::disk('public')->url($this->logo_path)
-            : null;
+        if (! $this->logo_path) {
+            return null;
+        }
+
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+
+        return $disk->url($this->logo_path);
     }
 
     protected function casts(): array
@@ -41,5 +49,15 @@ class Hotel extends Model
             'late_checkout_fee' => 'decimal:2',
             'tax_rate'          => 'decimal:4',
         ];
+    }
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'hotel_user');
+    }
+
+    public function inventory(): HasMany
+    {
+        return $this->hasMany(HotelInventory::class);
     }
 }

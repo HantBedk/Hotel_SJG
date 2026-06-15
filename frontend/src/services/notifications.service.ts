@@ -1,23 +1,29 @@
 import api from '@/lib/axios'
-import type { AppNotification } from '@/types'
+import type { ApiResponse, AppNotification } from '@/types'
 
-export const getNotificationsApi = async (): Promise<{
+export interface NotificationsListResult {
   data: AppNotification[]
   meta: unknown
-}> => {
-  const res = await api.get('/notifications')
-  return res.data.data
 }
 
-export const getUnreadCountApi = async (): Promise<number> => {
-  const res = await api.get('/notifications/unread-count')
-  return res.data.data.count
+export interface UnreadCountResult {
+  count: number
 }
 
-export const markReadApi = async (id: string): Promise<void> => {
+export async function getNotificationsApi(): Promise<NotificationsListResult> {
+  const { data } = await api.get<ApiResponse<NotificationsListResult>>('/notifications')
+  return data.data
+}
+
+export async function getUnreadCountApi(): Promise<number> {
+  const { data } = await api.get<ApiResponse<UnreadCountResult>>('/notifications/unread-count')
+  return data.data.count
+}
+
+export async function markReadApi(id: string): Promise<void> {
   await api.post(`/notifications/${id}/read`)
 }
 
-export const markAllReadApi = async (): Promise<void> => {
+export async function markAllReadApi(): Promise<void> {
   await api.post('/notifications/read-all')
 }

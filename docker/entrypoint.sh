@@ -24,10 +24,13 @@ else
     echo "$APP_KEY" > "$KEY_FILE"
 fi
 
-# Cache de configuración
 # Unset any empty env vars that docker-compose may inject so dotenv/.env takes over
 [ -z "$APP_KEY" ]   && unset APP_KEY
 [ -z "$APP_DEBUG" ] && unset APP_DEBUG
+
+# Cache de configuración — redescubrir paquetes según vendor real (--no-dev en imagen).
+rm -f bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/cache/config.php
+php artisan package:discover --ansi
 php artisan config:cache
 php artisan route:cache
 # No view:cache — pure SPA project, no Blade views
@@ -36,9 +39,12 @@ php artisan route:cache
 echo "Ejecutando migraciones..."
 php artisan migrate --force
 
-# Seeders solo en primer arranque (flag de control)
-if [ ! -f /var/www/html/storage/.seeded ]; then
-    echo "Ejecutando seeders iniciales..."
+# Seeders en primer arranque, o si la BD quedó vacía (.seeded huérfano del volumen host).
+USER_COUNT=$(PGPASSWORD="${DB_PASSWORD:-changeme_strong_password}" psql -h "${DB_HOST:-db}" -U "${DB_USERNAME:-hotel_user}" -d "${DB_DATABASE:-hotel_sjg}" -tAc "SELECT COUNT(*) FROM users" 2>/dev/null || echo "0")
+USER_COUNT=$(echo "$USER_COUNT" | tr -d '[:space:]')
+
+if [ ! -f /var/www/html/storage/.seeded ] || [ "$USER_COUNT" = "0" ]; then
+    echo "Ejecutando seeders iniciales (users=${USER_COUNT})..."
     php artisan db:seed --force
     touch /var/www/html/storage/.seeded
     echo "Seeders completados."

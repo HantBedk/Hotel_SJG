@@ -9,7 +9,11 @@ const STATUS_CONFIG: Record<RoomStatus, { label: string; color: string; bg: stri
   blocked:     { label: 'Bloqueada',    color: 'var(--status-blocked)',     bg: '#F9FAFB' },
 }
 
-export function RoomStatusBadge({ status }: { status: RoomStatus }) {
+interface RoomStatusBadgeProps {
+  readonly status: RoomStatus
+}
+
+export function RoomStatusBadge({ status }: RoomStatusBadgeProps) {
   const cfg = STATUS_CONFIG[status]
   return (
     <span

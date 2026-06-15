@@ -14,8 +14,83 @@ type ViewMode = 'week' | 'twoWeeks' | 'month' | 'year'
 
 const VIEW_DAYS: Record<ViewMode, number> = { week: 7, twoWeeks: 14, month: 30, year: 365 }
 
+const MOBILE_SKELETON_KEYS = Array.from({ length: 5 }, (_, i) => `calendar-skeleton-${i + 1}`)
+
+function occupancyHeatColor(pct: number): string {
+  if (pct >= 0.9) return '#7F1D1D'
+  if (pct >= 0.7) return '#DC2626'
+  if (pct >= 0.5) return '#F97316'
+  if (pct >= 0.3) return '#F59E0B'
+  if (pct > 0) return '#10B981'
+  return 'var(--bg-input)'
+}
+
+function entryDotClass(entry: CalendarEntry): string {
+  if (entry.type === 'reservation') {
+    return entry.status === 'confirmed' ? 'bg-sky-600' : 'bg-sky-400'
+  }
+  return entry.status === 'extended' ? 'bg-rose-700' : 'bg-rose-500'
+}
+
+function viewModeLabel(mode: ViewMode): string {
+  if (mode === 'week') return '7 días'
+  if (mode === 'twoWeeks') return '14 días'
+  if (mode === 'month') return '30 días'
+  return 'Año'
+}
+
+function monthAverageOccupancy(monthTotalOccupied: number, daysCount: number, totalRooms: number): number {
+  if (totalRooms === 0) return 0
+  return Math.round((monthTotalOccupied / (daysCount * totalRooms)) * 100)
+}
+
+interface HeatmapDayCellProps {
+  readonly date: Date
+  readonly occ: number
+  readonly totalRooms: number
+  readonly today: string
+}
+
+function HeatmapDayCell({ date, occ, totalRooms, today }: HeatmapDayCellProps) {
+  const pct = totalRooms > 0 ? occ / totalRooms : 0
+  const isToday = format(date, 'yyyy-MM-dd') === today
+  return (
+    <div
+      className="aspect-square rounded-sm"
+      style={{
+        background: occupancyHeatColor(pct),
+        outline: isToday ? '1.5px solid var(--color-primary)' : 'none',
+        outlineOffset: '1px',
+      }}
+      title={`${format(date, 'd MMM', { locale: es })} · ${occ}/${totalRooms} (${Math.round(pct * 100)}%)`}
+    />
+  )
+}
+
+interface YearHeatmapProps {
+  readonly data: CalendarData
+  readonly startDate: Date
+  readonly onMonthClick?: (monthStart: Date) => void
+}
+
+interface MobileCalendarListProps {
+  readonly data: CalendarData
+  readonly startDate: Date
+  readonly days: number
+}
+
+interface LegendDotProps {
+  readonly color: string
+  readonly label: string
+}
+
+interface EntryDetailPanelProps {
+  readonly entry: CalendarEntry
+  readonly onClose: () => void
+}
+
 // ── Year heatmap: 12 mini-meses con celdas por día coloreadas por ocupación ──
-function YearHeatmap({ data, startDate, onMonthClick }: { data: CalendarData; startDate: Date; onMonthClick?: (monthStart: Date) => void }) {
+function YearHeatmap({ data, startDate, onMonthClick }: YearHeatmapProps) {
   const totalRooms = data.rooms.length
   const entries = [...data.reservations, ...data.stays]
 
@@ -57,31 +132,19 @@ function YearHeatmap({ data, startDate, onMonthClick }: { data: CalendarData; st
               {days.map((date) => {
                 const occ = occupiedSet(date).size
                 monthTotalOccupied += occ
-                const pct = totalRooms > 0 ? occ / totalRooms : 0
-                const isToday = format(date, 'yyyy-MM-dd') === today
-                const bg =
-                  pct >= 0.9 ? '#7F1D1D'
-                  : pct >= 0.7 ? '#DC2626'
-                  : pct >= 0.5 ? '#F97316'
-                  : pct >= 0.3 ? '#F59E0B'
-                  : pct > 0 ? '#10B981'
-                  : 'var(--bg-input)'
                 return (
-                  <div
+                  <HeatmapDayCell
                     key={format(date, 'yyyy-MM-dd')}
-                    className="aspect-square rounded-sm"
-                    style={{
-                      background: bg,
-                      outline: isToday ? '1.5px solid var(--color-primary)' : 'none',
-                      outlineOffset: '1px',
-                    }}
-                    title={`${format(date, 'd MMM', { locale: es })} · ${occ}/${totalRooms} (${Math.round(pct * 100)}%)`}
+                    date={date}
+                    occ={occ}
+                    totalRooms={totalRooms}
+                    today={today}
                   />
                 )
               })}
             </div>
             <div className="text-[10px] mt-2 text-right" style={{ color: 'var(--text-muted)' }}>
-              Prom. {totalRooms > 0 ? Math.round((monthTotalOccupied / (days.length * totalRooms)) * 100) : 0}%
+              Prom. {monthAverageOccupancy(monthTotalOccupied, days.length, totalRooms)}%
             </div>
           </button>
         )
@@ -91,7 +154,7 @@ function YearHeatmap({ data, startDate, onMonthClick }: { data: CalendarData; st
 }
 
 // ── Mobile list view ──────────────────────────────────────────────────────────
-function MobileCalendarList({ data, startDate, days }: { data: CalendarData; startDate: Date; days: number }) {
+function MobileCalendarList({ data, startDate, days }: MobileCalendarListProps) {
   const dates = eachDayOfInterval({ start: startDate, end: addDays(startDate, days - 1) })
   const allEntries = [...data.reservations, ...data.stays]
 
@@ -116,14 +179,9 @@ function MobileCalendarList({ data, startDate, days }: { data: CalendarData; sta
               {format(date, "EEEE d 'de' MMMM", { locale: es })}
             </div>
             <ul className="divide-y" style={{ borderColor: 'var(--border-default)' }}>
-              {entries.map((entry, i) => (
-                <li key={i} className="px-4 py-3 flex items-start gap-3">
-                  <span className={cn(
-                    'mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0',
-                    entry.type === 'reservation'
-                      ? (entry.status === 'confirmed' ? 'bg-sky-600' : 'bg-sky-400')
-                      : (entry.status === 'extended'  ? 'bg-rose-700' : 'bg-rose-500'),
-                  )} />
+              {entries.map((entry) => (
+                <li key={`${entry.type}-${entry.id}`} className="px-4 py-3 flex items-start gap-3">
+                  <span className={cn('mt-0.5 w-2.5 h-2.5 rounded-full flex-shrink-0', entryDotClass(entry))} />
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
                       {entry.guest_name ?? entry.company_name ?? '—'}
@@ -194,6 +252,55 @@ export default function CalendarPage() {
     return `${format(anchor, 'd MMM', { locale: es })} – ${format(end, 'd MMM yyyy', { locale: es })}`
   })()
 
+  let desktopContent: React.ReactNode = null
+  if (isLoading && !data) {
+    desktopContent = (
+      <div className="flex-1 p-4">
+        <SkeletonTable rows={8} cols={7} />
+      </div>
+    )
+  } else if (data && view === 'year') {
+    desktopContent = (
+      <div className="flex-1 overflow-y-auto pr-2 pb-4">
+        <YearHeatmap
+          data={data}
+          startDate={anchor}
+          onMonthClick={(monthStart) => {
+            setView('month')
+            setAnchor(monthStart)
+          }}
+        />
+      </div>
+    )
+  } else if (data) {
+    desktopContent = (
+      <CalendarGrid
+        data={data}
+        startDate={anchor}
+        days={days}
+        onEntryClick={setSelectedEntry}
+        onCellClick={handleCellClick}
+        onRangeSelect={(_roomId, start, _end) => {
+          setPrefillDate(format(start, 'yyyy-MM-dd'))
+          setShowWizard(true)
+        }}
+      />
+    )
+  }
+
+  let mobileContent: React.ReactNode = null
+  if (isLoading && !data) {
+    mobileContent = (
+      <div className="p-4 space-y-2">
+        {MOBILE_SKELETON_KEYS.map((key) => (
+          <Skeleton key={key} className="h-20 w-full rounded-xl" />
+        ))}
+      </div>
+    )
+  } else if (data) {
+    mobileContent = <MobileCalendarList data={data} startDate={anchor} days={days} />
+  }
+
   return (
     <div className="flex flex-col h-full gap-3">
       {/* Toolbar */}
@@ -206,6 +313,7 @@ export default function CalendarPage() {
           {(['week', 'twoWeeks', 'month', 'year'] as ViewMode[]).map((v) => (
             <button
               key={v}
+              type="button"
               onClick={() => switchView(v)}
               className={cn('px-3 py-1.5 transition-colors', view === v ? 'font-semibold' : '')}
               style={{
@@ -213,7 +321,7 @@ export default function CalendarPage() {
                 color: view === v ? 'white' : 'var(--text-secondary)',
               }}
             >
-              {v === 'week' ? '7 días' : v === 'twoWeeks' ? '14 días' : v === 'month' ? '30 días' : 'Año'}
+              {viewModeLabel(v)}
             </button>
           ))}
         </div>
@@ -221,6 +329,7 @@ export default function CalendarPage() {
         {/* Navigation */}
         <div className="flex items-center gap-1">
           <button
+            type="button"
             onClick={() => navigate('prev')}
             className="p-1.5 rounded-lg transition-colors hover:opacity-80"
             style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border-default)' }}
@@ -229,6 +338,7 @@ export default function CalendarPage() {
           </button>
 
           <button
+            type="button"
             onClick={goToday}
             className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors hover:opacity-80"
             style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border-default)' }}
@@ -237,6 +347,7 @@ export default function CalendarPage() {
           </button>
 
           <button
+            type="button"
             onClick={() => navigate('next')}
             className="p-1.5 rounded-lg transition-colors hover:opacity-80"
             style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)', border: '1px solid var(--border-default)' }}
@@ -250,6 +361,7 @@ export default function CalendarPage() {
         </span>
 
         <button
+          type="button"
           onClick={() => refetch()}
           className="p-1.5 rounded-lg transition-colors hover:opacity-80"
           style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border-default)' }}
@@ -259,6 +371,7 @@ export default function CalendarPage() {
         </button>
 
         <button
+          type="button"
           onClick={() => { setPrefillDate(undefined); setShowWizard(true) }}
           className="ml-auto px-3 py-1.5 rounded-lg text-sm font-semibold text-white transition-colors hover:opacity-90"
           style={{ background: 'var(--color-primary)' }}
@@ -279,49 +392,12 @@ export default function CalendarPage() {
 
       {/* Desktop grid */}
       <div className="hidden md:flex flex-1 overflow-hidden">
-        {isLoading && !data ? (
-          <div className="flex-1 p-4">
-            <SkeletonTable rows={8} cols={7} />
-          </div>
-        ) : data ? (
-          view === 'year' ? (
-            <div className="flex-1 overflow-y-auto pr-2 pb-4">
-              <YearHeatmap
-                data={data}
-                startDate={anchor}
-                onMonthClick={(monthStart) => {
-                  setView('month')
-                  setAnchor(monthStart)
-                }}
-              />
-            </div>
-          ) : (
-            <CalendarGrid
-              data={data}
-              startDate={anchor}
-              days={days}
-              onEntryClick={setSelectedEntry}
-              onCellClick={handleCellClick}
-              onRangeSelect={(_roomId, start, _end) => {
-                setPrefillDate(format(start, 'yyyy-MM-dd'))
-                setShowWizard(true)
-              }}
-            />
-          )
-        ) : null}
+        {desktopContent}
       </div>
 
       {/* Mobile list view */}
       <div className="md:hidden flex-1 overflow-y-auto">
-        {isLoading && !data ? (
-          <div className="p-4 space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-20 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : data ? (
-          <MobileCalendarList data={data} startDate={anchor} days={days} />
-        ) : null}
+        {mobileContent}
       </div>
 
       {/* Entry detail panel */}
@@ -347,7 +423,7 @@ export default function CalendarPage() {
   )
 }
 
-function LegendDot({ color, label }: { color: string; label: string }) {
+function LegendDot({ color, label }: LegendDotProps) {
   return (
     <span className="flex items-center gap-1.5">
       <span className={`inline-block w-3 h-3 rounded-sm ${color}`} />
@@ -356,7 +432,7 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   )
 }
 
-function EntryDetailPanel({ entry, onClose }: { entry: CalendarEntry; onClose: () => void }) {
+function EntryDetailPanel({ entry, onClose }: EntryDetailPanelProps) {
   const isReservation = entry.type === 'reservation'
   const navigate = useNavigate()
   const canCheckIn = isReservation && ['pending', 'confirmed'].includes(entry.status)
@@ -364,21 +440,23 @@ function EntryDetailPanel({ entry, onClose }: { entry: CalendarEntry; onClose: (
   const go = (path: string) => { onClose(); navigate(path) }
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      style={{ background: 'rgba(0,0,0,0.4)' }}
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <button
+        type="button"
+        aria-label="Cerrar panel"
+        className="absolute inset-0 border-0 p-0 cursor-default"
+        style={{ background: 'rgba(0,0,0,0.4)' }}
+        onClick={onClose}
+      />
       <div
-        className="rounded-t-2xl sm:rounded-2xl p-5 w-full sm:max-w-sm shadow-xl"
+        className="relative z-10 rounded-t-2xl sm:rounded-2xl p-5 w-full sm:max-w-sm shadow-xl"
         style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
-        onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-3">
           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${isReservation ? 'bg-sky-100 text-sky-700' : 'bg-rose-100 text-rose-700'}`}>
             {isReservation ? 'Reserva' : 'Estadía'}
           </span>
-          <button onClick={onClose} className="text-xs" style={{ color: 'var(--text-muted)' }}>Cerrar</button>
+          <button type="button" onClick={onClose} className="text-xs" style={{ color: 'var(--text-muted)' }}>Cerrar</button>
         </div>
 
         <p className="font-semibold">{entry.guest_name ?? entry.company_name ?? '—'}</p>
@@ -399,6 +477,7 @@ function EntryDetailPanel({ entry, onClose }: { entry: CalendarEntry; onClose: (
           {isReservation ? (
             <>
               <button
+                type="button"
                 onClick={() => go(`/reservations?id=${entry.id}`)}
                 className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white"
                 style={{ background: 'var(--color-primary)' }}
@@ -407,6 +486,7 @@ function EntryDetailPanel({ entry, onClose }: { entry: CalendarEntry; onClose: (
               </button>
               {canCheckIn && (
                 <button
+                  type="button"
                   onClick={() => go(`/reservations?id=${entry.id}&action=checkin`)}
                   className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border"
                   style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
@@ -416,6 +496,7 @@ function EntryDetailPanel({ entry, onClose }: { entry: CalendarEntry; onClose: (
               )}
               {canCheckIn && (
                 <button
+                  type="button"
                   onClick={() => go(`/reservations?id=${entry.id}&action=cancel`)}
                   className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border"
                   style={{ borderColor: 'var(--border-default)', color: '#DC2626' }}
@@ -426,6 +507,7 @@ function EntryDetailPanel({ entry, onClose }: { entry: CalendarEntry; onClose: (
             </>
           ) : (
             <button
+              type="button"
               onClick={() => go(`/stays?id=${entry.id}`)}
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white"
               style={{ background: 'var(--color-primary)' }}

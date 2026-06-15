@@ -47,7 +47,7 @@ export default function PagosHistoricoTab() {
   // Total excluye pagos anulados — coherente con cómo el backend calcula ingresos.
   const totalAmount = payments
     .filter(p => !p.cancelled_at)
-    .reduce((acc, p) => acc + parseFloat(p.amount), 0)
+    .reduce((acc, p) => acc + Number.parseFloat(p.amount), 0)
 
   const cancelledCount = payments.filter(p => p.cancelled_at).length
 
@@ -154,7 +154,7 @@ export default function PagosHistoricoTab() {
                         {p.guest_name}
                       </td>
                       <td className="py-2 px-2 font-medium" style={{ color: 'var(--text-primary)', textDecoration: isCancelled ? 'line-through' : undefined }}>
-                        {formatCOP(parseFloat(p.amount))}
+                        {formatCOP(Number.parseFloat(p.amount))}
                       </td>
                       <td className="py-2 px-2" style={{ color: 'var(--text-secondary)' }}>
                         {METHOD_LABELS[p.payment_method] ?? p.payment_method}

@@ -2,15 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToHotel;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Suggestion extends Model
 {
-    use HasUuids;
+    use HasUuids, BelongsToHotel;
 
     protected $fillable = [
+        'hotel_id',
         'type',
         'title',
         'description',

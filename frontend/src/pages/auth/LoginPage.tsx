@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type SubmitEvent } from 'react'
 import { BedDouble, Mail, Lock, Eye, EyeOff, ShieldCheck, Key, Bell, UserCircle, ArrowRight, Shield, X, CheckCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLoginForm } from '@/hooks/useLoginForm'
@@ -6,10 +6,10 @@ import { forgotPasswordApi } from '@/services/auth.service'
 import { cn } from '@/lib/cn'
 
 const features = [
-  { icon: Key,        title: 'Control de Accesos',  desc: 'Gestión de llaves y cerraduras' },
-  { icon: Shield,     title: 'Alta Seguridad',       desc: 'Auditoría de acciones 24/7' },
-  { icon: Bell,       title: 'Tiempo Real',          desc: 'Notificaciones y alertas live' },
-  { icon: UserCircle, title: 'Gestión Operativa',    desc: 'Staff, housekeeping y reservas' },
+  { id: 'access-control', icon: Key,        title: 'Control de Accesos',  desc: 'Gestión de llaves y cerraduras' },
+  { id: 'high-security',  icon: Shield,     title: 'Alta Seguridad',       desc: 'Auditoría de acciones 24/7' },
+  { id: 'real-time',      icon: Bell,       title: 'Tiempo Real',          desc: 'Notificaciones y alertas live' },
+  { id: 'operations',     icon: UserCircle, title: 'Gestión Operativa',    desc: 'Staff, housekeeping y reservas' },
 ]
 
 const phrases = [
@@ -28,7 +28,7 @@ export default function LoginPage() {
   const [forgotEmail, setForgotEmail]   = useState('')
   const [forgotStatus, setForgotStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
 
-  const handleForgot = async (e: React.FormEvent) => {
+  const handleForgot = async (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault()
     setForgotStatus('sending')
     try {
@@ -71,7 +71,7 @@ export default function LoginPage() {
             </div>
 
             <h1 className="text-4xl lg:text-5xl font-bold text-white mb-6 leading-[1.1] tracking-tight">
-              Hotel San José<br />
+              Hotel Manager<br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-300">del Guaviare</span>
             </h1>
 
@@ -93,7 +93,7 @@ export default function LoginPage() {
             <div className="grid grid-cols-2 gap-x-8 gap-y-6 max-w-2xl">
               {features.map((f, i) => (
                 <motion.div
-                  key={i}
+                  key={f.id}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.5, delay: 0.4 + i * 0.1 }}
@@ -155,7 +155,7 @@ export default function LoginPage() {
                   aria-invalid={!!errors.email}
                   aria-describedby={errors.email ? 'email-error' : undefined}
                   {...register('email')}
-                  placeholder="correo@hotelsjg.com"
+                  placeholder="correo@ejemplo.com"
                   className={cn(
                     'w-full pl-12 pr-4 py-3.5 bg-white/80 backdrop-blur-sm border rounded-xl text-slate-900',
                     'focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all outline-none shadow-sm',
@@ -249,7 +249,7 @@ export default function LoginPage() {
               >
                 <div className="flex items-center justify-between mb-5">
                   <h3 className="font-bold text-slate-900 text-base">Olvidé mi contraseña</h3>
-                  <button onClick={closeForgot} className="text-slate-400 hover:text-slate-600 transition-colors">
+                  <button type="button" onClick={closeForgot} aria-label="Cerrar" className="text-slate-400 hover:text-slate-600 transition-colors">
                     <X size={18} />
                   </button>
                 </div>
@@ -262,6 +262,7 @@ export default function LoginPage() {
                       Tu solicitud fue notificada al administrador. Espera que te asignen una nueva contraseña.
                     </p>
                     <button
+                      type="button"
                       onClick={closeForgot}
                       className="mt-2 px-5 py-2 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
                     >
@@ -274,12 +275,13 @@ export default function LoginPage() {
                       Ingresa tu correo y se le notificará al administrador para que restablezca tu contraseña.
                     </p>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1 uppercase tracking-wide">
+                      <label htmlFor="forgot-email" className="block text-xs font-semibold text-slate-600 mb-1 uppercase tracking-wide">
                         Correo electrónico
                       </label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <input
+                          id="forgot-email"
                           type="email"
                           required
                           autoFocus

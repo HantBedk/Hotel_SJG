@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToHotel;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,9 +11,27 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Stay extends Model
 {
-    use HasUuids;
+    use HasUuids, BelongsToHotel;
+
+    public const STATUS_ACTIVE      = 'active';
+    public const STATUS_EXTENDED    = 'extended';
+    public const STATUS_CHECKED_OUT = 'checked_out';
+
+    /** Estadías en curso (operaciones permitidas). */
+    public const OPEN_STATUSES = [
+        self::STATUS_ACTIVE,
+        self::STATUS_EXTENDED,
+    ];
+
+    /** Estados que generan devengo de ingreso por noche. */
+    public const REVENUE_STATUSES = [
+        self::STATUS_ACTIVE,
+        self::STATUS_EXTENDED,
+        self::STATUS_CHECKED_OUT,
+    ];
 
     protected $fillable = [
+        'hotel_id',
         'guest_id',
         'company_id',
         'reservation_id',
@@ -94,9 +114,34 @@ class Stay extends Model
         return $this->hasMany(MinibarConsumption::class);
     }
 
-    public function scopeActive($query)
+    public function scopeActive(Builder $query): Builder
     {
-        return $query->where('status', 'active');
+        return $query->where('status', self::STATUS_ACTIVE);
+    }
+
+    public function scopeOpen(Builder $query): Builder
+    {
+        return $query->whereIn('status', self::OPEN_STATUSES);
+    }
+
+    public function scopeByStatus(Builder $query, string $status): Builder
+    {
+        return $query->where('status', $status);
+    }
+
+    public function scopeForCompany(Builder $query, string $companyId): Builder
+    {
+        return $query->where('company_id', $companyId);
+    }
+
+    public function isOpen(): bool
+    {
+        return in_array($this->status, self::OPEN_STATUSES, true);
+    }
+
+    public function isCheckedOut(): bool
+    {
+        return $this->status === self::STATUS_CHECKED_OUT;
     }
 
     public function pendingBalance(): float

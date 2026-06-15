@@ -2,15 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToHotel;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class InventoryTransaction extends Model
 {
-    use HasUuids;
+    use HasUuids, BelongsToHotel;
 
     protected $fillable = [
+        'hotel_id',
         'inventory_item_id', 'type', 'quantity', 'unit_price', 'total_value',
         'performed_by', 'destination_room_id', 'destination_user_id', 'notes',
     ];

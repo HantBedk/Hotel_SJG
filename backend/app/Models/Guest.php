@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -42,13 +43,42 @@ class Guest extends Model
         return $this->hasMany(Stay::class);
     }
 
-    public function scopeSearch($query, string $term)
+    public function reservations(): HasMany
     {
-        return $query->where(function ($q) use ($term) {
-            $q->whereRaw('full_name ILIKE ?', ["%{$term}%"])
-              ->orWhere('document_number', 'ILIKE', "%{$term}%")
-              ->orWhere('phone', 'ILIKE', "%{$term}%")
-              ->orWhere('email', 'ILIKE', "%{$term}%");
+        return $this->hasMany(Reservation::class);
+    }
+
+    /**
+     * Huéspedes vinculados al hotel vía estadías o reservas (no tienen hotel_id propio).
+     */
+    public function scopeForHotel(Builder $query, string $hotelId): Builder
+    {
+        return $query->where(function (Builder $q) use ($hotelId) {
+            $q->whereHas('stays', fn (Builder $stay) => $stay->where('hotel_id', $hotelId))
+              ->orWhereHas('reservations', fn (Builder $reservation) => $reservation->where('hotel_id', $hotelId));
+        });
+    }
+
+    public function scopeWithStaysCountForHotel(Builder $query, ?string $hotelId = null): Builder
+    {
+        return $query->withCount([
+            'stays as stays_count' => function (Builder $stayQuery) use ($hotelId) {
+                if ($hotelId !== null) {
+                    $stayQuery->where('hotel_id', $hotelId);
+                }
+            },
+        ]);
+    }
+
+    public function scopeSearch(Builder $query, string $term): Builder
+    {
+        $pattern = '%' . $term . '%';
+
+        return $query->where(function (Builder $q) use ($pattern) {
+            $q->whereRaw('full_name ILIKE ?', [$pattern])
+              ->orWhereRaw('document_number ILIKE ?', [$pattern])
+              ->orWhereRaw('phone ILIKE ?', [$pattern])
+              ->orWhereRaw('email ILIKE ?', [$pattern]);
         });
     }
 }

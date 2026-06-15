@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { X, Save, Loader2 } from 'lucide-react'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
+import { cn } from '@/lib/cn'
 import type { Reservation } from '@/types'
 
 interface Props {
-  reservation: Reservation
-  onSave: (payload: {
+  readonly reservation: Reservation
+  readonly onSave: (payload: {
     id: string
     start_date?: string
     end_date?: string
@@ -13,40 +14,71 @@ interface Props {
     deposit_amount?: number
     notes?: string
   }) => void
-  onClose: () => void
-  saving?: boolean
+  readonly onClose: () => void
+  readonly saving?: boolean
 }
 
 function nightsBetween(start: string, end: string): number {
   if (!start || !end) return 0
-  const d1 = new Date(start), d2 = new Date(end)
-  return Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86400000))
+  const d1 = new Date(start)
+  const d2 = new Date(end)
+  return Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86_400_000))
 }
 
-// El backend castea start_date/end_date como `date` y Eloquent las serializa
-// como ISO datetime ("2026-06-23T05:00:00.000000Z"). <input type="date"> sólo
-// acepta "YYYY-MM-DD", así que tomamos los primeros 10 chars (que ya son la
-// fecha en el TZ del hotel) para no introducir un shift por timezone local.
 function toDateInputValue(value: string | null | undefined): string {
   if (!value) return ''
   return value.slice(0, 10)
+}
+
+function useDialogLifecycle(onClose: () => void) {
+  const dialogRef = useFocusTrap<HTMLDialogElement>(true, onClose)
+  const backdropClassName = 'absolute inset-0 border-0 p-0 cursor-default'
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (!dialog.open) dialog.showModal()
+    return () => {
+      if (dialog.open) dialog.close()
+    }
+  }, [dialogRef])
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  return { dialogRef, backdropClassName }
+}
+
+function nightPluralSuffix(n: number): string {
+  return n === 1 ? '' : 's'
+}
+
+function nightsSummaryText(nights: number): string {
+  if (nights <= 0) return 'Las fechas no son válidas'
+  return `${nights} noche${nightPluralSuffix(nights)}`
 }
 
 export default function EditReservationModal({ reservation, onSave, onClose, saving }: Props) {
   const initialStart = toDateInputValue(reservation.start_date)
   const initialEnd   = toDateInputValue(reservation.end_date)
 
-  const [startDate, setStartDate]    = useState(initialStart)
-  const [endDate, setEndDate]        = useState(initialEnd)
+  const [startDate, setStartDate]     = useState(initialStart)
+  const [endDate, setEndDate]         = useState(initialEnd)
   const [agreedPrice, setAgreedPrice] = useState(String(reservation.agreed_price ?? ''))
-  const [deposit, setDeposit]        = useState(String(reservation.deposit_amount ?? ''))
-  const [notes, setNotes]            = useState(reservation.notes ?? '')
+  const [deposit, setDeposit]         = useState(String(reservation.deposit_amount ?? ''))
+  const [notes, setNotes]             = useState(reservation.notes ?? '')
+
+  const { dialogRef, backdropClassName } = useDialogLifecycle(onClose)
 
   const nights = nightsBetween(startDate, endDate)
   const priceNum = Number(agreedPrice)
   const valid = startDate && endDate && nights > 0 && agreedPrice && priceNum >= 0
-
-  const dialogRef = useFocusTrap<HTMLDivElement>(true, onClose)
+  const nightsSummary = nightsSummaryText(nights)
 
   const handleSave = () => {
     if (!valid) return
@@ -60,19 +92,24 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      style={{ background: 'rgba(0,0,0,0.5)' }}
+    <dialog
+      ref={dialogRef}
+      aria-label="Editar reserva"
+      className={cn(
+        'app-modal fixed inset-0 z-50 m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
+        'flex items-end sm:items-center justify-center pointer-events-none p-0 sm:p-4',
+      )}
     >
+      <button
+        type="button"
+        aria-label="Cerrar modal"
+        className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
+        onClick={onClose}
+      />
       <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Editar reserva"
-        className="w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        className="relative z-10 pointer-events-auto w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         style={{ background: 'var(--bg-surface)', maxHeight: '92vh' }}
       >
-        {/* Header */}
         <div
           className="flex items-center justify-between px-5 py-4 border-b shrink-0"
           style={{ borderColor: 'var(--border-default)' }}
@@ -83,15 +120,12 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
               {reservation.guest?.full_name ?? reservation.company?.name ?? '—'}
             </p>
           </div>
-          <button onClick={onClose} style={{ color: 'var(--text-muted)' }} aria-label="Cerrar">
+          <button type="button" onClick={onClose} style={{ color: 'var(--text-muted)' }} aria-label="Cerrar">
             <X size={18} />
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-
-          {/* Datos no editables */}
           <div
             className="rounded-lg p-3 text-xs space-y-1"
             style={{ background: 'var(--bg-input)', color: 'var(--text-muted)' }}
@@ -108,13 +142,13 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
             </p>
           </div>
 
-          {/* Fechas */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+              <label htmlFor="edit-res-start-date" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
                 Llegada *
               </label>
               <input
+                id="edit-res-start-date"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
@@ -123,10 +157,11 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+              <label htmlFor="edit-res-end-date" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
                 Salida *
               </label>
               <input
+                id="edit-res-end-date"
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
@@ -136,15 +171,15 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
             </div>
           </div>
           <p className="text-xs" style={{ color: nights > 0 ? 'var(--text-muted)' : '#DC2626' }}>
-            {nights > 0 ? `${nights} noche${nights !== 1 ? 's' : ''}` : 'Las fechas no son válidas'}
+            {nightsSummary}
           </p>
 
-          {/* Precio */}
           <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="edit-res-agreed-price" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
               Precio total acordado (COP) *
             </label>
             <input
+              id="edit-res-agreed-price"
               type="number"
               min="0"
               step="any"
@@ -155,12 +190,12 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
             />
           </div>
 
-          {/* Depósito */}
           <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="edit-res-deposit" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
               Depósito previsto (COP)
             </label>
             <input
+              id="edit-res-deposit"
               type="number"
               min="0"
               step="any"
@@ -171,12 +206,12 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
             />
           </div>
 
-          {/* Notas */}
           <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="edit-res-notes" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
               Notas
             </label>
             <textarea
+              id="edit-res-notes"
               rows={3}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -186,12 +221,12 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
           </div>
         </div>
 
-        {/* Footer */}
         <div
           className="flex gap-2 px-5 py-4 border-t shrink-0"
           style={{ borderColor: 'var(--border-default)' }}
         >
           <button
+            type="button"
             onClick={onClose}
             className="px-4 py-2 rounded-lg text-sm border hover:opacity-80"
             style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
@@ -199,6 +234,7 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
             Cancelar
           </button>
           <button
+            type="button"
             onClick={handleSave}
             disabled={!valid || saving}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40"
@@ -209,6 +245,6 @@ export default function EditReservationModal({ reservation, onSave, onClose, sav
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   )
 }

@@ -14,6 +14,10 @@ const ACTION_COLORS: Record<string, { bg: string; color: string }> = {
   'stay.service':            { bg: '#EDE9FE', color: '#5B21B6' },
   'stay.transfer':           { bg: '#FEF3C7', color: '#92400E' },
   'stay.minibar_cancelled':  { bg: '#FEE2E2', color: '#991B1B' },
+  'stay.minibar':            { bg: '#DBEAFE', color: '#1E40AF' },
+  'minibar_sale.created':    { bg: '#DBEAFE', color: '#1E40AF' },
+  'minibar_sale.paid':       { bg: '#D1FAE5', color: '#065F46' },
+  'minibar_sale.cancelled':  { bg: '#FEE2E2', color: '#991B1B' },
   'reservation.created':   { bg: '#D1FAE5', color: '#065F46' },
   'reservation.cancelled': { bg: '#FEE2E2', color: '#991B1B' },
   'login':                 { bg: '#E0F2FE', color: '#0369A1' },
@@ -24,7 +28,11 @@ const ACTION_COLORS: Record<string, { bg: string; color: string }> = {
   'inventory.restock':     { bg: '#D1FAE5', color: '#065F46' },
 }
 
-function LogRow({ log }: { log: ActivityLogEntry }) {
+interface LogRowProps {
+  readonly log: ActivityLogEntry
+}
+
+function LogRow({ log }: LogRowProps) {
   const [expanded, setExpanded] = useState(false)
   const colors = ACTION_COLORS[log.action] ?? { bg: '#F3F4F6', color: '#374151' }
 

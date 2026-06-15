@@ -75,9 +75,11 @@ export interface IncomeDailyPoint {
   total: number
 }
 
+export type IncomeGranularity = 'hour' | 'day'
+
 export interface IncomeDaily {
   period: { from: string; to: string }
-  granularity: 'hour' | 'day'
+  granularity: IncomeGranularity
   data: IncomeDailyPoint[]
 }
 
@@ -92,9 +94,7 @@ export async function getIncomeDailyApi(params: IncomeRangeParams = {}): Promise
 }
 
 export async function fetchIncomeReportHtml(params: IncomeRangeParams = {}): Promise<string> {
-  // El backend devuelve un HTML imprimible (no un PDF binario). El consumidor
-  // lo renderiza en un iframe dentro de un modal para mantener la navegación
-  // del usuario en la misma página.
-  const response = await api.get<string>('/income/report', { params, responseType: 'text' })
-  return response.data
+  // El backend devuelve HTML imprimible (no PDF). El consumidor lo muestra en iframe.
+  const { data } = await api.get<string>('/income/report', { params, responseType: 'text' })
+  return data
 }

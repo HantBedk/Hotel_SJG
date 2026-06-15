@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, Moon, Sun, Menu, Settings as SettingsIcon, LogOut } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/authStore'
+import { useHotelStore } from '@/store/hotelStore'
 import { useAuth } from '@/hooks/useAuth'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUnreadCountApi } from '@/services/notifications.service'
 import NotificationCenter from '@/components/notifications/NotificationCenter'
 import { useReverb } from '@/hooks/useReverb'
+import { useSwitchHotel } from '@/hooks/useSwitchHotel'
+import { hotelQueryKey, useHotelQueryKey } from '@/lib/hotelQueryKey'
 
 interface NotificationBroadcast {
   id:         string
@@ -21,18 +24,34 @@ interface NotificationBroadcast {
   created_at: string
 }
 
+function notificationToastIcon(severity: NotificationBroadcast['severity']): string {
+  if (severity === 'critical') return '🚨'
+  if (severity === 'warning') return '⚠️'
+  return '🔔'
+}
+
+function notificationToastMessage(title: string, message: string | null): string {
+  if (!message) return title
+  return `${title} — ${message}`
+}
+
 interface HeaderProps {
-  title: string
-  onToggleSidebar?: () => void
-  darkMode: boolean
-  onToggleDark: () => void
+  readonly title: string
+  readonly onToggleSidebar?: () => void
+  readonly darkMode: boolean
+  readonly onToggleDark: () => void
 }
 
 export default function Header({ title, onToggleSidebar, darkMode, onToggleDark }: HeaderProps) {
   const user = useAuthStore((s) => s.user)
   const { logout, hasPermission } = useAuth()
   const navigate = useNavigate()
+  const switchHotel = useSwitchHotel()
   const queryClient = useQueryClient()
+  const hotels = useHotelStore((s) => s.hotels)
+  const currentHotelId = useHotelStore((s) => s.currentHotelId)
+  const canSwitchHotel = useHotelStore((s) => s.canSwitchHotel)
+  const isSwitchingHotel = useHotelStore((s) => s.isSwitchingHotel)
   const [notifOpen, setNotifOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
@@ -49,8 +68,9 @@ export default function Header({ title, onToggleSidebar, darkMode, onToggleDark 
     return () => document.removeEventListener('mousedown', handler)
   }, [userMenuOpen])
 
+  const notificationsUnreadKey = useHotelQueryKey('notifications-unread')
   const { data: unreadCount = 0 } = useQuery({
-    queryKey: ['notifications-unread'],
+    queryKey: notificationsUnreadKey,
     queryFn: getUnreadCountApi,
     refetchInterval: 60_000,
   })
@@ -58,24 +78,28 @@ export default function Header({ title, onToggleSidebar, darkMode, onToggleDark 
   // Real-time notification: invalidar queries y mostrar toast si el evento
   // está dirigido al usuario actual. El backend emite por user_id, pero el
   // canal es compartido — por eso filtramos en cliente.
+  const notifChannel = currentHotelId
+    ? `hotel.${currentHotelId}.notifications`
+    : 'hotel.notifications'
+
   useReverb<NotificationBroadcast>({
-    channel: 'hotel.notifications',
+    channel: notifChannel,
     event:   'notification.created',
     onEvent: (n) => {
-      queryClient.invalidateQueries({ queryKey: ['notifications-unread'] })
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('notifications-unread') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('notifications') })
 
-      if (!user || n.user_id !== user.id) return
+      if (n.user_id !== user?.id) return
       // Los is_modal abren NotificationModal automáticamente — no duplicar con toast.
       if (n.is_modal) return
 
       const opts = {
         duration: n.severity === 'critical' ? 8000 : 5000,
-        icon:     n.severity === 'critical' ? '🚨' : n.severity === 'warning' ? '⚠️' : '🔔',
+        icon:     notificationToastIcon(n.severity),
       }
-      toast(`${n.title}${n.message ? ` — ${n.message}` : ''}`, opts)
+      toast(notificationToastMessage(n.title, n.message), opts)
     },
-    enabled: !!user,
+    enabled: !!user && !!currentHotelId,
   })
 
   return (
@@ -102,6 +126,38 @@ export default function Header({ title, onToggleSidebar, darkMode, onToggleDark 
       >
         {title}
       </h1>
+
+      {/* Hotel selector / label */}
+      {hotels.length > 0 && (
+        canSwitchHotel ? (
+          <select
+            value={currentHotelId ?? ''}
+            disabled={isSwitchingHotel}
+            onChange={(e) => {
+              void switchHotel(e.target.value)
+            }}
+            className="hidden sm:block text-sm rounded-lg border px-2 py-1.5 max-w-[200px] truncate disabled:opacity-60 disabled:cursor-wait"
+            style={{
+              borderColor: 'var(--border-default)',
+              color: 'var(--text-primary)',
+              background: 'var(--bg-surface)',
+            }}
+            aria-label="Hotel activo"
+          >
+            {hotels.map((h) => (
+              <option key={h.id} value={h.id}>{h.name}</option>
+            ))}
+          </select>
+        ) : (
+          <span
+            className="hidden sm:block text-sm truncate max-w-[180px]"
+            style={{ color: 'var(--text-muted)' }}
+            title={hotels.find((h) => h.id === currentHotelId)?.name}
+          >
+            {hotels.find((h) => h.id === currentHotelId)?.name ?? hotels[0]?.name}
+          </span>
+        )
+      )}
 
       {/* Actions */}
       <div className="flex items-center gap-2">

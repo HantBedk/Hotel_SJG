@@ -6,24 +6,30 @@ import {
   getHousekeepersApi,
 } from '@/services/rooms.service'
 import type { Room, RoomStatus } from '@/types'
+import { hotelQueryKey } from '@/lib/hotelQueryKey'
+import { extractApiError } from '@/lib/apiError'
 
 export function useRooms(statusFilter?: RoomStatus) {
   const queryClient = useQueryClient()
 
   const { data: rooms = [], isLoading } = useQuery({
-    queryKey: ['rooms', statusFilter],
+    queryKey: hotelQueryKey('rooms', statusFilter),
     queryFn:  () => getRoomsApi(statusFilter),
   })
 
   const { data: roomTypes = [] } = useQuery({
-    queryKey: ['room-types'],
+    queryKey: hotelQueryKey('room-types'),
     queryFn:  getRoomTypesApi,
     staleTime: Infinity,
   })
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['rooms'] })
-    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('rooms') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('dashboard') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('notifications') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('notifications-unread') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('activity-logs') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('admin', 'rooms') })
   }
 
   const createMutation = useMutation({
@@ -39,11 +45,22 @@ export function useRooms(statusFilter?: RoomStatus) {
     onError:   () => toast.error('Error al actualizar.'),
   })
 
+  const patchRoomInCache = (room: Room) => {
+    queryClient.setQueriesData<Room[]>(
+      { queryKey: hotelQueryKey('rooms') },
+      (prev) => prev?.map((r) => (r.id === room.id ? { ...r, ...room } : r)) ?? [],
+    )
+  }
+
   const statusMutation = useMutation({
     mutationFn: ({ id, status, notes }: { id: string; status: RoomStatus; notes?: string }) =>
       updateRoomStatusApi(id, { status, notes }),
-    onSuccess: () => { toast.success('Estado actualizado.'); invalidate() },
-    onError:   () => toast.error('Error al cambiar estado.'),
+    onSuccess: (room) => {
+      toast.success('Estado actualizado.')
+      patchRoomInCache(room)
+      invalidate()
+    },
+    onError:   (e) => toast.error(extractApiError(e, 'Error al cambiar estado.')),
   })
 
   const deleteMutation = useMutation({
@@ -54,20 +71,14 @@ export function useRooms(statusFilter?: RoomStatus) {
 
   // Sync room when Reverb broadcasts a status change
   const syncRoomStatus = (roomId: string, status: RoomStatus) => {
-    // Update the unfiltered list in-place
-    queryClient.setQueryData<Room[]>(['rooms', undefined], (prev) =>
-      prev?.map((r) => r.id === roomId ? { ...r, status } : r) ?? []
+    queryClient.setQueriesData<Room[]>(
+      { queryKey: hotelQueryKey('rooms') },
+      (prev) => prev?.map((r) => (r.id === roomId ? { ...r, status } : r)) ?? [],
     )
-    // For the filtered list: if the room's new status no longer matches the filter,
-    // invalidate so it gets removed; otherwise patch it
-    if (statusFilter && status !== statusFilter) {
-      queryClient.invalidateQueries({ queryKey: ['rooms', statusFilter] })
-    } else {
-      queryClient.setQueryData<Room[]>(['rooms', statusFilter], (prev) =>
-        prev?.map((r) => r.id === roomId ? { ...r, status } : r) ?? []
-      )
-    }
-    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('dashboard') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('notifications') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('notifications-unread') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('repair-orders') })
   }
 
   return {
@@ -89,7 +100,7 @@ export function useRooms(statusFilter?: RoomStatus) {
 
 export function useHousekeepers() {
   return useQuery({
-    queryKey: ['housekeepers'],
+    queryKey: hotelQueryKey('housekeepers'),
     queryFn:  getHousekeepersApi,
     staleTime: 5 * 60 * 1000,
   })

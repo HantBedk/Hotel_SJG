@@ -2,222 +2,344 @@ import api from '@/lib/axios'
 import type {
   AdminUser,
   AdminUserPayload,
+  ApiResponse,
   BackupFile,
   ExtraService,
+  HotelInfo,
+  HotelInfoPayload,
+  HotelLogoUploadResult,
+  HotelSummary,
   House,
   Room,
   RoomType,
   Season,
-} from '../types'
+} from '@/types'
 
-// ── Hotel ─────────────────────────────────────────────────────────────────────
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = globalThis.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  globalThis.URL.revokeObjectURL(url)
+}
 
-export const getHotelInfoApi = () =>
-  api.get('/admin/hotel').then(r => r.data.data)
+// ── Hotels (multi-tenant admin) ───────────────────────────────────────────────
 
-export const updateHotelInfoApi = (data: Record<string, string>) =>
-  api.put('/admin/hotel', data).then(r => r.data.data)
+export async function getAdminHotelsApi(): Promise<HotelSummary[]> {
+  const { data } = await api.get<ApiResponse<HotelSummary[]>>('/admin/hotels')
+  return data.data
+}
 
-export const uploadLogoApi = (file: File) => {
+export async function createHotelApi(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { data } = await api.post<ApiResponse<Record<string, unknown>>>('/admin/hotels', payload)
+  return data.data
+}
+
+export async function updateHotelApi(id: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { data } = await api.put<ApiResponse<Record<string, unknown>>>(`/admin/hotels/${id}`, payload)
+  return data.data
+}
+
+export async function deleteHotelApi(id: string): Promise<ApiResponse> {
+  const { data } = await api.delete<ApiResponse>(`/admin/hotels/${id}`)
+  return data
+}
+
+// ── Hotel (activo) ────────────────────────────────────────────────────────────
+
+export async function getHotelInfoApi(): Promise<HotelInfo> {
+  const { data } = await api.get<ApiResponse<HotelInfo>>('/admin/hotel')
+  return data.data
+}
+
+export async function updateHotelInfoApi(payload: HotelInfoPayload): Promise<HotelInfo> {
+  const { data } = await api.put<ApiResponse<HotelInfo>>('/admin/hotel', payload)
+  return data.data
+}
+
+export async function uploadLogoApi(file: File): Promise<HotelLogoUploadResult> {
   const form = new FormData()
   form.append('logo', file)
-  return api.post('/admin/hotel/logo', form, {
+  const { data } = await api.post<ApiResponse<HotelLogoUploadResult>>('/admin/hotel/logo', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
-  }).then(r => r.data.data)
+  })
+  return data.data
 }
 
 // ── Room types ────────────────────────────────────────────────────────────────
 
-export const getAdminRoomTypesApi = () =>
-  api.get('/admin/room-types').then(r => r.data.data as RoomType[])
+export async function getAdminRoomTypesApi(): Promise<RoomType[]> {
+  const { data } = await api.get<ApiResponse<RoomType[]>>('/admin/room-types')
+  return data.data
+}
 
-export const createRoomTypeApi = (data: Partial<RoomType>) =>
-  api.post('/admin/room-types', data).then(r => r.data.data as RoomType)
+export async function createRoomTypeApi(payload: Partial<RoomType>): Promise<RoomType> {
+  const { data } = await api.post<ApiResponse<RoomType>>('/admin/room-types', payload)
+  return data.data
+}
 
-export const updateRoomTypeApi = (id: string, data: Partial<RoomType>) =>
-  api.put(`/admin/room-types/${id}`, data).then(r => r.data.data as RoomType)
+export async function updateRoomTypeApi(id: string, payload: Partial<RoomType>): Promise<RoomType> {
+  const { data } = await api.put<ApiResponse<RoomType>>(`/admin/room-types/${id}`, payload)
+  return data.data
+}
 
-export const deleteRoomTypeApi = (id: string) =>
-  api.delete(`/admin/room-types/${id}`).then(r => r.data)
+export async function deleteRoomTypeApi(id: string): Promise<ApiResponse> {
+  const { data } = await api.delete<ApiResponse>(`/admin/room-types/${id}`)
+  return data
+}
 
 // ── Houses ────────────────────────────────────────────────────────────────────
 
-export const getAdminHousesApi = () =>
-  api.get('/admin/houses').then(r => r.data.data as House[])
+export async function getAdminHousesApi(): Promise<House[]> {
+  const { data } = await api.get<ApiResponse<House[]>>('/admin/houses')
+  return data.data
+}
 
-export const createHouseApi = (data: { name: string; price: number }) =>
-  api.post('/admin/houses', data).then(r => r.data.data as House)
+export async function createHouseApi(payload: { name: string; price: number }): Promise<House> {
+  const { data } = await api.post<ApiResponse<House>>('/admin/houses', payload)
+  return data.data
+}
 
-export const updateHouseApi = (id: string, data: Partial<House>) =>
-  api.put(`/admin/houses/${id}`, data).then(r => r.data.data as House)
+export async function updateHouseApi(id: string, payload: Partial<House>): Promise<House> {
+  const { data } = await api.put<ApiResponse<House>>(`/admin/houses/${id}`, payload)
+  return data.data
+}
 
-export const deleteHouseApi = (id: string) =>
-  api.delete(`/admin/houses/${id}`).then(r => r.data)
+export async function deleteHouseApi(id: string): Promise<ApiResponse> {
+  const { data } = await api.delete<ApiResponse>(`/admin/houses/${id}`)
+  return data
+}
 
 // ── Rooms (admin) ─────────────────────────────────────────────────────────────
 
-export const getAdminRoomsApi = () =>
-  api.get('/admin/rooms').then(r => r.data.data as Room[])
-
-export const createAdminRoomApi = (data: {
+export interface CreateAdminRoomPayload {
   room_type_id: string
   house_id?: string | null
   number: string
   floor?: number | null
   notes?: string | null
-}) => api.post('/admin/rooms', data).then(r => r.data.data as Room)
+}
 
-export const updateAdminRoomApi = (id: string, data: Partial<Room>) =>
-  api.put(`/admin/rooms/${id}`, data).then(r => r.data.data as Room)
+export async function getAdminRoomsApi(): Promise<Room[]> {
+  const { data } = await api.get<ApiResponse<Room[]>>('/admin/rooms')
+  return data.data
+}
 
-export const deleteAdminRoomApi = (id: string) =>
-  api.delete(`/admin/rooms/${id}`).then(r => r.data)
+export async function createAdminRoomApi(payload: CreateAdminRoomPayload): Promise<Room> {
+  const { data } = await api.post<ApiResponse<Room>>('/admin/rooms', payload)
+  return data.data
+}
 
-export const massUpdateRoomPricesApi = (room_type_id: string, base_price: number) =>
-  api.patch('/admin/rooms/mass-update', { room_type_id, base_price }).then(r => r.data.data as RoomType)
+export async function updateAdminRoomApi(id: string, payload: Partial<Room>): Promise<Room> {
+  const { data } = await api.put<ApiResponse<Room>>(`/admin/rooms/${id}`, payload)
+  return data.data
+}
+
+export async function deleteAdminRoomApi(id: string): Promise<ApiResponse> {
+  const { data } = await api.delete<ApiResponse>(`/admin/rooms/${id}`)
+  return data
+}
+
+export async function massUpdateRoomPricesApi(roomTypeId: string, basePrice: number): Promise<RoomType> {
+  const { data } = await api.patch<ApiResponse<RoomType>>('/admin/rooms/mass-update', {
+    room_type_id: roomTypeId,
+    base_price: basePrice,
+  })
+  return data.data
+}
 
 // ── Seasons ───────────────────────────────────────────────────────────────────
 
-export const getAdminSeasonsApi = () =>
-  api.get('/admin/seasons').then(r => r.data.data as Season[])
+export async function getAdminSeasonsApi(): Promise<Season[]> {
+  const { data } = await api.get<ApiResponse<Season[]>>('/admin/seasons')
+  return data.data
+}
 
-export const createSeasonApi = (data: Partial<Season>) =>
-  api.post('/admin/seasons', data).then(r => r.data.data as Season)
+export async function createSeasonApi(payload: Partial<Season>): Promise<Season> {
+  const { data } = await api.post<ApiResponse<Season>>('/admin/seasons', payload)
+  return data.data
+}
 
-export const updateSeasonApi = (id: string, data: Partial<Season>) =>
-  api.put(`/admin/seasons/${id}`, data).then(r => r.data.data as Season)
+export async function updateSeasonApi(id: string, payload: Partial<Season>): Promise<Season> {
+  const { data } = await api.put<ApiResponse<Season>>(`/admin/seasons/${id}`, payload)
+  return data.data
+}
 
-export const deleteSeasonApi = (id: string) =>
-  api.delete(`/admin/seasons/${id}`).then(r => r.data)
+export async function deleteSeasonApi(id: string): Promise<ApiResponse> {
+  const { data } = await api.delete<ApiResponse>(`/admin/seasons/${id}`)
+  return data
+}
 
 // ── Extra services ────────────────────────────────────────────────────────────
 
-export const getAdminExtraServicesApi = () =>
-  api.get('/admin/extra-services').then(r => r.data.data as ExtraService[])
+export async function getAdminExtraServicesApi(): Promise<ExtraService[]> {
+  const { data } = await api.get<ApiResponse<ExtraService[]>>('/admin/extra-services')
+  return data.data
+}
 
-export const createExtraServiceApi = (data: Partial<ExtraService>) =>
-  api.post('/admin/extra-services', data).then(r => r.data.data as ExtraService)
+export async function createExtraServiceApi(payload: Partial<ExtraService>): Promise<ExtraService> {
+  const { data } = await api.post<ApiResponse<ExtraService>>('/admin/extra-services', payload)
+  return data.data
+}
 
-export const updateExtraServiceApi = (id: string, data: Partial<ExtraService>) =>
-  api.put(`/admin/extra-services/${id}`, data).then(r => r.data.data as ExtraService)
+export async function updateExtraServiceApi(id: string, payload: Partial<ExtraService>): Promise<ExtraService> {
+  const { data } = await api.put<ApiResponse<ExtraService>>(`/admin/extra-services/${id}`, payload)
+  return data.data
+}
 
-export const deleteExtraServiceApi = (id: string) =>
-  api.delete(`/admin/extra-services/${id}`).then(r => r.data)
+export async function deleteExtraServiceApi(id: string): Promise<ApiResponse> {
+  const { data } = await api.delete<ApiResponse>(`/admin/extra-services/${id}`)
+  return data
+}
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
-export const getAdminUsersApi = () =>
-  api.get('/admin/users').then(r => r.data.data as AdminUser[])
+export async function getAdminUsersApi(): Promise<AdminUser[]> {
+  const { data } = await api.get<ApiResponse<AdminUser[]>>('/admin/users')
+  return data.data
+}
 
-export const createAdminUserApi = (data: AdminUserPayload) =>
-  api.post('/admin/users', data).then(r => r.data.data as AdminUser)
+export async function createAdminUserApi(payload: AdminUserPayload): Promise<AdminUser> {
+  const { data } = await api.post<ApiResponse<AdminUser>>('/admin/users', payload)
+  return data.data
+}
 
-export const updateAdminUserApi = (id: string, data: Partial<AdminUserPayload>) =>
-  api.put(`/admin/users/${id}`, data).then(r => r.data.data as AdminUser)
+export async function updateAdminUserApi(id: string, payload: Partial<AdminUserPayload>): Promise<AdminUser> {
+  const { data } = await api.put<ApiResponse<AdminUser>>(`/admin/users/${id}`, payload)
+  return data.data
+}
 
-export const deleteAdminUserApi = (id: string) =>
-  api.delete(`/admin/users/${id}`).then(r => r.data)
+export async function deleteAdminUserApi(id: string): Promise<ApiResponse> {
+  const { data } = await api.delete<ApiResponse>(`/admin/users/${id}`)
+  return data
+}
 
-// ── Roles & permissions ───────────────────────────────────────────────────────
+// ── Roles & permissions ─────────────────────────────────────────────────────
 
-export const getAdminRolesApi = () =>
-  api.get('/admin/roles').then(r => r.data.data as { id: string; name: string; permissions: string[] }[])
+export interface AdminRole {
+  id: string
+  name: string
+  permissions: string[]
+}
 
-export const getAdminPermissionsApi = () =>
-  api.get('/admin/permissions').then(r => r.data.data as string[])
+export async function getAdminRolesApi(): Promise<AdminRole[]> {
+  const { data } = await api.get<ApiResponse<AdminRole[]>>('/admin/roles')
+  return data.data
+}
 
-export const updateRolePermissionsApi = (roleId: string, permissions: string[]) =>
-  api.put(`/admin/roles/${roleId}/permissions`, { permissions }).then(r => r.data.data)
+export async function getAdminPermissionsApi(): Promise<string[]> {
+  const { data } = await api.get<ApiResponse<string[]>>('/admin/permissions')
+  return data.data
+}
+
+export async function updateRolePermissionsApi(roleId: string, permissions: string[]): Promise<AdminRole> {
+  const { data } = await api.put<ApiResponse<AdminRole>>(`/admin/roles/${roleId}/permissions`, { permissions })
+  return data.data
+}
 
 // ── Backups ───────────────────────────────────────────────────────────────────
 
-export const getBackupsApi = () =>
-  api.get('/admin/backups').then(r => r.data.data as BackupFile[])
+export async function getBackupsApi(): Promise<BackupFile[]> {
+  const { data } = await api.get<ApiResponse<BackupFile[]>>('/admin/backups')
+  return data.data
+}
 
 export interface BackupPreview {
-  users:            number
-  guests:           number
-  companies:        number
-  rooms:            number
-  reservations:     number
-  stays:            number
-  active_stays:     number
-  inventory_items:  number
+  users: number
+  guests: number
+  companies: number
+  rooms: number
+  reservations: number
+  stays: number
+  active_stays: number
+  inventory_items: number
   minibar_products: number
 }
 
-export const getBackupPreviewApi = () =>
-  api.get('/admin/backups/preview').then(r => r.data.data as BackupPreview)
+export async function getBackupPreviewApi(): Promise<BackupPreview> {
+  const { data } = await api.get<ApiResponse<BackupPreview>>('/admin/backups/preview')
+  return data.data
+}
 
-export const createBackupApi = () =>
-  api.post('/admin/backups').then(r => r.data.data as BackupFile)
+export async function createBackupApi(): Promise<BackupFile> {
+  const { data } = await api.post<ApiResponse<BackupFile>>('/admin/backups')
+  return data.data
+}
 
-export const deleteAllBackupsApi = () =>
-  api.delete('/admin/backups').then(r => r.data.data as { deleted: number })
+export interface DeleteAllBackupsResult {
+  deleted: number
+}
 
-export const wipeDatabaseApi = (opts: { keepUsers: boolean }) =>
-  api.post('/admin/database/wipe', {
+export async function deleteAllBackupsApi(): Promise<DeleteAllBackupsResult> {
+  const { data } = await api.delete<ApiResponse<DeleteAllBackupsResult>>('/admin/backups')
+  return data.data
+}
+
+export interface WipeDatabaseResult {
+  success: boolean
+  keep_users: boolean
+  message: string
+}
+
+export async function wipeDatabaseApi(opts: { keepUsers: boolean }): Promise<WipeDatabaseResult> {
+  const { data } = await api.post<WipeDatabaseResult>('/admin/database/wipe', {
     confirm: 'BORRAR',
     keep_users: opts.keepUsers,
-  }).then(r => r.data as { success: boolean; keep_users: boolean; message: string })
+  })
+  return data
+}
 
-export const downloadBackupApi = async (filename: string): Promise<void> => {
-  const res = await api.get(
+export async function downloadBackupApi(filename: string): Promise<void> {
+  const { data } = await api.get<Blob>(
     `/admin/backups/${encodeURIComponent(filename)}/download`,
     { responseType: 'blob' },
   )
-  const url = URL.createObjectURL(res.data as Blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+  triggerBlobDownload(data, filename)
 }
 
-export const restoreBackupApi = (file: File) => {
+export async function restoreBackupApi(file: File): Promise<ApiResponse> {
   const form = new FormData()
   form.append('file', file)
-  return api.post('/admin/backups/restore', form, {
+  const { data } = await api.post<ApiResponse>('/admin/backups/restore', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
-  }).then(r => r.data)
+  })
+  return data
 }
 
-export const downloadMigrationKitApi = async (): Promise<void> => {
-  const res = await api.get('/admin/backups/migration-kit', { responseType: 'blob' })
-  const url = URL.createObjectURL(res.data as Blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'kit-migracion-backups.zip'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+export async function downloadMigrationKitApi(): Promise<void> {
+  const { data } = await api.get<Blob>('/admin/backups/migration-kit', { responseType: 'blob' })
+  triggerBlobDownload(data, 'kit-migracion-backups.zip')
 }
 
 export interface BackupSettings {
-  auto_backup:            boolean
-  auto_backup_time:       string
-  auto_backup_folder:     string
-  retention_days:         number
+  auto_backup: boolean
+  auto_backup_time: string
+  auto_backup_folder: string
+  retention_days: number
   shared_container_path?: string
-  shared_host_path?:      string
+  shared_host_path?: string
 }
 
-export const getBackupSettingsApi = () =>
-  api.get('/admin/backups/settings').then(r => r.data.data as BackupSettings)
+export async function getBackupSettingsApi(): Promise<BackupSettings> {
+  const { data } = await api.get<ApiResponse<BackupSettings>>('/admin/backups/settings')
+  return data.data
+}
 
-export const saveBackupSettingsApi = (data: BackupSettings) =>
-  api.post('/admin/backups/settings', data).then(r => r.data)
+export async function saveBackupSettingsApi(payload: BackupSettings): Promise<ApiResponse> {
+  const { data } = await api.post<ApiResponse>('/admin/backups/settings', payload)
+  return data
+}
 
 export interface BackupFolderCheck {
   using_default: boolean
   resolved_path: string
-  exists:        boolean
-  writable:      boolean
-  message:       string
+  exists: boolean
+  writable: boolean
+  message: string
 }
 
-export const validateBackupFolderApi = (path: string) =>
-  api.post('/admin/backups/validate-folder', { path }).then(r => r.data.data as BackupFolderCheck)
+export async function validateBackupFolderApi(path: string): Promise<BackupFolderCheck> {
+  const { data } = await api.post<ApiResponse<BackupFolderCheck>>('/admin/backups/validate-folder', { path })
+  return data.data
+}

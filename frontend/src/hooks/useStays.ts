@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import toast from 'react-hot-toast'
 import {
   getStaysApi, getStayApi, createStayApi, checkoutStayApi,
@@ -14,14 +15,14 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
   const normalizedFilters = typeof filters === 'string' ? { status: filters } : (filters ?? {})
 
   const { data, isLoading } = useQuery({
-    queryKey: ['stays', normalizedFilters],
+    queryKey: hotelQueryKey('stays', normalizedFilters),
     queryFn:  () => getStaysApi(normalizedFilters),
   })
 
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['stays'] })
-    queryClient.invalidateQueries({ queryKey: ['rooms'] })
-    queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('stays') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('rooms') })
+    queryClient.invalidateQueries({ queryKey: hotelQueryKey('dashboard') })
   }
 
   const checkInMutation = useMutation({
@@ -52,11 +53,11 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
       addMinibarChargesApi(stayId, { items }),
     onSuccess: () => {
       toast.success('Consumos de minibar registrados.')
-      queryClient.invalidateQueries({ queryKey: ['stays'] })
-      queryClient.invalidateQueries({ queryKey: ['room-minibars'] })
-      queryClient.invalidateQueries({ queryKey: ['minibar-products'] })
-      queryClient.invalidateQueries({ queryKey: ['minibars'] })
-      queryClient.invalidateQueries({ queryKey: ['inventory-items'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('stays') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('room-minibars') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('minibar-products') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('minibars') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('inventory-items') })
     },
     onError: (e: { response?: { data?: { message?: string } } }) =>
       toast.error(e?.response?.data?.message ?? 'Error al registrar consumos.'),
@@ -73,7 +74,7 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
   const paymentMutation = useMutation({
     mutationFn: ({ stayId, ...payload }: { stayId: string; amount: number; payment_method: string; payment_type: string; paid_by: string; notes?: string }) =>
       addPaymentApi(stayId, payload),
-    onSuccess: () => { toast.success('Pago registrado.'); queryClient.invalidateQueries({ queryKey: ['stays'] }) },
+    onSuccess: () => { toast.success('Pago registrado.'); queryClient.invalidateQueries({ queryKey: hotelQueryKey('stays') }) },
     onError: () => toast.error('Error al registrar pago.'),
   })
 
@@ -82,10 +83,10 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
       cancelStayPaymentApi(stayId, paymentId, reason),
     onSuccess: () => {
       toast.success('Pago anulado. Queda en el historial.')
-      queryClient.invalidateQueries({ queryKey: ['stays'] })
-      queryClient.invalidateQueries({ queryKey: ['stay-payments'] })
-      queryClient.invalidateQueries({ queryKey: ['payments-history'] })
-      queryClient.invalidateQueries({ queryKey: ['income'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('stays') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('stay-payments') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('payments-history') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('income') })
     },
     onError: (e: { response?: { data?: { message?: string } } }) =>
       toast.error(e?.response?.data?.message ?? 'Error al anular el pago.'),
@@ -96,12 +97,12 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
       cancelMinibarConsumptionApi(stayId, consumptionId, reason),
     onSuccess: () => {
       toast.success('Consumo anulado. Queda en el historial.')
-      queryClient.invalidateQueries({ queryKey: ['stays'] })
-      queryClient.invalidateQueries({ queryKey: ['room-minibars'] })
-      queryClient.invalidateQueries({ queryKey: ['minibar-products'] })
-      queryClient.invalidateQueries({ queryKey: ['minibars'] })
-      queryClient.invalidateQueries({ queryKey: ['inventory-items'] })
-      queryClient.invalidateQueries({ queryKey: ['income'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('stays') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('room-minibars') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('minibar-products') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('minibars') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('inventory-items') })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('income') })
     },
     onError: (e: { response?: { data?: { message?: string } } }) =>
       toast.error(e?.response?.data?.message ?? 'Error al anular el consumo.'),
@@ -110,7 +111,7 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
   const serviceMutation = useMutation({
     mutationFn: ({ stayId, ...payload }: { stayId: string; extra_service_id: string; quantity: number }) =>
       addServiceApi(stayId, payload),
-    onSuccess: () => { toast.success('Servicio agregado.'); queryClient.invalidateQueries({ queryKey: ['stays'] }) },
+    onSuccess: () => { toast.success('Servicio agregado.'); queryClient.invalidateQueries({ queryKey: hotelQueryKey('stays') }) },
     onError: () => toast.error('Error al agregar servicio.'),
   })
 
@@ -136,7 +137,7 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
 
 export function useStay(id: string) {
   return useQuery({
-    queryKey: ['stays', id],
+    queryKey: hotelQueryKey('stays', id),
     queryFn:  () => getStayApi(id),
     enabled:  !!id,
   })
@@ -144,7 +145,7 @@ export function useStay(id: string) {
 
 export function useExtraServices() {
   return useQuery({
-    queryKey: ['extra-services'],
+    queryKey: hotelQueryKey('extra-services'),
     queryFn:  getExtraServicesApi,
     staleTime: 5 * 60 * 1000,
   })

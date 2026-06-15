@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useAuthBootstrap } from '@/hooks/useAuth'
@@ -27,7 +27,11 @@ function PageLoader() {
   )
 }
 
-function Lazy({ children }: { children: React.ReactNode }) {
+interface LazyProps {
+  readonly children: ReactNode
+}
+
+function Lazy({ children }: LazyProps) {
   return <Suspense fallback={<PageLoader />}>{children}</Suspense>
 }
 
@@ -39,27 +43,35 @@ function BootstrapGate() {
 }
 
 // ── Route guards ──────────────────────────────────────────────────────────────
-function RequireAuth({ children }: { children: React.ReactNode }) {
+interface RequireAuthProps {
+  readonly children: ReactNode
+}
+
+function RequireAuth({ children }: RequireAuthProps) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   if (!isAuthenticated) return <Navigate to="/login" replace />
   return <>{children}</>
 }
 
-function RequireGuest({ children }: { children: React.ReactNode }) {
+interface RequireGuestProps {
+  readonly children: ReactNode
+}
+
+function RequireGuest({ children }: RequireGuestProps) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   if (isAuthenticated) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
-function RequirePermission({
-  children,
-  permission,
-}: {
-  children: React.ReactNode
-  permission: string
-}) {
-  const hasPermission = useAuthStore((s) => s.hasPermission)
-  if (!hasPermission(permission)) return <Navigate to="/" replace />
+interface RequirePermissionProps {
+  readonly children: ReactNode
+  readonly permission: string | readonly string[]
+}
+
+function RequirePermission({ children, permission }: RequirePermissionProps) {
+  const hasAnyPermission = useAuthStore((s) => s.hasAnyPermission)
+  const permissions = Array.isArray(permission) ? permission : [permission]
+  if (!hasAnyPermission(permissions)) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -85,7 +97,11 @@ export const router = createBrowserRouter([
         children: [
           {
             index: true,
-            element: <Lazy><DashboardPage /></Lazy>,
+            element: (
+              <RequirePermission permission="view_dashboard">
+                <Lazy><DashboardPage /></Lazy>
+              </RequirePermission>
+            ),
           },
           {
             path: 'rooms',
@@ -122,7 +138,7 @@ export const router = createBrowserRouter([
           {
             path: 'reservations',
             element: (
-              <RequirePermission permission="view_reservations">
+              <RequirePermission permission={['view_reservations', 'manage_reservations']}>
                 <Lazy><ReservationsPage /></Lazy>
               </RequirePermission>
             ),
@@ -130,7 +146,7 @@ export const router = createBrowserRouter([
           {
             path: 'calendar',
             element: (
-              <RequirePermission permission="view_reservations">
+              <RequirePermission permission={['view_reservations', 'manage_reservations']}>
                 <Lazy><CalendarPage /></Lazy>
               </RequirePermission>
             ),

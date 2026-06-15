@@ -14,19 +14,17 @@ class InventoryItem extends Model
 
     protected $fillable = [
         'category_id', 'code', 'name', 'brand', 'presentation', 'unit',
-        'cost_price', 'sale_price', 'current_stock', 'min_stock_threshold',
-        'expiry_date', 'supplier', 'invoice_number', 'location', 'active',
+        'cost_price', 'sale_price',
+        'expiry_date', 'supplier', 'invoice_number', 'active',
     ];
 
     protected function casts(): array
     {
         return [
-            'cost_price'          => 'decimal:2',
-            'sale_price'          => 'decimal:2',
-            'current_stock'       => 'integer',
-            'min_stock_threshold' => 'integer',
-            'expiry_date'         => 'date',
-            'active'              => 'boolean',
+            'cost_price'    => 'decimal:2',
+            'sale_price'    => 'decimal:2',
+            'expiry_date'   => 'date',
+            'active'        => 'boolean',
         ];
     }
 
@@ -40,9 +38,14 @@ class InventoryItem extends Model
         return $this->hasMany(InventoryTransaction::class);
     }
 
-    public function isLowStock(): bool
+    public function hotelInventories(): HasMany
     {
-        return $this->current_stock <= $this->min_stock_threshold;
+        return $this->hasMany(HotelInventory::class);
+    }
+
+    public function isLowStock(int $currentStock, int $minThreshold): bool
+    {
+        return $currentStock <= $minThreshold;
     }
 
     public function isExpiringSoon(int $days = 3): bool

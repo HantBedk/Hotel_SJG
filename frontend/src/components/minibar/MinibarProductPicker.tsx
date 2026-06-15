@@ -3,15 +3,15 @@ import { useRoomMinibars } from '@/hooks/useInventory'
 import type { MinibarProduct } from '@/types'
 
 interface Props {
-  roomId: string
-  query: string
-  show: boolean
-  selectedId: string
-  onQueryChange: (q: string) => void
-  onFocus: () => void
-  onBlur: () => void
-  onSelect: (product: MinibarProduct, stock: number) => void
-  products: MinibarProduct[]
+  readonly roomId: string
+  readonly query: string
+  readonly show: boolean
+  readonly selectedId: string
+  readonly onQueryChange: (q: string) => void
+  readonly onFocus: () => void
+  readonly onBlur: () => void
+  readonly onSelect: (product: MinibarProduct, stock: number) => void
+  readonly products: MinibarProduct[]
 }
 
 /**
@@ -56,12 +56,12 @@ export function MinibarProductPicker({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     const base = products.filter(p => p.active)
-    const matched = !q
-      ? base
-      : base.filter(p =>
+    const matched = q
+      ? base.filter(p =>
           p.name.toLowerCase().includes(q) ||
           (p.code ?? '').toLowerCase().includes(q),
         )
+      : base
     // Productos CON stock primero (ordenados por stock desc), después los agotados.
     return matched
       .map(p => ({ product: p, stock: totalStock(p) }))

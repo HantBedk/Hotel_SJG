@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Guest;
 use App\Models\GuestCompanion;
+use App\Support\TenantContext;
 use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,12 @@ class GuestController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Guest::withCount('stays');
+        $hotelId = TenantContext::id();
+        $query   = Guest::withStaysCountForHotel($hotelId);
+
+        if ($hotelId) {
+            $query->forHotel($hotelId);
+        }
 
         if ($document = $request->query('document')) {
             $query->where('document_number', $document);
@@ -63,9 +69,14 @@ class GuestController extends Controller
 
     public function show(Guest $guest): JsonResponse
     {
+        $staysQuery = fn ($q) => $q->with('stayRooms.room');
+        if ($hotelId = TenantContext::id()) {
+            $staysQuery = fn ($q) => $q->where('hotel_id', $hotelId)->with('stayRooms.room');
+        }
+
         return response()->json([
             'success' => true,
-            'data'    => $guest->load(['companions', 'stays.stayRooms.room']),
+            'data'    => $guest->load(['companions', 'stays' => $staysQuery]),
         ]);
     }
 
@@ -130,11 +141,12 @@ class GuestController extends Controller
 
     public function stays(Guest $guest): JsonResponse
     {
-        $stays = $guest->stays()
-            ->with(['stayRooms.room', 'payments'])
-            ->orderByDesc('check_in_datetime')
-            ->get();
+        $query = $guest->stays()->with(['stayRooms.room', 'payments'])->orderByDesc('check_in_datetime');
 
-        return response()->json(['success' => true, 'data' => $stays]);
+        if ($hotelId = TenantContext::id()) {
+            $query->where('hotel_id', $hotelId);
+        }
+
+        return response()->json(['success' => true, 'data' => $query->get()]);
     }
 }

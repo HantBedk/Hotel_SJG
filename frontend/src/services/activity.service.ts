@@ -1,5 +1,5 @@
 import api from '@/lib/axios'
-import type { ActivityLogEntry, PaymentHistoryEntry, Suggestion } from '../types'
+import type { ActivityLogEntry, ApiResponse, PaymentHistoryEntry, Suggestion } from '@/types'
 
 // ── Activity logs ─────────────────────────────────────────────────────────────
 
@@ -12,16 +12,29 @@ export interface ActivityFilters {
   per_page?: number
 }
 
-export const getActivityLogsApi = (filters: ActivityFilters = {}) =>
-  api.get('/activity-logs', { params: filters }).then(r => r.data.data as {
-    data: ActivityLogEntry[]
-    current_page: number
-    last_page: number
-    total: number
-  })
+export interface PaginatedPage<T> {
+  data: T[]
+  current_page: number
+  last_page: number
+  total: number
+}
 
-export const getActivityActionsApi = () =>
-  api.get('/activity-logs/actions').then(r => r.data.data as { value: string; label: string }[])
+export type ActivityLogsPage = PaginatedPage<ActivityLogEntry>
+
+export interface ActivityActionOption {
+  value: string
+  label: string
+}
+
+export async function getActivityLogsApi(filters: ActivityFilters = {}): Promise<ActivityLogsPage> {
+  const { data } = await api.get<ApiResponse<ActivityLogsPage>>('/activity-logs', { params: filters })
+  return data.data
+}
+
+export async function getActivityActionsApi(): Promise<ActivityActionOption[]> {
+  const { data } = await api.get<ApiResponse<ActivityActionOption[]>>('/activity-logs/actions')
+  return data.data
+}
 
 // ── Payments history ──────────────────────────────────────────────────────────
 
@@ -36,18 +49,21 @@ export interface PaymentFilters {
   per_page?: number
 }
 
-export const getPaymentsHistoryApi = (filters: PaymentFilters = {}) =>
-  api.get('/reports/payments', { params: filters }).then(r => r.data.data as {
-    data: PaymentHistoryEntry[]
-    current_page: number
-    last_page: number
-    total: number
-  })
+export type PaymentHistoryPage = PaginatedPage<PaymentHistoryEntry>
+
+export async function getPaymentsHistoryApi(filters: PaymentFilters = {}): Promise<PaymentHistoryPage> {
+  const { data } = await api.get<ApiResponse<PaymentHistoryPage>>('/reports/payments', { params: filters })
+  return data.data
+}
 
 // ── Suggestions ───────────────────────────────────────────────────────────────
 
-export const getSuggestionsApi = () =>
-  api.get('/suggestions').then(r => r.data.data as Suggestion[])
+export async function getSuggestionsApi(): Promise<Suggestion[]> {
+  const { data } = await api.get<ApiResponse<Suggestion[]>>('/suggestions')
+  return data.data
+}
 
-export const dismissSuggestionApi = (id: string) =>
-  api.post(`/suggestions/${id}/dismiss`).then(r => r.data)
+export async function dismissSuggestionApi(id: string): Promise<ApiResponse> {
+  const { data } = await api.post<ApiResponse>(`/suggestions/${id}/dismiss`)
+  return data
+}

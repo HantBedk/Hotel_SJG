@@ -63,7 +63,9 @@ class CreateAutoBackup extends Command
     private function pruneOldBackups(string $dir): void
     {
         $days = (int) Setting::get('backup.retention_days', 30);
-        if ($days <= 0) return;
+        if ($days <= 0) {
+            return;
+        }
 
         $cutoff = now()->subDays($days)->timestamp;
         collect(File::files($dir))

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect, type SubmitEvent, type ElementType } from 'react'
 import { Plus, Pencil, Trash2, X, RefreshCw, Clock, BedDouble, ChevronRight, Undo2, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -13,8 +13,10 @@ import {
 import { createMinibarApi, restockRoomMinibarApi, returnFromRoomMinibarApi } from '@/services/inventory.service'
 import { useRooms } from '@/hooks/useRooms'
 import { useAuth } from '@/hooks/useAuth'
+import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { SkeletonTable } from '@/components/ui/Skeleton'
-import type { InventoryItem, Minibar, MinibarProduct, Room, RoomMinibar } from '@/types'
+import { cn } from '@/lib/cn'
+import type { Minibar, MinibarProduct, Room, RoomMinibar } from '@/types'
 
 function formatCurrency(v: string | number | null) {
   if (v == null) return '—'
@@ -24,6 +26,65 @@ function formatCurrency(v: string | number | null) {
 function formatDateTime(iso: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
+}
+
+function useDialogLifecycle(onClose: () => void) {
+  const dialogRef = useFocusTrap<HTMLDialogElement>(true, onClose)
+  const backdropClassName = 'absolute inset-0 border-0 p-0 cursor-default'
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    if (!dialog.open) dialog.showModal()
+    return () => {
+      if (dialog.open) dialog.close()
+    }
+  }, [dialogRef])
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [])
+
+  return { dialogRef, backdropClassName }
+}
+
+type SortDir = 'asc' | 'desc'
+
+function sortHeaderIcon(active: boolean, dir: SortDir): ElementType {
+  if (active && dir === 'asc') return ArrowUp
+  if (active && dir === 'desc') return ArrowDown
+  return ArrowUpDown
+}
+
+function optionalNumberString(value: number | string | null | undefined, fallback = ''): string {
+  if (value == null) return fallback
+  return String(value)
+}
+
+function minibarProductOptionLabel(product: MinibarProduct, stock: number, soldOut: boolean): string {
+  const codePart = product.code ? `[${product.code}] ` : ''
+  const presentationPart = product.presentation ? ` · ${product.presentation}` : ''
+  const base = `${codePart}${product.name}${presentationPart} — ${formatCurrency(product.sale_price)}`
+  if (soldOut) return `${base} — AGOTADO`
+  return `${base} · stock ${stock}`
+}
+
+function stockPluralSuffix(count: number): string {
+  return count === 1 ? '' : 's'
+}
+
+function minibarCreateSubmitLabel(saving: boolean, bulkMode: boolean, roomCount: number): string {
+  if (saving) return 'Creando…'
+  if (bulkMode) return `Crear ${roomCount}`
+  return 'Crear'
+}
+
+function minibarBulkCountLabel(count: number): string {
+  return `(${count})`
 }
 
 // ── Product form ──────────────────────────────────────────────────────────────
@@ -41,38 +102,40 @@ interface ProductFormData {
 }
 
 interface ProductFormProps {
-  product?: MinibarProduct | null
-  onSave: (data: Partial<MinibarProduct>) => void
-  onClose: () => void
-  saving: boolean
+  readonly product?: MinibarProduct | null
+  readonly onSave: (data: Partial<MinibarProduct>) => void
+  readonly onClose: () => void
+  readonly saving: boolean
 }
 
 function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
   const isEdit = !!product
   const { data: inventoryData } = useInventoryItems({ per_page: 200 })
-  const inventoryItems: InventoryItem[] = (inventoryData?.data ?? []) as InventoryItem[]
+  const inventoryItems = inventoryData?.data ?? []
+  const { dialogRef, backdropClassName } = useDialogLifecycle(onClose)
+  const dialogLabel = isEdit ? 'Editar producto' : 'Nuevo producto de minibar'
 
   const [form, setForm] = useState<ProductFormData>({
-    code:              product?.code ?? '',
-    name:              product?.name ?? '',
-    presentation:      product?.presentation ?? '',
+    code: product?.code ?? '',
+    name: product?.name ?? '',
+    presentation: product?.presentation ?? '',
     inventory_item_id: product?.inventory_item_id ?? '',
-    sale_price:        product?.sale_price != null ? String(product.sale_price) : '',
-    cost_price:        product?.cost_price != null ? String(product.cost_price) : '',
-    stock_quantity:    product?.stock_quantity != null ? String(product.stock_quantity) : '0',
-    expiration_date:   product?.expiration_date ?? '',
-    has_expiration:    !!product?.expiration_date,
-    description:       product?.description ?? '',
+    sale_price: optionalNumberString(product?.sale_price),
+    cost_price: optionalNumberString(product?.cost_price),
+    stock_quantity: optionalNumberString(product?.stock_quantity, '0'),
+    expiration_date: product?.expiration_date ?? '',
+    has_expiration: !!product?.expiration_date,
+    description: product?.description ?? '',
   })
   const set = <K extends keyof ProductFormData>(k: K, v: ProductFormData[K]) =>
     setForm((f) => ({ ...f, [k]: v }))
 
-  const costNum = parseFloat(form.cost_price) || 0
-  const saleNum = parseFloat(form.sale_price) || 0
+  const costNum = Number.parseFloat(form.cost_price) || 0
+  const saleNum = Number.parseFloat(form.sale_price) || 0
   const priceInvalid = form.sale_price !== '' && saleNum <= costNum
-  const linkMissing  = !form.inventory_item_id
+  const linkMissing = !form.inventory_item_id
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (priceInvalid) return
     const payload: Partial<MinibarProduct> = {
@@ -90,18 +153,37 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }}>
-      <div className="w-full max-w-md rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto" style={{ background: 'var(--bg-surface)' }}>
+    <dialog
+      ref={dialogRef}
+      aria-label={dialogLabel}
+      className={cn(
+        'app-modal fixed inset-0 z-50 m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
+        'flex items-center justify-center pointer-events-none p-4',
+      )}
+    >
+      <button
+        type="button"
+        aria-label="Cerrar modal"
+        className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
+        onClick={onClose}
+      />
+      <div
+        className="relative z-10 pointer-events-auto w-full max-w-md rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto"
+        style={{ background: 'var(--bg-surface)' }}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 z-10" style={{ borderColor: 'var(--border-default)', background: 'var(--bg-surface)' }}>
           <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {isEdit ? 'Editar producto' : 'Nuevo producto de minibar'}
+            {dialogLabel}
           </h2>
-          <button onClick={onClose}><X size={18} style={{ color: 'var(--text-secondary)' }} /></button>
+          <button type="button" onClick={onClose} aria-label="Cerrar">
+            <X size={18} style={{ color: 'var(--text-secondary)' }} />
+          </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Nombre *</label>
+            <label htmlFor="product-name" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Nombre *</label>
             <input
+              id="product-name"
               type="text"
               required
               value={form.name}
@@ -113,8 +195,9 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Código</label>
+              <label htmlFor="product-code" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Código</label>
               <input
+                id="product-code"
                 type="text"
                 value={form.code}
                 onChange={(e) => set('code', e.target.value)}
@@ -124,8 +207,9 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Presentación</label>
+              <label htmlFor="product-presentation" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Presentación</label>
               <input
+                id="product-presentation"
                 type="text"
                 value={form.presentation}
                 onChange={(e) => set('presentation', e.target.value)}
@@ -137,10 +221,11 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+            <label htmlFor="product-inventory-item" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
               Producto del catálogo (inventario) *
             </label>
             <select
+              id="product-inventory-item"
               value={form.inventory_item_id}
               onChange={(e) => set('inventory_item_id', e.target.value)}
               className="w-full px-3 py-2 rounded-lg border text-sm"
@@ -175,8 +260,9 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Precio compra</label>
+              <label htmlFor="product-cost-price" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Precio compra</label>
               <input
+                id="product-cost-price"
                 type="number" min="0" step="any"
                 value={form.cost_price}
                 onChange={(e) => set('cost_price', e.target.value)}
@@ -185,8 +271,9 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Precio venta *</label>
+              <label htmlFor="product-sale-price" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Precio venta *</label>
               <input
+                id="product-sale-price"
                 type="number" required min="0" step="any"
                 value={form.sale_price}
                 onChange={(e) => set('sale_price', e.target.value)}
@@ -206,8 +293,9 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
           )}
 
           <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Cantidad *</label>
+            <label htmlFor="product-stock-quantity" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Cantidad *</label>
             <input
+              id="product-stock-quantity"
               type="number" required min="0"
               value={form.stock_quantity}
               onChange={(e) => set('stock_quantity', e.target.value)}
@@ -218,17 +306,21 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Fecha de vencimiento</label>
-              <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: 'var(--text-muted)' }}>
+              <label htmlFor="product-expiration-date" className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                Fecha de vencimiento
+              </label>
+              <label htmlFor="product-no-expiration" className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: 'var(--text-muted)' }}>
                 <input
+                  id="product-no-expiration"
                   type="checkbox"
                   checked={!form.has_expiration}
                   onChange={(e) => set('has_expiration', !e.target.checked)}
                 />
-                Sin vencimiento
+                {' '}Sin vencimiento
               </label>
             </div>
             <input
+              id="product-expiration-date"
               type="date"
               disabled={!form.has_expiration}
               required={form.has_expiration}
@@ -240,8 +332,9 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Descripción</label>
+            <label htmlFor="product-description" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Descripción</label>
             <input
+              id="product-description"
               type="text"
               value={form.description}
               onChange={(e) => set('description', e.target.value)}
@@ -262,7 +355,7 @@ function ProductForm({ product, onSave, onClose, saving }: ProductFormProps) {
           </div>
         </form>
       </div>
-    </div>
+    </dialog>
   )
 }
 
@@ -274,12 +367,11 @@ interface RestockItem {
 }
 
 interface RestockRoomModalProps {
-  roomId: string
-  roomNumber: string
-  products: MinibarProduct[]
-  onSave: (items: { minibar_product_id: string; quantity: number }[]) => void
-  onClose: () => void
-  saving: boolean
+  readonly roomNumber: string
+  readonly products: MinibarProduct[]
+  readonly onSave: (items: { minibar_product_id: string; quantity: number }[]) => void
+  readonly onClose: () => void
+  readonly saving: boolean
 }
 
 function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: RestockRoomModalProps) {
@@ -332,14 +424,34 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
     onSave(payload)
   }
 
+  const { dialogRef, backdropClassName } = useDialogLifecycle(onClose)
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }}>
-      <div className="w-full max-w-2xl rounded-xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col" style={{ background: 'var(--bg-surface)' }}>
+    <dialog
+      ref={dialogRef}
+      aria-label={`Reponer minibar — Hab. ${roomNumber}`}
+      className={cn(
+        'app-modal fixed inset-0 z-50 m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
+        'flex items-center justify-center pointer-events-none p-4',
+      )}
+    >
+      <button
+        type="button"
+        aria-label="Cerrar modal"
+        className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
+        onClick={onClose}
+      />
+      <div
+        className="relative z-10 pointer-events-auto w-full max-w-2xl rounded-xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col"
+        style={{ background: 'var(--bg-surface)' }}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
           <h2 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
             Reponer minibar — Hab. {roomNumber}
           </h2>
-          <button onClick={onClose}><X size={18} style={{ color: 'var(--text-secondary)' }} /></button>
+          <button type="button" onClick={onClose} aria-label="Cerrar">
+            <X size={18} style={{ color: 'var(--text-secondary)' }} />
+          </button>
         </div>
 
         <div className="p-6 space-y-3 overflow-y-auto">
@@ -353,11 +465,12 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
               <div key={it.id} className="flex flex-col gap-1"><div className="flex items-end gap-2">
                 <div className="flex-1 min-w-0">
                   {idx === 0 && (
-                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    <label htmlFor={`restock-product-${it.id}`} className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
                       Producto
                     </label>
                   )}
                   <select
+                    id={`restock-product-${it.id}`}
                     value={it.productId}
                     onChange={(e) => updateItem(it.id, { productId: e.target.value })}
                     className="w-full px-3 py-2 rounded-lg border text-sm"
@@ -367,12 +480,11 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
                     {activeProducts
                       .filter((p) => !usedIds.has(p.id))
                       .map((p) => {
-                        const stock     = availableStock(p)
-                        const agotado   = stock <= 0
-                        const baseLabel = `${p.code ? `[${p.code}] ` : ''}${p.name}${p.presentation ? ` · ${p.presentation}` : ''} — ${formatCurrency(p.sale_price)}`
+                        const productStock = availableStock(p)
+                        const soldOut = productStock <= 0
                         return (
-                          <option key={p.id} value={p.id} disabled={agotado}>
-                            {baseLabel}{agotado ? ' — AGOTADO' : ` · stock ${stock}`}
+                          <option key={p.id} value={p.id} disabled={soldOut}>
+                            {minibarProductOptionLabel(p, productStock, soldOut)}
                           </option>
                         )
                       })}
@@ -380,11 +492,12 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
                 </div>
                 <div className="w-24">
                   {idx === 0 && (
-                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    <label htmlFor={`restock-qty-${it.id}`} className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
                       Cantidad
                     </label>
                   )}
                   <input
+                    id={`restock-qty-${it.id}`}
                     type="number" min="1"
                     value={it.qty}
                     onChange={(e) => updateItem(it.id, { qty: e.target.value })}
@@ -403,9 +516,9 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
                   <Trash2 size={14} />
                 </button>
               </div>
-              {overStock && (
+              {overStock && stock != null && (
                 <p className="text-[11px] pl-1" style={{ color: '#EF4444' }}>
-                  Solo hay {stock} disponible{stock === 1 ? '' : 's'} en el catálogo.
+                  Solo hay {stock} disponible{stockPluralSuffix(stock)} en el catálogo.
                 </p>
               )}
               </div>
@@ -430,11 +543,12 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
         </div>
 
         <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: 'var(--border-default)' }}>
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border"
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm border"
             style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
             Cancelar
           </button>
           <button
+            type="button"
             disabled={saving || validItems.length === 0 || hasStockError}
             onClick={handleSubmit}
             className="px-4 py-2 rounded-lg text-sm text-white font-medium disabled:opacity-40"
@@ -444,7 +558,7 @@ function RestockRoomModal({ roomNumber, products, onSave, onClose, saving }: Res
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   )
 }
 
@@ -459,11 +573,11 @@ interface ReturnItem {
 }
 
 interface ReturnToCatalogModalProps {
-  roomNumber: string
-  roomMinibars: RoomMinibar[]
-  onSave: (items: { minibar_product_id: string; quantity: number }[]) => void
-  onClose: () => void
-  saving: boolean
+  readonly roomNumber: string
+  readonly roomMinibars: RoomMinibar[]
+  readonly onSave: (items: { minibar_product_id: string; quantity: number }[]) => void
+  readonly onClose: () => void
+  readonly saving: boolean
 }
 
 function ReturnToCatalogModal({ roomNumber, roomMinibars, onSave, onClose, saving }: ReturnToCatalogModalProps) {
@@ -508,14 +622,34 @@ function ReturnToCatalogModal({ roomNumber, roomMinibars, onSave, onClose, savin
     )
   }
 
+  const { dialogRef, backdropClassName } = useDialogLifecycle(onClose)
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }}>
-      <div className="w-full max-w-2xl rounded-xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col" style={{ background: 'var(--bg-surface)' }}>
+    <dialog
+      ref={dialogRef}
+      aria-label={`Devolver al catálogo — Hab. ${roomNumber}`}
+      className={cn(
+        'app-modal fixed inset-0 z-50 m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
+        'flex items-center justify-center pointer-events-none p-4',
+      )}
+    >
+      <button
+        type="button"
+        aria-label="Cerrar modal"
+        className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
+        onClick={onClose}
+      />
+      <div
+        className="relative z-10 pointer-events-auto w-full max-w-2xl rounded-xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col"
+        style={{ background: 'var(--bg-surface)' }}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
           <h2 className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
             Devolver al catálogo — Hab. {roomNumber}
           </h2>
-          <button onClick={onClose}><X size={18} style={{ color: 'var(--text-secondary)' }} /></button>
+          <button type="button" onClick={onClose} aria-label="Cerrar">
+            <X size={18} style={{ color: 'var(--text-secondary)' }} />
+          </button>
         </div>
 
         <div className="p-6 space-y-3 overflow-y-auto">
@@ -529,11 +663,12 @@ function ReturnToCatalogModal({ roomNumber, roomMinibars, onSave, onClose, savin
               <div key={it.id} className="flex items-end gap-2">
                 <div className="flex-1 min-w-0">
                   {idx === 0 && (
-                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    <label htmlFor={`return-product-${it.id}`} className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
                       Producto en el minibar
                     </label>
                   )}
                   <select
+                    id={`return-product-${it.id}`}
                     value={it.roomMinibarId}
                     onChange={(e) => {
                       const rm = inMinibar.find((r) => r.id === e.target.value)
@@ -560,11 +695,12 @@ function ReturnToCatalogModal({ roomNumber, roomMinibars, onSave, onClose, savin
                 </div>
                 <div className="w-24">
                   {idx === 0 && (
-                    <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    <label htmlFor={`return-qty-${it.id}`} className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
                       Cantidad
                     </label>
                   )}
                   <input
+                    id={`return-qty-${it.id}`}
                     type="number" min="1" max={it.available || undefined}
                     value={it.qty}
                     onChange={(e) => updateItem(it.id, { qty: e.target.value })}
@@ -616,11 +752,12 @@ function ReturnToCatalogModal({ roomNumber, roomMinibars, onSave, onClose, savin
         </div>
 
         <div className="flex justify-end gap-3 px-6 py-4 border-t" style={{ borderColor: 'var(--border-default)' }}>
-          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border"
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm border"
             style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}>
             Cancelar
           </button>
           <button
+            type="button"
             disabled={saving || validItems.length === 0 || overflow}
             onClick={handleSubmit}
             className="px-4 py-2 rounded-lg text-sm text-white font-medium disabled:opacity-40"
@@ -629,13 +766,12 @@ function ReturnToCatalogModal({ roomNumber, roomMinibars, onSave, onClose, savin
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   )
 }
 
 // ── Catalogue section ─────────────────────────────────────────────────────────
 type SortKey = 'code' | 'name' | 'presentation' | 'cost_price' | 'sale_price' | 'stock' | 'expiration_date' | 'active'
-type SortDir = 'asc' | 'desc'
 
 const COLUMNS: { key: SortKey | null; label: string; numeric?: boolean }[] = [
   { key: 'code',            label: 'Código' },
@@ -724,6 +860,113 @@ function CatalogueSection() {
     }
   }
 
+  let tableContent
+  if (isLoading) {
+    tableContent = (
+      <div className="py-4"><SkeletonTable rows={5} cols={5} /></div>
+    )
+  } else if (products.length === 0) {
+    tableContent = (
+      <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>Sin productos de minibar.</div>
+    )
+  } else {
+    tableContent = (
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[820px] text-sm">
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
+              {COLUMNS.map((col) => {
+                const columnKey = col.key
+                if (!columnKey) {
+                  return <th key="actions" className="px-3 py-3 text-left font-medium whitespace-nowrap"></th>
+                }
+                const active = sortKey === columnKey
+                const Icon = sortHeaderIcon(active, sortDir)
+                return (
+                  <th key={columnKey} className="px-3 py-3 text-left font-medium whitespace-nowrap">
+                    <button
+                      type="button"
+                      onClick={() => handleSort(columnKey)}
+                      className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity"
+                      style={{ color: active ? 'var(--color-primary)' : 'var(--text-secondary)' }}
+                    >
+                      {col.label}
+                      <Icon size={12} style={{ opacity: active ? 1 : 0.5 }} />
+                    </button>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedProducts.map((p) => {
+              const expired = p.expiration_date && new Date(p.expiration_date) < new Date()
+              const warehouseStock = p.inventory_item ? p.inventory_item.current_stock : p.stock_quantity
+              const realStock = p.total_stock ?? warehouseStock
+              return (
+              <tr key={p.id}
+                className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                style={{ borderBottom: '1px solid var(--border-default)' }}>
+                <td className="px-3 py-3 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  {p.code ?? '—'}
+                </td>
+                <td className="px-3 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>
+                  {p.name}
+                  {p.description && (
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{p.description}</p>
+                  )}
+                </td>
+                <td className="px-3 py-3" style={{ color: 'var(--text-secondary)' }}>{p.presentation ?? '—'}</td>
+                <td className="px-3 py-3" style={{ color: 'var(--text-secondary)' }}>{formatCurrency(p.cost_price)}</td>
+                <td className="px-3 py-3" style={{ color: 'var(--text-primary)' }}>{formatCurrency(p.sale_price)}</td>
+                <td className="px-3 py-3">
+                  <span
+                    className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: realStock > 0 ? '#F0FDF4' : '#FEF2F2', color: realStock > 0 ? '#16A34A' : '#DC2626' }}
+                    title={`Stock total disponible (bodega: ${warehouseStock} + en habitaciones: ${realStock - warehouseStock})`}
+                  >
+                    {realStock}
+                  </span>
+                </td>
+                <td className="px-3 py-3 text-xs" style={{ color: expired ? '#DC2626' : 'var(--text-secondary)' }}>
+                  {p.expiration_date
+                    ? new Date(p.expiration_date).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : <span style={{ color: 'var(--text-muted)' }}>Sin vencimiento</span>}
+                </td>
+                <td className="px-3 py-3">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    style={{ background: p.active ? '#F0FDF4' : '#F9FAFB', color: p.active ? '#16A34A' : '#6B7280' }}>
+                    {p.active ? 'Activo' : 'Inactivo'}
+                  </span>
+                </td>
+                <td className="px-3 py-3">
+                  {canManage && (
+                    <div className="flex items-center gap-1 justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setModalProduct(p)}
+                        className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                        style={{ color: 'var(--text-secondary)' }}>
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { if (confirm('¿Desactivar este producto?')) deleteMutation.mutate(p.id) }}
+                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+
   return (
     <div className="rounded-xl border" style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}>
       <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
@@ -731,7 +974,9 @@ function CatalogueSection() {
           Productos de minibar
         </span>
         {canManage && (
-          <button onClick={() => setModalProduct(null)}
+          <button
+            type="button"
+            onClick={() => setModalProduct(null)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white font-medium"
             style={{ background: 'var(--color-primary)' }}>
             <Plus size={14} />Nuevo
@@ -739,103 +984,7 @@ function CatalogueSection() {
         )}
       </div>
 
-      {isLoading ? (
-        <div className="py-4"><SkeletonTable rows={5} cols={5} /></div>
-      ) : products.length === 0 ? (
-        <div className="text-center py-16" style={{ color: 'var(--text-muted)' }}>Sin productos de minibar.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
-                {COLUMNS.map((col) => {
-                  if (!col.key) {
-                    return <th key="actions" className="px-3 py-3 text-left font-medium whitespace-nowrap"></th>
-                  }
-                  const active = sortKey === col.key
-                  const Icon = !active ? ArrowUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown
-                  return (
-                    <th key={col.key} className="px-3 py-3 text-left font-medium whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => handleSort(col.key as SortKey)}
-                        className="inline-flex items-center gap-1 hover:opacity-80 transition-opacity"
-                        style={{ color: active ? 'var(--color-primary)' : 'var(--text-secondary)' }}
-                      >
-                        {col.label}
-                        <Icon size={12} style={{ opacity: active ? 1 : 0.5 }} />
-                      </button>
-                    </th>
-                  )
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedProducts.map((p) => {
-                const expired = p.expiration_date && new Date(p.expiration_date) < new Date()
-                // Mostramos el stock total disponible (bodega + lo que está en las
-                // habitaciones) para que el número baje al consumir desde cualquier hab.
-                const warehouseStock = p.inventory_item ? p.inventory_item.current_stock : p.stock_quantity
-                const realStock = p.total_stock ?? warehouseStock
-                return (
-                <tr key={p.id}
-                  className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
-                  style={{ borderBottom: '1px solid var(--border-default)' }}>
-                  <td className="px-3 py-3 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {p.code ?? '—'}
-                  </td>
-                  <td className="px-3 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>
-                    {p.name}
-                    {p.description && (
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{p.description}</p>
-                    )}
-                  </td>
-                  <td className="px-3 py-3" style={{ color: 'var(--text-secondary)' }}>{p.presentation ?? '—'}</td>
-                  <td className="px-3 py-3" style={{ color: 'var(--text-secondary)' }}>{formatCurrency(p.cost_price)}</td>
-                  <td className="px-3 py-3" style={{ color: 'var(--text-primary)' }}>{formatCurrency(p.sale_price)}</td>
-                  <td className="px-3 py-3">
-                    <span
-                      className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                      style={{ background: realStock > 0 ? '#F0FDF4' : '#FEF2F2', color: realStock > 0 ? '#16A34A' : '#DC2626' }}
-                      title={`Stock total disponible (bodega: ${warehouseStock} + en habitaciones: ${realStock - warehouseStock})`}
-                    >
-                      {realStock}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 text-xs" style={{ color: expired ? '#DC2626' : 'var(--text-secondary)' }}>
-                    {p.expiration_date
-                      ? new Date(p.expiration_date).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
-                      : <span style={{ color: 'var(--text-muted)' }}>Sin vencimiento</span>}
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                      style={{ background: p.active ? '#F0FDF4' : '#F9FAFB', color: p.active ? '#16A34A' : '#6B7280' }}>
-                      {p.active ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3">
-                    {canManage && (
-                      <div className="flex items-center gap-1 justify-end">
-                        <button onClick={() => setModalProduct(p)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
-                          style={{ color: 'var(--text-secondary)' }}>
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          onClick={() => { if (confirm('¿Desactivar este producto?')) deleteMutation.mutate(p.id) }}
-                          className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {tableContent}
 
       {modalProduct !== undefined && (
         <ProductForm
@@ -851,11 +1000,11 @@ function CatalogueSection() {
 
 // ── New minibar modal ────────────────────────────────────────────────────────
 interface NewMinibarModalProps {
-  availableRooms: Room[]
-  onSave: (data: { room_id: string; name: string | null; notes: string | null }) => void
-  onSaveAll: (notes: string | null) => void
-  onClose: () => void
-  saving: boolean
+  readonly availableRooms: Room[]
+  readonly onSave: (data: { room_id: string; name: string | null; notes: string | null }) => void
+  readonly onSaveAll: (notes: string | null) => void
+  readonly onClose: () => void
+  readonly saving: boolean
 }
 
 function NewMinibarModal({ availableRooms, onSave, onSaveAll, onClose, saving }: NewMinibarModalProps) {
@@ -863,32 +1012,52 @@ function NewMinibarModal({ availableRooms, onSave, onSaveAll, onClose, saving }:
   const [roomId, setRoomId] = useState('')
   const [name, setName] = useState('')
   const [notes, setNotes] = useState('')
+  const { dialogRef, backdropClassName } = useDialogLifecycle(onClose)
 
   const canSubmit = bulkMode ? availableRooms.length > 0 : !!roomId
 
+  const handleSubmit = (e: SubmitEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (bulkMode) {
+      onSaveAll(notes.trim() || null)
+    } else {
+      onSave({ room_id: roomId, name: name.trim() || null, notes: notes.trim() || null })
+    }
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,.5)' }}>
-      <div className="w-full max-w-md rounded-xl shadow-2xl" style={{ background: 'var(--bg-surface)' }}>
+    <dialog
+      ref={dialogRef}
+      aria-label="Nuevo minibar"
+      className={cn(
+        'app-modal fixed inset-0 z-50 m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
+        'flex items-center justify-center pointer-events-none p-4',
+      )}
+    >
+      <button
+        type="button"
+        aria-label="Cerrar modal"
+        className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
+        onClick={onClose}
+      />
+      <div
+        className="relative z-10 pointer-events-auto w-full max-w-md rounded-xl shadow-2xl"
+        style={{ background: 'var(--bg-surface)' }}
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'var(--border-default)' }}>
           <h2 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Nuevo minibar</h2>
-          <button onClick={onClose}><X size={18} style={{ color: 'var(--text-secondary)' }} /></button>
+          <button type="button" onClick={onClose} aria-label="Cerrar">
+            <X size={18} style={{ color: 'var(--text-secondary)' }} />
+          </button>
         </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            if (bulkMode) {
-              onSaveAll(notes.trim() || null)
-            } else {
-              onSave({ room_id: roomId, name: name.trim() || null, notes: notes.trim() || null })
-            }
-          }}
-          className="p-6 space-y-4"
-        >
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <label
+            htmlFor="new-minibar-bulk"
             className="flex items-start gap-2 p-3 rounded-lg cursor-pointer"
             style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
           >
             <input
+              id="new-minibar-bulk"
               type="checkbox"
               checked={bulkMode}
               onChange={(e) => setBulkMode(e.target.checked)}
@@ -896,9 +1065,9 @@ function NewMinibarModal({ availableRooms, onSave, onSaveAll, onClose, saving }:
               className="mt-0.5"
             />
             <span className="text-xs" style={{ color: 'var(--text-primary)' }}>
-              Crear para todas las habitaciones sin minibar
-              <span className="ml-1 font-semibold" style={{ color: 'var(--color-primary)' }}>
-                ({availableRooms.length})
+              Crear para todas las habitaciones sin minibar{' '}
+              <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>
+                {minibarBulkCountLabel(availableRooms.length)}
               </span>
             </span>
           </label>
@@ -906,8 +1075,9 @@ function NewMinibarModal({ availableRooms, onSave, onSaveAll, onClose, saving }:
           {!bulkMode && (
             <>
               <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Habitación *</label>
+                <label htmlFor="new-minibar-room" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Habitación *</label>
                 <select
+                  id="new-minibar-room"
                   required value={roomId} onChange={(e) => setRoomId(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border text-sm"
                   style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
@@ -925,8 +1095,9 @@ function NewMinibarModal({ availableRooms, onSave, onSaveAll, onClose, saving }:
               </div>
 
               <div>
-                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Nombre (opcional)</label>
+                <label htmlFor="new-minibar-name" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Nombre (opcional)</label>
                 <input
+                  id="new-minibar-name"
                   type="text" value={name} onChange={(e) => setName(e.target.value)}
                   placeholder="Ej: Minibar suite 101"
                   className="w-full px-3 py-2 rounded-lg border text-sm"
@@ -937,8 +1108,9 @@ function NewMinibarModal({ availableRooms, onSave, onSaveAll, onClose, saving }:
           )}
 
           <div>
-            <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Notas (opcional)</label>
+            <label htmlFor="new-minibar-notes" className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Notas (opcional)</label>
             <input
+              id="new-minibar-notes"
               type="text" value={notes} onChange={(e) => setNotes(e.target.value)}
               className="w-full px-3 py-2 rounded-lg border text-sm"
               style={{ background: 'var(--bg-input)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
@@ -957,16 +1129,12 @@ function NewMinibarModal({ availableRooms, onSave, onSaveAll, onClose, saving }:
             </button>
             <button type="submit" disabled={saving || !canSubmit} className="px-4 py-2 rounded-lg text-sm text-white font-medium disabled:opacity-40"
               style={{ background: 'var(--color-primary)' }}>
-              {saving
-                ? 'Creando…'
-                : bulkMode
-                  ? `Crear ${availableRooms.length}`
-                  : 'Crear'}
+              {minibarCreateSubmitLabel(saving, bulkMode, availableRooms.length)}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </dialog>
   )
 }
 
@@ -1088,6 +1256,152 @@ function MinibarsSection() {
     }
   }
 
+  let minibarsListContent
+  if (loadingMinibars) {
+    minibarsListContent = (
+      <div className="py-4"><SkeletonTable rows={3} cols={3} /></div>
+    )
+  } else if (minibars.length === 0) {
+    minibarsListContent = (
+      <div className="text-center py-16 text-sm" style={{ color: 'var(--text-muted)' }}>
+        No hay minibars creados aún.
+      </div>
+    )
+  } else {
+    minibarsListContent = (
+      <ul>
+        {sortedMinibars.map((m) => {
+          const active = selectedRoomId === m.room_id
+
+          let roomProductsContent
+          if (loadingItems) {
+            roomProductsContent = (
+              <div className="py-4"><SkeletonTable rows={3} cols={4} /></div>
+            )
+          } else if (roomMinibars.length === 0) {
+            roomProductsContent = (
+              <div className="text-center py-8 text-sm" style={{ color: 'var(--text-muted)' }}>
+                Aún no se han agregado productos a este minibar.
+              </div>
+            )
+          } else {
+            roomProductsContent = (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[680px] text-sm">
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
+                      {['Producto', 'Cantidad', 'Precio venta', 'Última reposición', 'Por'].map((h) => (
+                        <th key={h} className="px-4 py-2 text-left font-medium">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {roomMinibars.map((rm) => (
+                      <tr key={rm.id}
+                        className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+                        style={{ borderBottom: '1px solid var(--border-default)' }}>
+                        <td className="px-4 py-2.5 font-medium" style={{ color: 'var(--text-primary)' }}>
+                          {rm.product?.name ?? '—'}
+                        </td>
+                        <td className="px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                            style={{ background: rm.quantity > 0 ? '#F0FDF4' : '#FEF2F2', color: rm.quantity > 0 ? '#16A34A' : '#DC2626' }}>
+                            {rm.quantity}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5" style={{ color: 'var(--text-secondary)' }}>
+                          {formatCurrency(rm.product?.sale_price ?? null)}
+                        </td>
+                        <td className="px-4 py-2.5" style={{ color: 'var(--text-secondary)' }}>
+                          <span className="inline-flex items-center gap-1">
+                            <Clock size={11} style={{ color: 'var(--text-muted)' }} />
+                            {formatDateTime(rm.last_restocked_at)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5" style={{ color: 'var(--text-muted)' }}>
+                          {rm.restocked_by_user?.name ?? '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          }
+
+          return (
+            <li key={m.id}
+              style={{ borderBottom: '1px solid var(--border-default)' }}>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="flex flex-1 items-center gap-3 p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors min-w-0"
+                  style={active ? { background: 'var(--bg-input)' } : undefined}
+                  onClick={() => setSelectedRoomId(active ? null : m.room_id)}
+                >
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-xs shrink-0"
+                    style={{ background: 'var(--color-primary)' }}>
+                    <BedDouble size={15} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      Hab. {m.room?.number ?? '—'} {m.name && <span className="font-normal" style={{ color: 'var(--text-muted)' }}>· {m.name}</span>}
+                    </p>
+                    <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                      {m.items?.length ?? 0} producto(s) asignado(s)
+                      {m.notes && <> · {m.notes}</>}
+                    </p>
+                  </div>
+                  <ChevronRight size={16}
+                    style={{ color: 'var(--text-muted)', transform: active ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }} />
+                </button>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(m)}
+                    className="p-1.5 mr-2 rounded-lg hover:bg-red-50 transition-colors text-red-500 shrink-0"
+                    title="Eliminar minibar">
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+
+              {active && (
+                <div style={{ background: 'var(--bg-input)', borderTop: '1px solid var(--border-default)' }}>
+                  <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
+                    <span className="font-medium text-xs uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                      Productos del minibar — Hab. {selectedRoomNumber}
+                    </span>
+                    {canManage && (
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setReturning(true)}
+                          disabled={roomMinibars.length === 0}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border disabled:opacity-40 disabled:cursor-not-allowed"
+                          style={{ borderColor: '#F97316', color: '#F97316', background: 'var(--bg-surface)' }}>
+                          <Undo2 size={13} />Devolver al catálogo
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRestocking(true)}
+                          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-white font-medium"
+                          style={{ background: 'var(--color-primary)' }}>
+                          <RefreshCw size={13} />Agregar / Reponer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  {roomProductsContent}
+                </div>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {/* Listado de minibars */}
@@ -1097,7 +1411,9 @@ function MinibarsSection() {
             Minibars ({minibars.length})
           </span>
           {canManage && (
-            <button onClick={() => setShowNew(true)}
+            <button
+              type="button"
+              onClick={() => setShowNew(true)}
               className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white font-medium"
               style={{ background: 'var(--color-primary)' }}>
               <Plus size={14} />Nuevo minibar
@@ -1105,128 +1421,7 @@ function MinibarsSection() {
           )}
         </div>
 
-        {loadingMinibars ? (
-          <div className="py-4"><SkeletonTable rows={3} cols={3} /></div>
-        ) : minibars.length === 0 ? (
-          <div className="text-center py-16 text-sm" style={{ color: 'var(--text-muted)' }}>
-            No hay minibars creados aún.
-          </div>
-        ) : (
-          <ul>
-            {sortedMinibars.map((m) => {
-              const active = selectedRoomId === m.room_id
-              return (
-                <li key={m.id}
-                  style={{ borderBottom: '1px solid var(--border-default)' }}>
-                  <div
-                    className="flex items-center gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
-                    style={active ? { background: 'var(--bg-input)' } : undefined}
-                    onClick={() => setSelectedRoomId(active ? null : m.room_id)}
-                  >
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-xs"
-                      style={{ background: 'var(--color-primary)' }}>
-                      <BedDouble size={15} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-                        Hab. {m.room?.number ?? '—'} {m.name && <span className="font-normal" style={{ color: 'var(--text-muted)' }}>· {m.name}</span>}
-                      </p>
-                      <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-                        {m.items?.length ?? 0} producto(s) asignado(s)
-                        {m.notes && <> · {m.notes}</>}
-                      </p>
-                    </div>
-                    {canManage && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(m) }}
-                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500"
-                        title="Eliminar minibar">
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                    <ChevronRight size={16}
-                      style={{ color: 'var(--text-muted)', transform: active ? 'rotate(90deg)' : undefined, transition: 'transform .15s' }} />
-                  </div>
-
-                  {active && (
-                    <div style={{ background: 'var(--bg-input)', borderTop: '1px solid var(--border-default)' }}>
-                      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
-                        <span className="font-medium text-xs uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
-                          Productos del minibar — Hab. {selectedRoomNumber}
-                        </span>
-                        {canManage && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setReturning(true)}
-                              disabled={roomMinibars.length === 0}
-                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border disabled:opacity-40 disabled:cursor-not-allowed"
-                              style={{ borderColor: '#F97316', color: '#F97316', background: 'var(--bg-surface)' }}>
-                              <Undo2 size={13} />Devolver al catálogo
-                            </button>
-                            <button onClick={() => setRestocking(true)}
-                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-white font-medium"
-                              style={{ background: 'var(--color-primary)' }}>
-                              <RefreshCw size={13} />Agregar / Reponer
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {loadingItems ? (
-                        <div className="py-4"><SkeletonTable rows={3} cols={4} /></div>
-                      ) : roomMinibars.length === 0 ? (
-                        <div className="text-center py-8 text-sm" style={{ color: 'var(--text-muted)' }}>
-                          Aún no se han agregado productos a este minibar.
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full min-w-[680px] text-sm">
-                            <thead>
-                              <tr style={{ borderBottom: '1px solid var(--border-default)', color: 'var(--text-secondary)', fontSize: '12px' }}>
-                                {['Producto', 'Cantidad', 'Precio venta', 'Última reposición', 'Por'].map((h) => (
-                                  <th key={h} className="px-4 py-2 text-left font-medium">{h}</th>
-                                ))}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {roomMinibars.map((rm) => (
-                                <tr key={rm.id}
-                                  className="transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
-                                  style={{ borderBottom: '1px solid var(--border-default)' }}>
-                                  <td className="px-4 py-2.5 font-medium" style={{ color: 'var(--text-primary)' }}>
-                                    {rm.product?.name ?? '—'}
-                                  </td>
-                                  <td className="px-4 py-2.5" style={{ color: 'var(--text-primary)' }}>
-                                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                                      style={{ background: rm.quantity > 0 ? '#F0FDF4' : '#FEF2F2', color: rm.quantity > 0 ? '#16A34A' : '#DC2626' }}>
-                                      {rm.quantity}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-2.5" style={{ color: 'var(--text-secondary)' }}>
-                                    {formatCurrency(rm.product?.sale_price ?? null)}
-                                  </td>
-                                  <td className="px-4 py-2.5" style={{ color: 'var(--text-secondary)' }}>
-                                    <span className="inline-flex items-center gap-1">
-                                      <Clock size={11} style={{ color: 'var(--text-muted)' }} />
-                                      {formatDateTime(rm.last_restocked_at)}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-2.5" style={{ color: 'var(--text-muted)' }}>
-                                    {rm.restocked_by_user?.name ?? '—'}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        )}
+        {minibarsListContent}
       </div>
 
       {showNew && (
@@ -1241,7 +1436,6 @@ function MinibarsSection() {
 
       {restocking && selectedMinibar && (
         <RestockRoomModal
-          roomId={selectedMinibar.room_id}
           roomNumber={selectedRoomNumber}
           products={products}
           onSave={handleRestock}

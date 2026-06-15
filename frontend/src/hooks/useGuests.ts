@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import toast from 'react-hot-toast'
 import {
   getGuestsApi, createGuestApi, updateGuestApi, deleteGuestApi, searchGuestsApi,
@@ -10,7 +11,7 @@ export function useGuests(search?: string) {
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['guests', search],
+    queryKey: hotelQueryKey('guests', search),
     queryFn:  () => getGuestsApi(search),
   })
 
@@ -18,7 +19,7 @@ export function useGuests(search?: string) {
     mutationFn: createGuestApi,
     onSuccess: () => {
       toast.success('Huésped creado.')
-      queryClient.invalidateQueries({ queryKey: ['guests'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('guests') })
     },
     onError: (err: unknown) => toast.error(extractApiError(err, 'Error al crear huésped.')),
   })
@@ -28,7 +29,7 @@ export function useGuests(search?: string) {
       updateGuestApi(id, payload),
     onSuccess: () => {
       toast.success('Huésped actualizado.')
-      queryClient.invalidateQueries({ queryKey: ['guests'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('guests') })
     },
     onError: (err: unknown) => toast.error(extractApiError(err, 'Error al actualizar huésped.')),
   })
@@ -37,7 +38,7 @@ export function useGuests(search?: string) {
     mutationFn: deleteGuestApi,
     onSuccess: () => {
       toast.success('Huésped eliminado.')
-      queryClient.invalidateQueries({ queryKey: ['guests'] })
+      queryClient.invalidateQueries({ queryKey: hotelQueryKey('guests') })
     },
     onError: (err: unknown) => toast.error(extractApiError(err, 'Error al eliminar huésped.')),
   })
@@ -58,7 +59,7 @@ export function useGuests(search?: string) {
 export function useGuestSearch(term: string, enabled = true) {
   const trimmed = term.trim()
   return useQuery({
-    queryKey: ['guests', 'search', trimmed],
+    queryKey: hotelQueryKey('guests', 'search', trimmed),
     queryFn:  () => searchGuestsApi(trimmed),
     enabled:  enabled && trimmed.length >= 1,
     staleTime: 10_000,
