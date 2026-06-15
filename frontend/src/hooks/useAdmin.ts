@@ -6,16 +6,19 @@ import {
   createBackupApi,
   deleteAllBackupsApi,
   createExtraServiceApi,
+  createNationalityApi,
   createHouseApi,
   createRoomTypeApi,
   createSeasonApi,
   deleteAdminRoomApi,
   deleteAdminUserApi,
   deleteExtraServiceApi,
+  deleteNationalityApi,
   deleteHouseApi,
   deleteRoomTypeApi,
   deleteSeasonApi,
   getAdminExtraServicesApi,
+  getAdminNationalitiesApi,
   getAdminHousesApi,
   getAdminPermissionsApi,
   getAdminRolesApi,
@@ -23,6 +26,10 @@ import {
   getAdminRoomTypesApi,
   getAdminSeasonsApi,
   getAdminUsersApi,
+  getAdminPersonasApi,
+  createAdminPersonaApi,
+  updateAdminPersonaApi,
+  deleteAdminPersonaApi,
   getBackupsApi,
   getBackupPreviewApi,
   getBackupSettingsApi,
@@ -33,6 +40,7 @@ import {
   updateAdminRoomApi,
   updateAdminUserApi,
   updateExtraServiceApi,
+  updateNationalityApi,
   updateHotelInfoApi,
   updateHouseApi,
   updateRolePermissionsApi,
@@ -41,7 +49,8 @@ import {
   uploadLogoApi,
   wipeDatabaseApi,
 } from '../services/admin.service'
-import type { AdminUserPayload, ExtraService, House, Room, RoomType, Season } from '../types'
+import type { Nationality } from '@/types/person'
+import type { AdminUserPayload, AdminPersonaPayload, ExtraService, House, Room, RoomType, Season } from '../types'
 
 // ── Hotel ─────────────────────────────────────────────────────────────────────
 
@@ -176,6 +185,33 @@ export function useExtraServiceMutations() {
   return { create, update, remove }
 }
 
+// ── Nationalities ─────────────────────────────────────────────────────────────
+
+export function useAdminNationalities() {
+  return useQuery({ queryKey: ['admin', 'nationalities'], queryFn: getAdminNationalitiesApi })
+}
+
+export function useNationalityMutations() {
+  const qc = useQueryClient()
+  const inv = () => {
+    qc.invalidateQueries({ queryKey: ['admin', 'nationalities'] })
+    qc.invalidateQueries({ queryKey: ['nationalities'] })
+  }
+
+  const create = useMutation({
+    mutationFn: (payload: Pick<Nationality, 'name' | 'iso_code' | 'sort_order' | 'is_active'>) => createNationalityApi(payload),
+    onSuccess: inv,
+  })
+  const update = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Pick<Nationality, 'name' | 'iso_code' | 'sort_order' | 'is_active'>> }) =>
+      updateNationalityApi(id, data),
+    onSuccess: inv,
+  })
+  const remove = useMutation({ mutationFn: deleteNationalityApi, onSuccess: inv })
+
+  return { create, update, remove }
+}
+
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 export function useAdminUsers() {
@@ -192,6 +228,28 @@ export function useAdminUserMutations() {
     onSuccess: inv,
   })
   const remove = useMutation({ mutationFn: deleteAdminUserApi, onSuccess: inv })
+
+  return { create, update, remove }
+}
+
+export function useAdminPersonas(filters?: { search?: string; role?: string; page?: number }) {
+  return useQuery({
+    queryKey: hotelQueryKey('admin', 'personas', filters),
+    queryFn:  () => getAdminPersonasApi(filters),
+  })
+}
+
+export function useAdminPersonaMutations() {
+  const qc = useQueryClient()
+  const inv = () => qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'personas') })
+
+  const create = useMutation({ mutationFn: createAdminPersonaApi, onSuccess: inv })
+  const update = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<AdminPersonaPayload> }) =>
+      updateAdminPersonaApi(id, data),
+    onSuccess: inv,
+  })
+  const remove = useMutation({ mutationFn: deleteAdminPersonaApi, onSuccess: inv })
 
   return { create, update, remove }
 }

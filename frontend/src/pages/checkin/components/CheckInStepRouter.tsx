@@ -34,7 +34,6 @@ export function CheckInStepRouter({ wizard, rooms }: CheckInStepRouterProps) {
         guest={state.guest}
         guestSearch={state.guestSearch}
         guestResults={wizard.guestResults}
-        companions={state.companions}
         withCompany={state.withCompany}
         onNewGuestChange={wizard.mainGuest.onNewGuestChange}
         onGuestSearchChange={wizard.mainGuest.onGuestSearchChange}
@@ -42,10 +41,6 @@ export function CheckInStepRouter({ wizard, rooms }: CheckInStepRouterProps) {
         onClearGuest={wizard.mainGuest.onClearGuest}
         onStartNewGuest={wizard.mainGuest.onStartNewGuest}
         onBackToSearch={wizard.mainGuest.onBackToSearch}
-        onAddCompanion={wizard.mainGuest.onAddCompanion}
-        onCompanionNameChange={wizard.mainGuest.onCompanionNameChange}
-        onCompanionRelationshipChange={wizard.mainGuest.onCompanionRelationshipChange}
-        onRemoveCompanion={wizard.mainGuest.onRemoveCompanion}
         onWithCompanyChange={wizard.mainGuest.onWithCompanyChange}
       />
     )

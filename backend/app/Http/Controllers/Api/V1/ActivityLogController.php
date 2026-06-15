@@ -154,7 +154,7 @@ class ActivityLogController extends Controller
 
     public function payments(Request $request): JsonResponse
     {
-        $query = Payment::with(['stay.guest', 'receptionist', 'cancelledBy:id,name'])
+        $query = Payment::with(['stay.guest', 'receptionist.persona', 'cancelledBy.persona'])
             ->orderByDesc('payment_date');
 
         // Por defecto el historial muestra TODOS los pagos (anulados con badge).
@@ -182,9 +182,7 @@ class ActivityLogController extends Controller
         }
 
         if ($guestName = $request->query('guest')) {
-            $query->whereHas('stay.guest', fn($q) =>
-                $q->where('full_name', 'ilike', "%{$guestName}%")
-            );
+            $query->whereHas('stay.guest', fn ($q) => $q->search($guestName));
         }
 
         $payments = $query->paginate($this->perPage($request, 50))->through(fn($p) => [

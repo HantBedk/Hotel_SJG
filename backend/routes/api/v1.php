@@ -12,6 +12,7 @@ Route::middleware(['auth:sanctum', SetCurrentHotel::class])->group(function () {
     require __DIR__ . '/v1/dashboard.php';
     require __DIR__ . '/v1/rooms.php';
     require __DIR__ . '/v1/guests.php';
+    require __DIR__ . '/v1/nationalities.php';
     require __DIR__ . '/v1/companies.php';
     require __DIR__ . '/v1/stays.php';
     require __DIR__ . '/v1/reservations.php';

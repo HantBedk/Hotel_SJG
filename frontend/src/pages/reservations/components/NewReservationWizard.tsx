@@ -11,6 +11,9 @@ import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { createGuestApi } from '@/services/guests.service'
 import { extractApiError } from '@/lib/apiError'
 import { cn } from '@/lib/cn'
+import { PersonNameFieldsInput } from '@/components/person/PersonNameFields'
+import { NationalitySelect } from '@/components/person/NationalitySelect'
+import { emptyPersonName, isPersonNameValid, type PersonNameFields } from '@/types/person'
 import type { Guest, Company, Room, DocumentType } from '@/types'
 
 interface Props {
@@ -38,12 +41,15 @@ const DOC_TYPES: { value: DocumentType; label: string }[] = [
 ]
 
 interface NewGuestForm {
-  full_name:       string
+  primer_nombre: string
+  segundo_nombre: string
+  primer_apellido: string
+  segundo_apellido: string
   document_type:   DocumentType
   document_number: string
   email:           string
   phone:           string
-  nationality:     string
+  nationality_id:  string
 }
 
 interface WizardState {
@@ -138,7 +144,7 @@ function canAdvanceStep(
   switch (step) {
     case 'guest':
       if (creatingNew) {
-        return !!newGuest.full_name.trim() && !!newGuest.document_number.trim()
+        return isPersonNameValid(newGuest) && !!newGuest.document_number.trim()
       }
       return !!state.guest
     case 'room':
@@ -311,18 +317,17 @@ function GuestStep({
             </button>
           </div>
 
-          <div>
-            <label htmlFor="wizard-new-guest-name" className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Nombre completo *</label>
-            <input
-              id="wizard-new-guest-name"
-              className="w-full px-3 py-2 rounded-lg text-sm border"
-              style={{ background: 'var(--bg-main)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-              placeholder="Juan Pérez García"
-              value={newGuest.full_name}
-              onChange={(e) => onSetNewGuestField('full_name', e.target.value)}
-              autoFocus
-            />
-          </div>
+          <PersonNameFieldsInput
+            value={newGuest}
+            onChange={(patch) => {
+              for (const key of Object.keys(patch) as Array<keyof PersonNameFields>) {
+                const value = patch[key]
+                if (value !== undefined) {
+                  onSetNewGuestField(key, value)
+                }
+              }
+            }}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -366,13 +371,9 @@ function GuestStep({
             </div>
             <div>
               <label htmlFor="wizard-new-guest-nationality" className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Nacionalidad</label>
-              <input
-                id="wizard-new-guest-nationality"
-                className="w-full px-3 py-2 rounded-lg text-sm border"
-                style={{ background: 'var(--bg-main)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
-                placeholder="Colombiana"
-                value={newGuest.nationality}
-                onChange={(e) => onSetNewGuestField('nationality', e.target.value)}
+              <NationalitySelect
+                value={newGuest.nationality_id}
+                onChange={(nationality_id) => onSetNewGuestField('nationality_id', nationality_id)}
               />
             </div>
           </div>
@@ -763,12 +764,12 @@ export default function NewReservationWizard({ prefillStartDate, prefillRoom, on
 
   const [creatingNew, setCreatingNew] = useState(false)
   const [newGuest, setNewGuest] = useState<NewGuestForm>({
-    full_name:       '',
+    ...emptyPersonName(),
     document_type:   'cc',
     document_number: '',
     email:           '',
     phone:           '',
-    nationality:     '',
+    nationality_id:  '',
   })
   const [guestError, setGuestError] = useState('')
   const [savingGuest, setSavingGuest] = useState(false)
@@ -800,12 +801,15 @@ export default function NewReservationWizard({ prefillStartDate, prefillRoom, on
     setGuestError('')
     try {
       const created = await createGuestApi({
-        full_name:       newGuest.full_name.trim(),
+        primer_nombre:    newGuest.primer_nombre.trim(),
+        segundo_nombre:   newGuest.segundo_nombre.trim(),
+        primer_apellido:  newGuest.primer_apellido.trim(),
+        segundo_apellido: newGuest.segundo_apellido.trim(),
         document_type:   newGuest.document_type,
         document_number: newGuest.document_number.trim(),
         email:           newGuest.email.trim() || undefined,
         phone:           newGuest.phone.trim() || undefined,
-        nationality:     newGuest.nationality.trim() || undefined,
+        nationality_id:  newGuest.nationality_id || undefined,
       })
       set('guest', created)
       setCreatingNew(false)

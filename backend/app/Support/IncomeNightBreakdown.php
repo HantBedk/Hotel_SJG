@@ -20,7 +20,7 @@ class IncomeNightBreakdown
         $rangeStayRooms = StayRoom::with([
             'room:id,number',
             'stay:id,guest_id,company_id,status,actual_check_out_datetime',
-            'stay.guest:id,full_name',
+            'stay.guest',
             'stay.company:id,name',
         ])
             ->where('is_active', true)

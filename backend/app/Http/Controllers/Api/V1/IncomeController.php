@@ -69,7 +69,7 @@ class IncomeController extends Controller
             ->value('total');
 
         $recentPayments = Payment::active()
-            ->with(['stay.guest:id,full_name', 'stay.company:id,name', 'receptionist:id,name'])
+            ->with(['stay.guest', 'stay.company:id,name', 'receptionist.persona'])
             ->whereBetween('payment_date', [$periodStart, $periodEnd])
             ->orderByDesc('payment_date')
             ->limit(20)

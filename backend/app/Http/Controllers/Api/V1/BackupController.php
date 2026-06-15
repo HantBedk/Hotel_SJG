@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
-use App\Models\Guest;
+use App\Models\Persona;
 use App\Models\InventoryItem;
 use App\Models\MinibarProduct;
 use App\Models\Reservation;
@@ -151,7 +151,7 @@ class BackupController extends Controller
             'success' => true,
             'data'    => [
                 'users'            => User::count(),
-                'guests'           => Guest::count(),
+                'guests'           => Persona::guests()->count(),
                 'companies'        => Company::count(),
                 'rooms'            => Room::count(),
                 'reservations'     => Reservation::count(),
@@ -379,13 +379,13 @@ class BackupController extends Controller
         try {
             // 1) Snapshot SIEMPRE de los superadmins (nunca se borran).
             //    Si keep_users=true, además captura el resto de usuarios.
-            $userQuery = User::query()->with(['roles:id,name', 'permissions:id,name']);
+            $userQuery = User::query()->with(['persona.roles', 'persona']);
             if (! $keepUsers) {
-                $userQuery->whereHas('roles', fn ($q) => $q->where('name', 'superadmin'));
+                $userQuery->whereHas('persona.roles', fn ($q) => $q->where('name', 'superadmin'));
             }
             $preserved = $userQuery->get()->map(fn ($u) => [
                 'id'                => $u->id,
-                'name'              => $u->name,
+                'person_id'         => $u->person_id,
                 'email'             => $u->email,
                 'email_verified_at' => $u->email_verified_at,
                 'password'          => $u->password,
@@ -393,8 +393,8 @@ class BackupController extends Controller
                 'is_active'         => $u->is_active,
                 'created_at'        => $u->created_at,
                 'updated_at'        => $u->updated_at,
-                '_roles'            => $u->roles->pluck('name')->all(),
-                '_permissions'      => $u->permissions->pluck('name')->all(),
+                '_persona'          => $u->persona?->getAttributes(),
+                '_roles'            => $u->getRoleNames()->all(),
             ])->all();
 
             // 2) Drop + recreate estructura.
@@ -402,6 +402,7 @@ class BackupController extends Controller
 
             // 3) Reseed: roles/permisos + datos base. NO SuperAdminSeeder
             //    porque restauramos los superadmins reales desde el snapshot.
+            Artisan::call('db:seed', ['--class' => 'NationalitiesSeeder',    '--force' => true]);
             Artisan::call('db:seed', ['--class' => 'RolesPermissionsSeeder', '--force' => true]);
             Artisan::call('db:seed', ['--class' => 'HotelSeeder',            '--force' => true]);
             Artisan::call('db:seed', ['--class' => 'SettingsSeeder',         '--force' => true]);
@@ -409,22 +410,21 @@ class BackupController extends Controller
             // 4) Restaurar usuarios preservados con sus IDs y roles originales.
             //    Inserción directa para preservar UUIDs y evitar re-hash de password.
             foreach ($preserved as $row) {
-                $roles       = $row['_roles'];
-                $permissions = $row['_permissions'];
-                unset($row['_roles'], $row['_permissions']);
+                $roles   = $row['_roles'];
+                $persona = $row['_persona'] ?? null;
+                unset($row['_roles'], $row['_persona']);
+
+                if ($persona) {
+                    DB::table('personas')->insertOrIgnore($persona);
+                }
 
                 DB::table('users')->insert($row);
 
                 $user = User::find($row['id']);
-                if (! $user) {
+                if (! $user || empty($roles)) {
                     continue;
                 }
-                if (! empty($roles)) {
-                    $user->syncRoles($roles);
-                }
-                if (! empty($permissions)) {
-                    $user->syncPermissions($permissions);
-                }
+                $user->syncRoles($roles);
             }
         } catch (\Throwable $e) {
             return response()->json([

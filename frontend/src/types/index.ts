@@ -12,7 +12,7 @@ export type { Setting } from './settings'
 export type { HotelInfo, HotelInfoPayload, HotelLogoUploadResult } from './hotel'
 export type { House } from './house'
 export type { RoomStatus, RoomType, Room } from './room'
-export type { DocumentType, GuestCompanion, Guest } from './guest'
+export type { DocumentType, Guest } from './guest'
 export type { Company } from './company'
 export type {
   StayStatus,
@@ -83,5 +83,5 @@ export type {
   Suggestion,
   PaymentHistoryEntry,
 } from './activity'
-export type { AdminUser, AdminUserPayload, BackupFile } from './admin'
+export type { AdminUser, AdminUserPayload, AdminPersona, AdminPersonaPayload, BackupFile } from './admin'
 export type { DashboardStats } from './dashboard'

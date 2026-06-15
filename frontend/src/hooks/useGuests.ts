@@ -3,9 +3,10 @@ import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import toast from 'react-hot-toast'
 import {
   getGuestsApi, createGuestApi, updateGuestApi, deleteGuestApi, searchGuestsApi,
+  extractGuestList,
+  type CreateGuestPayload,
 } from '@/services/guests.service'
 import { extractApiError } from '@/lib/apiError'
-import type { Guest } from '@/types'
 
 export function useGuests(search?: string) {
   const queryClient = useQueryClient()
@@ -25,7 +26,7 @@ export function useGuests(search?: string) {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: Partial<Guest> }) =>
+    mutationFn: ({ id, payload }: { id: string; payload: Partial<CreateGuestPayload> }) =>
       updateGuestApi(id, payload),
     onSuccess: () => {
       toast.success('Huésped actualizado.')
@@ -44,7 +45,7 @@ export function useGuests(search?: string) {
   })
 
   return {
-    guests:       (data as { data: Guest[] })?.data ?? [],
+    guests:       extractGuestList(data ?? []),
     meta:         (data as { meta: unknown })?.meta,
     isLoading,
     createGuest:  createMutation.mutate,

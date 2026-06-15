@@ -12,6 +12,7 @@ class DatabaseSeeder extends Seeder
         // servicios ni categorías de ejemplo — el cliente los configura después.
         $this->call([
             HotelSeeder::class,
+            NationalitiesSeeder::class,
             RolesPermissionsSeeder::class,
             SuperAdminSeeder::class,
             SettingsSeeder::class,

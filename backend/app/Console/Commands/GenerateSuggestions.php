@@ -36,17 +36,17 @@ class GenerateSuggestions extends Command
     {
         $recurringGuests = DB::table('stays')
             ->join('minibar_consumptions', 'stays.id', '=', 'minibar_consumptions.stay_id')
-            ->join('guests', 'stays.guest_id', '=', 'guests.id')
+            ->join('personas', 'stays.person_id', '=', 'personas.id')
             ->select(
-                'stays.guest_id',
-                'guests.full_name',
+                'stays.person_id as guest_id',
+                DB::raw("trim(concat_ws(' ', personas.primer_nombre, personas.segundo_nombre, personas.primer_apellido, personas.segundo_apellido)) as full_name"),
                 DB::raw('COUNT(DISTINCT stays.id) as stay_count'),
                 DB::raw('SUM(minibar_consumptions.quantity) as total_items'),
                 DB::raw("string_agg(DISTINCT minibar_consumptions.product_name, ', ') as products")
             )
             ->where('stays.hotel_id', $hotelId)
             ->where('stays.status', 'checked_out')
-            ->groupBy('stays.guest_id', 'guests.full_name')
+            ->groupBy('stays.person_id', 'personas.primer_nombre', 'personas.segundo_nombre', 'personas.primer_apellido', 'personas.segundo_apellido')
             ->having(DB::raw('COUNT(DISTINCT stays.id)'), '>=', 3)
             ->orderByDesc('stay_count')
             ->limit(5)

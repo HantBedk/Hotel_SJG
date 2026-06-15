@@ -8,6 +8,8 @@ class AuthUserPayload
 {
     public static function build(User $user): array
     {
+        $user->loadMissing('persona');
+
         $hotels = HotelAccess::accessibleHotels($user)->map(fn ($h) => [
             'id'       => $h->id,
             'name'     => $h->name,
@@ -17,6 +19,7 @@ class AuthUserPayload
 
         return [
             'id'               => $user->id,
+            'person_id'        => $user->person_id,
             'name'             => $user->name,
             'email'            => $user->email,
             'roles'            => $user->getRoleNames(),

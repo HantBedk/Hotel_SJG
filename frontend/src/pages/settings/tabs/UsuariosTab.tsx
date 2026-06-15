@@ -1,28 +1,18 @@
-import { useState, useEffect, type SubmitEvent } from 'react'
-import { Plus, Pencil, UserX, X } from 'lucide-react'
+import { useState, type SubmitEvent } from 'react'
+import { Plus, Pencil, UserX } from 'lucide-react'
 import { useAdminUsers, useAdminUserMutations, useAdminRoles } from '@/hooks/useAdmin'
-import { useFocusTrap } from '@/hooks/useFocusTrap'
-import type { AdminUser, HotelSummary } from '@/types'
+import type { AdminUser } from '@/types'
 import { SkeletonText } from '@/components/ui/Skeleton'
 import { useAuth } from '@/hooks/useAuth'
 import { useHotelStore } from '@/store/hotelStore'
-import { cn } from '@/lib/cn'
-
-type UserForm = {
-  name: string
-  document_number: string
-  phone: string
-  email: string
-  password: string
-  role: string
-  is_active: boolean
-  hotel_ids: string[]
-}
+import { emptyPersonName, personNameFromGuest } from '@/types/person'
+import { UserFormModal, type UserForm } from '../components/UserFormModal'
 
 const EMPTY: UserForm = {
-  name: '',
+  ...emptyPersonName(),
   document_number: '',
   phone: '',
+  nationality_id: '',
   email: '',
   password: '',
   role: 'receptionist',
@@ -38,30 +28,6 @@ const ROLE_LABELS: Record<string, string> = {
   receptionist: 'Recepcionista',
   housekeeping: 'Camarera',
   maintenance: 'Mantenimiento',
-}
-
-function useDialogLifecycle(onClose: () => void) {
-  const dialogRef = useFocusTrap<HTMLDialogElement>(true, onClose)
-  const backdropClassName = 'absolute inset-0 border-0 p-0 cursor-default'
-
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-    if (!dialog.open) dialog.showModal()
-    return () => {
-      if (dialog.open) dialog.close()
-    }
-  }, [dialogRef])
-
-  useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [])
-
-  return { dialogRef, backdropClassName }
 }
 
 function roleNeedsLogin(role: string): boolean {
@@ -84,43 +50,17 @@ function slugify(value: string): string {
   return 'user'
 }
 
-function generatePlaceholderEmail(name: string, role: string): string {
+function generatePlaceholderEmail(form: UserForm, role: string): string {
+  const displayName = [form.primer_nombre, form.primer_apellido].filter(Boolean).join(' ')
   const stamp = Date.now().toString(36)
   const rnd = Math.random().toString(36).slice(2, 6)
-  return `${slugify(role)}-${slugify(name)}-${stamp}${rnd}@personal.local`
+  return `${slugify(role)}-${slugify(displayName)}-${stamp}${rnd}@personal.local`
 }
 
 function generatePlaceholderPassword(): string {
   const uuid = globalThis.crypto?.randomUUID?.()
   if (uuid) return uuid
   return Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
-}
-
-function userFieldId(field: string): string {
-  return `user-field-${field}`
-}
-
-function userFormTitle(editing: AdminUser | null): string {
-  if (editing) return `Editar: ${editing.name}`
-  return 'Nuevo usuario'
-}
-
-function userSaveLabel(saving: boolean): string {
-  if (saving) return 'Guardando…'
-  return 'Guardar'
-}
-
-function passwordFieldLabel(editing: AdminUser | null): string {
-  if (editing) return 'Contraseña (dejar vacío para no cambiar)'
-  return 'Contraseña *'
-}
-
-function hotelsAssignmentLabel(): string {
-  return 'Hoteles asignados'
-}
-
-function hotelsAssignmentHint(): string {
-  return 'Selecciona al menos un hotel.'
 }
 
 function activeBadgeStyle(isActive: boolean): { background: string; color: string } {
@@ -139,12 +79,12 @@ function isPersonalEmail(email: string | undefined): boolean {
 
 function filterVisibleUsers(users: AdminUser[], isSuperadmin: boolean): AdminUser[] {
   if (isSuperadmin) return users
-  return users.filter(user => user.role !== 'superadmin')
+  return users.filter((user) => user.role !== 'superadmin')
 }
 
 function filterRoleNames(roleNames: string[], isSuperadmin: boolean): string[] {
   if (isSuperadmin) return roleNames
-  return roleNames.filter(role => role !== 'superadmin')
+  return roleNames.filter((role) => role !== 'superadmin')
 }
 
 function canEditUser(user: AdminUser, isSuperadmin: boolean): boolean {
@@ -159,24 +99,18 @@ function canDeactivateUser(user: AdminUser, currentUserId: string | undefined): 
 }
 
 function userToForm(user: AdminUser): UserForm {
+  const name = personNameFromGuest(user)
   return {
-    name: user.name,
+    ...name,
     document_number: user.document_number ?? '',
     phone: user.phone ?? '',
+    nationality_id: user.nationality_id ?? '',
     email: user.email,
     password: '',
     role: user.role ?? 'receptionist',
     is_active: user.is_active,
     hotel_ids: user.hotel_ids ?? [],
   }
-}
-
-function toggleHotelAssignment(hotelIds: string[], hotelId: string, checked: boolean): string[] {
-  if (checked) {
-    return hotelIds.includes(hotelId) ? hotelIds : [...hotelIds, hotelId]
-  }
-  const next = hotelIds.filter(id => id !== hotelId)
-  return next.length === 0 ? hotelIds : next
 }
 
 function requiresHotelAssignment(role: string): boolean {
@@ -191,9 +125,13 @@ function hasValidHotelAssignment(role: string, hotelIds: string[], assignableCou
 function buildUpdatePayload(form: UserForm): Partial<UserForm> {
   const needsLogin = roleNeedsLogin(form.role)
   const payload: Partial<UserForm> = {
-    name: form.name,
+    primer_nombre: form.primer_nombre,
+    segundo_nombre: form.segundo_nombre,
+    primer_apellido: form.primer_apellido,
+    segundo_apellido: form.segundo_apellido,
     document_number: form.document_number,
     phone: form.phone,
+    nationality_id: form.nationality_id,
     role: form.role,
     is_active: form.is_active,
     hotel_ids: form.role === 'superadmin' ? [] : form.hotel_ids,
@@ -213,7 +151,7 @@ function buildCreatePayload(form: UserForm): UserForm {
   } else {
     payload = {
       ...form,
-      email: generatePlaceholderEmail(form.name, form.role),
+      email: generatePlaceholderEmail(form, form.role),
       password: generatePlaceholderPassword(),
     }
   }
@@ -221,258 +159,6 @@ function buildCreatePayload(form: UserForm): UserForm {
     return { ...payload, hotel_ids: [] }
   }
   return payload
-}
-
-interface UserHotelAssignmentProps {
-  readonly role: string
-  readonly hotelIds: string[]
-  readonly assignableHotels: HotelSummary[]
-  readonly onHotelIdsChange: (hotelIds: string[]) => void
-}
-
-function UserHotelAssignment({ role, hotelIds, assignableHotels, onHotelIdsChange }: UserHotelAssignmentProps) {
-  if (!requiresHotelAssignment(role) || assignableHotels.length === 0) return null
-
-  return (
-    <fieldset className="border-0 p-0 m-0 min-w-0">
-      <legend className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-        {hotelsAssignmentLabel()}
-      </legend>
-      <p className="text-[11px] mb-2" style={{ color: 'var(--text-muted)' }}>
-        {hotelsAssignmentHint()}
-      </p>
-      <div className="space-y-1 max-h-32 overflow-y-auto rounded-lg border px-2 py-2"
-        style={{ borderColor: 'var(--border-default)' }}>
-        {assignableHotels.map(hotel => {
-          const checkboxId = `user-hotel-${hotel.id}`
-          const checked = hotelIds.includes(hotel.id)
-          const isLastSelected = checked && hotelIds.length === 1
-          return (
-            <label key={hotel.id} htmlFor={checkboxId} className="flex items-center gap-2 text-sm">
-              <input
-                id={checkboxId}
-                type="checkbox"
-                checked={checked}
-                disabled={isLastSelected}
-                onChange={e => onHotelIdsChange(toggleHotelAssignment(hotelIds, hotel.id, e.target.checked))}
-              />
-              <span style={{ color: 'var(--text-primary)' }}>{hotel.name}</span>
-            </label>
-          )
-        })}
-      </div>
-    </fieldset>
-  )
-}
-
-interface UserFormModalProps {
-  readonly editing: AdminUser | null
-  readonly form: UserForm
-  readonly roleNames: string[]
-  readonly assignableHotels: HotelSummary[]
-  readonly saving: boolean
-  readonly onClose: () => void
-  readonly onChange: (patch: Partial<UserForm>) => void
-  readonly onHotelIdsChange: (hotelIds: string[]) => void
-  readonly onSubmit: (e: SubmitEvent<HTMLFormElement>) => void
-}
-
-function UserFormModal({
-  editing, form, roleNames, assignableHotels, saving, onClose, onChange, onHotelIdsChange, onSubmit,
-}: UserFormModalProps) {
-  const { dialogRef, backdropClassName } = useDialogLifecycle(onClose)
-  const needsLogin = roleNeedsLogin(form.role)
-
-  return (
-    <dialog
-      ref={dialogRef}
-      aria-label={userFormTitle(editing)}
-      className={cn(
-        'app-modal fixed inset-0 z-50 m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
-        'flex items-center justify-center pointer-events-none p-4',
-      )}
-    >
-      <button
-        type="button"
-        aria-label="Cerrar modal"
-        className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
-        onClick={onClose}
-      />
-      <form
-        onSubmit={onSubmit}
-        autoComplete="off"
-        className="relative z-10 pointer-events-auto rounded-xl p-6 space-y-4 w-full max-w-md max-h-[90vh] overflow-y-auto"
-        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {userFormTitle(editing)}
-          </h3>
-          <button type="button" onClick={onClose} aria-label="Cerrar" style={{ color: 'var(--text-muted)' }}>
-            <X size={16} />
-          </button>
-        </div>
-
-        <input type="text" name="prevent-autofill" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden="true" />
-        <input type="password" name="prevent-autofill" autoComplete="new-password" className="hidden" tabIndex={-1} aria-hidden="true" />
-
-        <div>
-          <label htmlFor={userFieldId('role')} className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-            Rol
-          </label>
-          <select
-            id={userFieldId('role')}
-            value={form.role}
-            onChange={e => {
-              const role = e.target.value
-              const patch: Partial<UserForm> = { role }
-              if (role === 'superadmin') {
-                patch.hotel_ids = []
-              } else if (form.hotel_ids.length === 0 && assignableHotels.length === 1) {
-                patch.hotel_ids = [assignableHotels[0].id]
-              }
-              onChange(patch)
-            }}
-            className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
-            style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
-          >
-            {roleNames.map(role => (
-              <option key={role} value={role}>{roleLabel(role)}</option>
-            ))}
-          </select>
-          {!needsLogin && (
-            <p className="mt-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>
-              Este rol es solo para seguimiento interno y no tiene acceso al sistema.
-            </p>
-          )}
-        </div>
-
-        <UserHotelAssignment
-          role={form.role}
-          hotelIds={form.hotel_ids}
-          assignableHotels={assignableHotels}
-          onHotelIdsChange={onHotelIdsChange}
-        />
-
-        <div>
-          <label htmlFor={userFieldId('name')} className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-            Nombre
-          </label>
-          <input
-            id={userFieldId('name')}
-            type="text"
-            value={form.name}
-            required
-            autoComplete="off"
-            onChange={e => onChange({ name: e.target.value })}
-            className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
-            style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor={userFieldId('document_number')} className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-              Cédula
-            </label>
-            <input
-              id={userFieldId('document_number')}
-              type="text"
-              inputMode="numeric"
-              value={form.document_number}
-              autoComplete="off"
-              onChange={e => onChange({ document_number: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
-              style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
-            />
-          </div>
-          <div>
-            <label htmlFor={userFieldId('phone')} className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-              Celular
-            </label>
-            <input
-              id={userFieldId('phone')}
-              type="tel"
-              value={form.phone}
-              autoComplete="off"
-              onChange={e => onChange({ phone: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
-              style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
-            />
-          </div>
-        </div>
-
-        {needsLogin && (
-          <>
-            <div>
-              <label htmlFor={userFieldId('email')} className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-                Email
-              </label>
-              <input
-                id={userFieldId('email')}
-                type="email"
-                value={form.email}
-                required
-                autoComplete="off"
-                name="user-email-field"
-                onChange={e => onChange({ email: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
-                style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
-              />
-            </div>
-            <div>
-              <label htmlFor={userFieldId('password')} className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-                {passwordFieldLabel(editing)}
-              </label>
-              <input
-                id={userFieldId('password')}
-                type="password"
-                value={form.password}
-                required={!editing}
-                minLength={6}
-                autoComplete="new-password"
-                name="user-password-field"
-                onChange={e => onChange({ password: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg text-sm border focus:outline-none"
-                style={{ background: 'var(--bg-base)', color: 'var(--text-primary)', borderColor: 'var(--border-default)' }}
-              />
-            </div>
-          </>
-        )}
-
-        {editing && (
-          <label htmlFor={userFieldId('is_active')} className="flex items-center gap-2 text-sm" style={{ color: 'var(--text-primary)' }}>
-            <input
-              id={userFieldId('is_active')}
-              type="checkbox"
-              checked={form.is_active}
-              onChange={e => onChange({ is_active: e.target.checked })}
-            />
-            <span>Activo</span>
-          </label>
-        )}
-
-        <div className="flex gap-2 pt-1">
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex-1 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-60"
-            style={{ background: 'var(--color-primary)' }}
-          >
-            {userSaveLabel(saving)}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm border"
-            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
-          >
-            Cancelar
-          </button>
-        </div>
-      </form>
-    </dialog>
-  )
 }
 
 interface UserTableRowProps {
@@ -544,7 +230,7 @@ export default function UsuariosTab() {
   const { create, update, remove } = useAdminUserMutations()
   const { data: roles = [] } = useAdminRoles()
   const { user: me, hasRole } = useAuth()
-  const assignableHotels = useHotelStore(s => s.hotels)
+  const assignableHotels = useHotelStore((s) => s.hotels)
 
   const [form, setForm] = useState<UserForm>(EMPTY)
   const [editing, setEditing] = useState<AdminUser | null>(null)
@@ -552,7 +238,7 @@ export default function UsuariosTab() {
 
   const isSuperadmin = hasRole('superadmin')
   const visibleUsers = filterVisibleUsers(users, isSuperadmin)
-  const roleNames = filterRoleNames(roles.map(r => r.name), isSuperadmin)
+  const roleNames = filterRoleNames(roles.map((r) => r.name), isSuperadmin)
 
   const openCreate = () => {
     setEditing(null)
@@ -573,6 +259,10 @@ export default function UsuariosTab() {
 
   const submit = async (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!form.primer_nombre.trim() || !form.primer_apellido.trim()) {
+      alert('Primer nombre y primer apellido son obligatorios.')
+      return
+    }
     if (!hasValidHotelAssignment(form.role, form.hotel_ids, assignableHotels.length)) {
       alert('Asigna al menos un hotel al usuario.')
       return
@@ -622,7 +312,7 @@ export default function UsuariosTab() {
             </tr>
           </thead>
           <tbody>
-            {visibleUsers.map(user => (
+            {visibleUsers.map((user) => (
               <UserTableRow
                 key={user.id}
                 user={user}
@@ -644,8 +334,8 @@ export default function UsuariosTab() {
           assignableHotels={assignableHotels}
           saving={saving}
           onClose={close}
-          onChange={patch => setForm(f => ({ ...f, ...patch }))}
-          onHotelIdsChange={hotelIds => setForm(f => ({ ...f, hotel_ids: hotelIds }))}
+          onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+          onHotelIdsChange={(hotelIds) => setForm((f) => ({ ...f, hotel_ids: hotelIds }))}
           onSubmit={submit}
         />
       )}

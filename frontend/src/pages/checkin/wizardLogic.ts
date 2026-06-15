@@ -1,9 +1,10 @@
 import { addDaysLocal, nowLocalISO, todayLocalISO } from '@/lib/format'
-import { createGuestApi, addCompanionApi } from '@/services/guests.service'
+import { createGuestApi } from '@/services/guests.service'
 import { createCompanyApi } from '@/services/companies.service'
-import type { Room, GuestCompanion, DocumentType } from '@/types'
+import type { Room } from '@/types'
 import type { AdditionalGuestForm } from '@/pages/checkin/ExtraGuestStep'
-import type { CompanionForm, StepId, WizardState } from '@/pages/checkin/types'
+import type { StepId, WizardState } from '@/pages/checkin/types'
+import { emptyPersonName, isPersonNameValid } from '@/types/person'
 
 export function isExtraMinor(idx: number, adults: number): boolean {
   return idx >= Math.max(0, adults - 1)
@@ -43,8 +44,14 @@ export function createInitialWizardState(rooms: Room[]): WizardState {
     guest: null,
     guestSearch: '',
     isNewGuest: false,
-    newGuest: { full_name: '', document_type: 'cc', document_number: '', phone: '', email: '', nationality: '' },
-    companions: [],
+    newGuest: {
+      ...emptyPersonName(),
+      document_type: 'cc',
+      document_number: '',
+      phone: '',
+      email: '',
+      nationality_id: '',
+    },
     withCompany: false,
     additionalGuests: [],
     company: null,
@@ -105,29 +112,23 @@ export function formatTotalGuestsLine(adults: number, children: number): string 
 
 export function additionalGuestSummaryName(ag: AdditionalGuestForm): string {
   if (ag.found) {
-    if (ag.isEditing) return ag.editData.full_name
+    if (ag.isEditing) {
+      return [ag.editData.primer_nombre, ag.editData.segundo_nombre, ag.editData.primer_apellido, ag.editData.segundo_apellido]
+        .filter(Boolean).join(' ').trim()
+    }
     return ag.found.full_name
   }
-  return ag.newGuest.full_name
+  return [ag.newGuest.primer_nombre, ag.newGuest.segundo_nombre, ag.newGuest.primer_apellido, ag.newGuest.segundo_apellido]
+    .filter(Boolean).join(' ').trim()
 }
 
 export function pendingRegistrationMessage(pendingCount: number): string {
   return `${pendingCount} ${pendingGuestWord(pendingCount)} pendiente${pendingSuffix(pendingCount)} de registrar.`
 }
 
-export function companionsPayload(companions: CompanionForm[]): Partial<GuestCompanion>[] {
-  return companions
-    .filter((c) => c.name.trim())
-    .map(({ name, document_type, relationship }) => ({
-      name,
-      document_type: document_type as DocumentType,
-      relationship,
-    }))
-}
-
 export function isMainGuestValid(state: WizardState): boolean {
   if (state.isNewGuest) {
-    return state.newGuest.full_name.trim() !== '' && state.newGuest.document_number.trim() !== ''
+    return isPersonNameValid(state.newGuest) && state.newGuest.document_number.trim() !== ''
   }
   return state.guest !== null
 }
@@ -146,19 +147,12 @@ export function canAdvanceStep(state: WizardState, step: StepId): boolean {
 }
 
 export async function resolveMainGuestId(state: WizardState): Promise<string> {
-  const companionsToSave = companionsPayload(state.companions)
-
   if (state.isNewGuest) {
-    const created = await createGuestApi({ ...state.newGuest, companions: companionsToSave })
+    const created = await createGuestApi(state.newGuest)
     return created.id
   }
 
   const guestId = state.guest?.id
-  if (guestId && companionsToSave.length > 0) {
-    for (const c of companionsToSave) {
-      await addCompanionApi(guestId, c)
-    }
-  }
   if (!guestId) throw new Error('Huésped titular requerido')
   return guestId
 }
@@ -172,14 +166,12 @@ export async function resolveAdditionalGuestIds(state: WizardState): Promise<str
     } else if (ag.notFound) {
       const isMinor = isExtraMinor(i, state.adults)
       const created = await createGuestApi({
-        full_name: ag.newGuest.full_name,
-        document_type: ag.newGuest.document_type,
-        document_number: ag.newGuest.document_number,
+        ...ag.newGuest,
         is_minor: isMinor,
         relationship: isMinor ? (ag.newGuest.relationship || undefined) : undefined,
         phone: isMinor ? undefined : ag.newGuest.phone,
         email: isMinor ? undefined : ag.newGuest.email,
-        nationality: ag.newGuest.nationality || undefined,
+        nationality_id: ag.newGuest.nationality_id || undefined,
       })
       ids.push(created.id)
     }

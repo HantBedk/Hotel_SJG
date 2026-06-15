@@ -1,5 +1,7 @@
 import api from '@/lib/axios'
-import type { ApiResponse, Guest, GuestCompanion, Stay } from '@/types'
+import type { ApiResponse, Guest } from '@/types'
+import type { PersonNameFields } from '@/types/person'
+import type { Stay } from '@/types/stay'
 
 export interface GuestFilters {
   search?: string
@@ -13,18 +15,18 @@ export interface GuestsListResult {
   meta: unknown
 }
 
-export interface CreateGuestPayload {
-  full_name: string
+export interface CreateGuestPayload extends PersonNameFields {
   document_type: string
   document_number: string
   is_minor?: boolean
-  relationship?: string
-  email?: string
-  phone?: string
-  nationality?: string
+  relationship?: string | null
+  email?: string | null
+  phone?: string | null
+  nationality_id?: string | null
   birth_date?: string
   notes?: string
-  companions?: Partial<GuestCompanion>[]
+  /** @deprecated compatibilidad transitoria */
+  full_name?: string
 }
 
 function resolveGuestFilters(filters?: string | GuestFilters): GuestFilters {
@@ -48,7 +50,8 @@ function stripPayloadFields<T extends object>(
   )
 }
 
-function extractGuestList(payload: GuestsListResult | Guest[]): Guest[] {
+export function extractGuestList(payload: GuestsListResult | Guest[] | undefined): Guest[] {
+  if (!payload) return []
   if (Array.isArray(payload)) return payload
   return payload.data ?? []
 }
@@ -72,7 +75,7 @@ export async function createGuestApi(payload: CreateGuestPayload): Promise<Guest
   return data.data
 }
 
-export async function updateGuestApi(id: string, payload: Partial<Guest>): Promise<Guest> {
+export async function updateGuestApi(id: string, payload: Partial<CreateGuestPayload>): Promise<Guest> {
   const { data } = await api.put<ApiResponse<Guest>>(`/guests/${id}`, stripPayloadFields(payload))
   return data.data
 }
@@ -99,15 +102,4 @@ export async function findGuestByDocumentApi(document: string): Promise<Guest | 
   })
   const guests = extractGuestList(data.data)
   return guests.at(0) ?? null
-}
-
-export async function addCompanionApi(
-  guestId: string,
-  payload: Partial<GuestCompanion>,
-): Promise<GuestCompanion> {
-  const { data } = await api.post<ApiResponse<GuestCompanion>>(
-    `/guests/${guestId}/companions`,
-    stripPayloadFields(payload, { stripNull: true }),
-  )
-  return data.data
 }

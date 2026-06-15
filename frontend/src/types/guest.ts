@@ -1,17 +1,15 @@
-export type DocumentType = 'cc' | 'ce' | 'passport' | 'ti' | 'rc'
+import type { Nationality, PersonNameFields } from './person'
 
-export interface GuestCompanion {
-  id: string
-  guest_id: string
-  name: string
-  document_type: DocumentType | null
-  document_number: string | null
-  relationship: string | null
-  age: number | null
-}
+export type { Nationality, PersonNameFields } from './person'
+
+export type DocumentType = 'cc' | 'ce' | 'passport' | 'ti' | 'rc'
 
 export interface Guest {
   id: string
+  primer_nombre: string
+  segundo_nombre: string | null
+  primer_apellido: string
+  segundo_apellido: string | null
   full_name: string
   document_type: DocumentType
   document_number: string
@@ -19,12 +17,14 @@ export interface Guest {
   relationship: string | null
   email: string | null
   phone: string | null
-  nationality: string | null
+  nationality_id: string | null
+  nationality?: Nationality | null
   birth_date: string | null
   notes: string | null
-  companions?: GuestCompanion[]
   stays_count?: number
   deleted_at: string | null
   created_at: string
   updated_at: string
 }
+
+export type GuestNameInput = PersonNameFields

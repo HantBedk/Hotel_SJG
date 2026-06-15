@@ -2,7 +2,7 @@ import { Suspense, type ReactNode } from 'react'
 import type { RouteObject } from 'react-router-dom'
 import { NAV_ITEMS, navItemRouteSegment } from '@/components/layout/sidebar/navigation'
 import { APP_ROUTE_COMPONENTS } from './appRouteComponents'
-import { RequirePermission } from './guards'
+import { RequireNavAccess } from './guards'
 import { PageLoader } from './PageLoader'
 
 interface LazyProps {
@@ -26,11 +26,11 @@ export function buildProtectedAppRoutes(): RouteObject[] {
     const segment = navItemRouteSegment(item)
 
     const element = (
-      <RequirePermission permission={item.permissions}>
+      <RequireNavAccess item={item}>
         <Lazy>
           <Page />
         </Lazy>
-      </RequirePermission>
+      </RequireNavAccess>
     )
 
     if (segment === null) {

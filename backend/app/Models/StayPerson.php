@@ -2,28 +2,28 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasPersonGuestRelation;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class StayGuest extends Model
+class StayPerson extends Model
 {
-    use HasUuids;
+    use HasUuids, HasPersonGuestRelation;
 
-    protected $fillable = ['stay_id', 'guest_id', 'is_primary'];
+    protected $table = 'stay_persons';
+
+    protected $fillable = ['stay_id', 'person_id', 'is_primary'];
 
     protected function casts(): array
     {
-        return ['is_primary' => 'boolean'];
+        return [
+            'is_primary' => 'boolean',
+        ];
     }
 
     public function stay(): BelongsTo
     {
         return $this->belongsTo(Stay::class);
-    }
-
-    public function guest(): BelongsTo
-    {
-        return $this->belongsTo(Guest::class);
     }
 }

@@ -19,6 +19,7 @@ interface AuthState extends AuthPersistedState {
   setBootstrapping: (value: boolean) => void
   hasPermission: (permission: string) => boolean
   hasAnyPermission: (permissions: readonly string[]) => boolean
+  hasAnyRole: (roles: readonly string[]) => boolean
   hasRole: (role: string) => boolean
 }
 
@@ -30,6 +31,11 @@ function userHasPermission(user: AuthUser | null, permission: string): boolean {
 
 function userHasAnyPermission(user: AuthUser | null, permissions: readonly string[]): boolean {
   return permissions.some((permission) => userHasPermission(user, permission))
+}
+
+function userHasAnyRole(user: AuthUser | null, roles: readonly string[]): boolean {
+  if (!user) return false
+  return roles.some((role) => user.roles.includes(role))
 }
 
 function userHasRole(user: AuthUser | null, role: string): boolean {
@@ -56,6 +62,8 @@ export const useAuthStore = create<AuthState>()(
       hasPermission: (permission) => userHasPermission(get().user, permission),
 
       hasAnyPermission: (permissions) => userHasAnyPermission(get().user, permissions),
+
+      hasAnyRole: (roles) => userHasAnyRole(get().user, roles),
 
       hasRole: (role) => userHasRole(get().user, role),
     }),

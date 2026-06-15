@@ -60,6 +60,7 @@ class RolesPermissionsSeeder extends Seeder
         ],
         'housekeeping' => [],
         'maintenance'  => [],
+        'guest'        => [],
     ];
 
     public function run(): void

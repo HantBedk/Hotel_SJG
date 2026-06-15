@@ -1,18 +1,31 @@
 import { z } from 'zod'
 
+export { emptyPersonName, isPersonNameValid } from '@/types/person'
+
 const phoneRx = /^[+\d][\d\s\-()]{5,}$/
 
-export const guestSchema = z.object({
-  full_name:       z.string().trim().min(2, 'Nombre demasiado corto').max(120, 'Demasiado largo'),
-  document_type:   z.enum(['cc', 'ce', 'passport', 'nit']),
+const personNameSchema = z.object({
+  primer_nombre:    z.string().trim().min(1, 'Primer nombre requerido').max(80),
+  segundo_nombre:   z.string().trim().max(80).optional().or(z.literal('')),
+  primer_apellido:  z.string().trim().min(1, 'Primer apellido requerido').max(80),
+  segundo_apellido: z.string().trim().max(80).optional().or(z.literal('')),
+})
+
+export const guestSchema = personNameSchema.extend({
+  document_type:   z.enum(['cc', 'ce', 'passport', 'ti', 'rc']),
   document_number: z.string().trim().min(4, 'Documento inválido').max(40, 'Documento demasiado largo'),
   email:           z.string().email('Email inválido').optional().or(z.literal('')),
   phone:           z.string().regex(phoneRx, 'Teléfono inválido').optional().or(z.literal('')),
-  nationality:     z.string().max(80).optional().or(z.literal('')),
+  nationality_id:  z.string().uuid().optional().or(z.literal('')),
   birth_date:      z.string().optional().or(z.literal('')),
   notes:           z.string().max(2000).optional().or(z.literal('')),
 })
 export type GuestInput = z.infer<typeof guestSchema>
+
+export const personaSchema = guestSchema.extend({
+  roles: z.array(z.string()).min(1, 'Selecciona al menos un rol'),
+})
+export type PersonaInput = z.infer<typeof personaSchema>
 
 export const companySchema = z.object({
   name:         z.string().trim().min(2, 'Nombre demasiado corto').max(150),

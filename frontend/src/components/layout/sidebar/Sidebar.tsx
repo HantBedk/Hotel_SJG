@@ -14,11 +14,11 @@ interface SidebarProps {
 
 export default function Sidebar({ collapsed = false, onClose }: SidebarProps) {
   const { pathname } = useLocation()
-  const { hasAnyPermission } = useAuth()
+  const { hasAnyPermission, hasAnyRole } = useAuth()
 
   const visibleModules = useMemo(
-    () => filterVisibleModules(NAV_MODULES, hasAnyPermission),
-    [hasAnyPermission],
+    () => filterVisibleModules(NAV_MODULES, hasAnyPermission, hasAnyRole),
+    [hasAnyPermission, hasAnyRole],
   )
 
   const activeModuleId = useMemo(

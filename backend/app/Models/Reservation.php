@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToHotel;
+use App\Models\Concerns\HasPersonGuestRelation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Reservation extends Model
 {
-    use HasUuids, SoftDeletes, BelongsToHotel;
+    use HasUuids, SoftDeletes, BelongsToHotel, HasPersonGuestRelation;
 
     private const ACTIVE_STATUSES = ['pending', 'confirmed'];
 
@@ -23,7 +24,7 @@ class Reservation extends Model
         'hotel_id',
         'group_id',
         'billing_mode',
-        'guest_id',
+        'person_id',
         'company_id',
         'room_id',
         'house_id',
@@ -47,11 +48,6 @@ class Reservation extends Model
             'deposit_amount' => 'decimal:2',
             'nights'         => 'integer',
         ];
-    }
-
-    public function guest(): BelongsTo
-    {
-        return $this->belongsTo(Guest::class);
     }
 
     public function company(): BelongsTo
@@ -113,10 +109,7 @@ class Reservation extends Model
         $pattern = '%' . $term . '%';
 
         return $query->whereHas('guest', function (Builder $guestQuery) use ($pattern) {
-            $guestQuery->where(function (Builder $q) use ($pattern) {
-                $q->whereRaw('full_name ILIKE ?', [$pattern])
-                  ->orWhereRaw('document_number ILIKE ?', [$pattern]);
-            });
+            $guestQuery->search($pattern);
         });
     }
 

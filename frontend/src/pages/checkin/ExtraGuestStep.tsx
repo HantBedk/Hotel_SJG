@@ -1,6 +1,9 @@
 import { CheckCircle, Plus, User } from 'lucide-react'
 import type { Guest } from '@/types'
 import { cn } from '@/lib/cn'
+import { PersonNameFieldsInput } from '@/components/person/PersonNameFields'
+import { NationalitySelect } from '@/components/person/NationalitySelect'
+import { emptyPersonName, isPersonNameValid, type PersonNameFields } from '@/types/person'
 
 const DOCUMENT_TYPES = [
   { value: 'cc', label: 'Cédula de ciudadanía' },
@@ -21,14 +24,13 @@ export interface AdditionalGuestForm {
   searchResults: Guest[]
   notFound: boolean
   isEditing: boolean
-  editData: { full_name: string; phone: string; email: string; nationality: string; relationship: string }
-  newGuest: {
-    full_name: string
+  editData: PersonNameFields & { phone: string; email: string; nationality_id: string; relationship: string }
+  newGuest: PersonNameFields & {
     document_type: string
     document_number: string
     phone: string
     email: string
-    nationality: string
+    nationality_id: string
     relationship: string
   }
   registered: boolean
@@ -45,14 +47,14 @@ export function makeExtraForm(isMinor = false): AdditionalGuestForm {
     searchResults: [],
     notFound: false,
     isEditing: false,
-    editData: { full_name: '', phone: '', email: '', nationality: '', relationship: '' },
+    editData: { ...emptyPersonName(), phone: '', email: '', nationality_id: '', relationship: '' },
     newGuest: {
-      full_name: '',
+      ...emptyPersonName(),
       document_type: isMinor ? 'ti' : 'cc',
       document_number: '',
       phone: '',
       email: '',
-      nationality: '',
+      nationality_id: '',
       relationship: '',
     },
     registered: false,
@@ -82,7 +84,7 @@ function confirmExtraButtonLabel(isSaving: boolean, isEditing: boolean): string 
 }
 
 function isNewFormValid(ag: AdditionalGuestForm, isMinor: boolean): boolean {
-  return ag.newGuest.full_name.trim() !== ''
+  return isPersonNameValid(ag.newGuest)
     && ag.newGuest.document_number.trim() !== ''
     && (isMinor ? ag.newGuest.relationship.trim() !== '' : true)
 }
@@ -128,7 +130,7 @@ function RegisteredGuestCard({ ag, isMinor, onEdit }: RegisteredGuestCardProps) 
           {ag.found ? (
             <>
               <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
-                {ag.isEditing ? ag.editData.full_name : ag.found.full_name}
+                {ag.isEditing ? ag.editData.primer_nombre : ag.found.full_name}
               </p>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 {ag.found.document_type.toUpperCase()} {ag.found.document_number}
@@ -137,7 +139,9 @@ function RegisteredGuestCard({ ag, isMinor, onEdit }: RegisteredGuestCardProps) 
             </>
           ) : (
             <>
-              <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>{ag.newGuest.full_name}</p>
+              <p className="font-medium text-sm" style={{ color: 'var(--text-primary)' }}>
+                {[ag.newGuest.primer_nombre, ag.newGuest.segundo_nombre, ag.newGuest.primer_apellido, ag.newGuest.segundo_apellido].filter(Boolean).join(' ')}
+              </p>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                 {ag.newGuest.document_type.toUpperCase()} {ag.newGuest.document_number}
                 {isMinor && ag.newGuest.relationship && ` · ${ag.newGuest.relationship}`}
@@ -172,13 +176,10 @@ function FoundGuestPanel({ ag, idx, isMinor, isSaving, onSetExtra, onConfirm }: 
           <span className="text-xs font-medium" style={{ color: 'var(--status-available)' }}>Huésped encontrado</span>
         </div>
         {ag.isEditing ? (
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              placeholder="Nombre completo"
-              value={ag.editData.full_name}
-              onChange={(e) => onSetExtra(idx, { editData: { ...ag.editData, full_name: e.target.value } })}
-              className={cn('col-span-2', inputCls)}
-              style={{ ...inputStyle, padding: '6px 12px' }}
+          <div className="space-y-2">
+            <PersonNameFieldsInput
+              value={ag.editData}
+              onChange={(patch) => onSetExtra(idx, { editData: { ...ag.editData, ...patch } })}
             />
             {isMinor ? (
               <input
@@ -186,11 +187,11 @@ function FoundGuestPanel({ ag, idx, isMinor, isSaving, onSetExtra, onConfirm }: 
                 placeholder="Parentesco con el titular *"
                 value={ag.editData.relationship}
                 onChange={(e) => onSetExtra(idx, { editData: { ...ag.editData, relationship: e.target.value } })}
-                className={cn('col-span-2', inputCls)}
+                className={cn('w-full', inputCls)}
                 style={{ ...inputStyle, padding: '6px 12px' }}
               />
             ) : (
-              <>
+              <div className="grid grid-cols-2 gap-2">
                 <input
                   placeholder="Teléfono"
                   value={ag.editData.phone}
@@ -205,14 +206,13 @@ function FoundGuestPanel({ ag, idx, isMinor, isSaving, onSetExtra, onConfirm }: 
                   className={inputCls}
                   style={{ ...inputStyle, padding: '6px 12px' }}
                 />
-                <input
-                  placeholder="Nacionalidad"
-                  value={ag.editData.nationality}
-                  onChange={(e) => onSetExtra(idx, { editData: { ...ag.editData, nationality: e.target.value } })}
-                  className={cn('col-span-2', inputCls)}
-                  style={{ ...inputStyle, padding: '6px 12px' }}
-                />
-              </>
+                <div className="col-span-2">
+                  <NationalitySelect
+                    value={ag.editData.nationality_id}
+                    onChange={(nationality_id) => onSetExtra(idx, { editData: { ...ag.editData, nationality_id } })}
+                  />
+                </div>
+              </div>
             )}
           </div>
         ) : (
@@ -288,16 +288,11 @@ function NewGuestForm({ ag, idx, isMinor, isSaving, onSetExtra, onPersist }: New
           ← Buscar otro
         </button>
       </div>
+      <PersonNameFieldsInput
+        value={ag.newGuest}
+        onChange={(patch) => onSetExtra(idx, { newGuest: { ...ag.newGuest, ...patch } })}
+      />
       <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2">
-          <input
-            placeholder="Nombre completo *"
-            value={ag.newGuest.full_name}
-            onChange={(e) => onSetExtra(idx, { newGuest: { ...ag.newGuest, full_name: e.target.value } })}
-            className={cn('w-full', inputCls)}
-            style={inputStyle}
-          />
-        </div>
         <select
           value={docType}
           onChange={(e) => onSetExtra(idx, { newGuest: { ...ag.newGuest, document_type: e.target.value } })}

@@ -10,6 +10,7 @@ use App\Models\MinibarProduct;
 use App\Models\MinibarRestockLog;
 use App\Models\MinibarSale;
 use App\Models\MinibarSaleItem;
+use App\Models\Persona;
 use App\Support\HotelInventoryService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -30,7 +31,8 @@ class MinibarSaleController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $q = MinibarSale::with(['items.product', 'registeredBy:id,name', 'guest:id,full_name,document_type,document_number,phone', 'cancelledBy:id,name', 'guest:id,full_name,document_type,document_number,phone'])
+        $guestEager = 'guest:' . Persona::listSelect();
+        $q = MinibarSale::with(['items.product', 'registeredBy.persona', $guestEager, 'guest.nationality', 'cancelledBy.persona'])
             ->orderByDesc('created_at');
 
         if ($status = $request->query('status')) {
@@ -67,7 +69,7 @@ class MinibarSaleController extends Controller
 
     public function show(MinibarSale $minibarSale): JsonResponse
     {
-        $minibarSale->load(['items.product', 'registeredBy:id,name', 'guest:id,full_name,document_type,document_number,phone', 'cancelledBy:id,name', 'guest:id,full_name,document_type,document_number,phone']);
+        $minibarSale->load($this->saleRelations());
         return $this->success($minibarSale);
     }
 
@@ -79,7 +81,7 @@ class MinibarSaleController extends Controller
         $data = $request->validate([
             'customer_name'      => 'nullable|string|max:150',
             'customer_document'  => 'nullable|string|max:50',
-            'guest_id'           => 'nullable|uuid|exists:guests,id',
+            'guest_id'           => 'nullable|uuid|exists:personas,id',
             'notes'              => 'nullable|string|max:500',
             'items'              => 'required|array|min:1',
             'items.*.minibar_product_id' => 'required|uuid|exists:minibar_products,id',
@@ -140,7 +142,7 @@ class MinibarSaleController extends Controller
         });
 
         return $this->success(
-            $sale->load(['items.product', 'registeredBy:id,name', 'guest:id,full_name,document_type,document_number,phone']),
+            $sale->load($this->saleRelations()),
             'Venta registrada (pendiente de pago).',
             201,
         );
@@ -154,7 +156,7 @@ class MinibarSaleController extends Controller
     {
         $data = $request->validate([
             'payment_method' => 'required|in:cash,transfer,card,credit',
-            'guest_id'       => 'nullable|uuid|exists:guests,id',
+            'guest_id'       => 'nullable|uuid|exists:personas,id',
         ]);
 
         abort_if($minibarSale->status !== 'pending', 422, 'Esta venta no está pendiente.');
@@ -233,7 +235,7 @@ class MinibarSaleController extends Controller
         });
 
         return $this->success(
-            $minibarSale->fresh()->load(['items.product', 'registeredBy:id,name', 'guest:id,full_name,document_type,document_number,phone']),
+            $minibarSale->fresh()->load($this->saleRelations()),
             'Venta pagada.',
         );
     }
@@ -304,7 +306,7 @@ class MinibarSaleController extends Controller
         });
 
         return $this->success(
-            $minibarSale->fresh()->load(['items.product', 'registeredBy:id,name', 'guest:id,full_name,document_type,document_number,phone', 'cancelledBy:id,name', 'guest:id,full_name,document_type,document_number,phone']),
+            $minibarSale->fresh()->load($this->saleRelations()),
             'Venta cancelada.',
         );
     }
@@ -327,9 +329,22 @@ class MinibarSaleController extends Controller
             ->orderByDesc('sale_number')
             ->value('sale_number');
         $next = 1;
-        if ($last && preg_match('/(\d+)$/', $last, $m)) {
+        $saleNumberPattern = '/(\d+)$/';
+        if ($last && preg_match($saleNumberPattern, $last, $m)) {
             $next = (int) $m[1] + 1;
         }
         return $prefix . str_pad((string) $next, 4, '0', STR_PAD_LEFT);
+    }
+
+    /** @return list<string> */
+    private function saleRelations(): array
+    {
+        return [
+            'items.product',
+            'registeredBy.persona',
+            'guest:' . Persona::listSelect(),
+            'guest.nationality',
+            'cancelledBy.persona',
+        ];
     }
 }

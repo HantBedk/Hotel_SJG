@@ -12,7 +12,7 @@ use App\Models\Reservation;
 use App\Models\ReservationPayment;
 use App\Models\Room;
 use App\Models\Stay;
-use App\Models\StayGuest;
+use App\Models\StayPerson;
 use App\Models\StayRoom;
 use App\Models\User;
 use App\Traits\Paginates;
@@ -67,7 +67,7 @@ class ReservationController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'guest_id'       => 'required_without:company_id|nullable|uuid|exists:guests,id',
+            'guest_id'       => 'required_without:company_id|nullable|uuid|exists:personas,id',
             'company_id'     => 'nullable|uuid|exists:companies,id',
             'room_id'        => 'nullable|uuid|exists:rooms,id',
             'house_id'       => 'nullable|uuid|exists:houses,id',
@@ -137,7 +137,7 @@ class ReservationController extends Controller
     public function bulkStore(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'guest_id'       => 'required_without:company_id|nullable|uuid|exists:guests,id',
+            'guest_id'       => 'required_without:company_id|nullable|uuid|exists:personas,id',
             'company_id'     => 'nullable|uuid|exists:companies,id',
             'room_ids'       => 'required|array|min:2',
             'room_ids.*'     => 'uuid|exists:rooms,id',
@@ -214,7 +214,7 @@ class ReservationController extends Controller
         abort_if(in_array($reservation->status, ['checked_in', 'cancelled', 'no_show']), 409, 'No se puede modificar esta reserva.');
 
         $data = $request->validate([
-            'guest_id'       => 'sometimes|nullable|uuid|exists:guests,id',
+            'guest_id'       => 'sometimes|nullable|uuid|exists:personas,id',
             'company_id'     => 'sometimes|nullable|uuid|exists:companies,id',
             'room_id'        => 'sometimes|nullable|uuid|exists:rooms,id',
             'house_id'       => 'sometimes|nullable|uuid|exists:houses,id',

@@ -1,7 +1,10 @@
 import api from '@/lib/axios'
+import type { Nationality } from '@/types/person'
 import type {
   AdminUser,
   AdminUserPayload,
+  AdminPersona,
+  AdminPersonaPayload,
   ApiResponse,
   BackupFile,
   ExtraService,
@@ -193,11 +196,72 @@ export async function deleteExtraServiceApi(id: string): Promise<ApiResponse> {
   return data
 }
 
+// ── Nationalities ─────────────────────────────────────────────────────────────
+
+export type NationalityPayload = Pick<Nationality, 'name' | 'iso_code' | 'sort_order' | 'is_active'>
+
+export async function getAdminNationalitiesApi(): Promise<Nationality[]> {
+  const { data } = await api.get<ApiResponse<Nationality[]>>('/admin/nationalities')
+  return data.data
+}
+
+export async function createNationalityApi(payload: NationalityPayload): Promise<Nationality> {
+  const { data } = await api.post<ApiResponse<Nationality>>('/admin/nationalities', payload)
+  return data.data
+}
+
+export async function updateNationalityApi(id: string, payload: Partial<NationalityPayload>): Promise<Nationality> {
+  const { data } = await api.put<ApiResponse<Nationality>>(`/admin/nationalities/${id}`, payload)
+  return data.data
+}
+
+export async function deleteNationalityApi(id: string): Promise<ApiResponse> {
+  const { data } = await api.delete<ApiResponse>(`/admin/nationalities/${id}`)
+  return data
+}
+
 // ── Users ─────────────────────────────────────────────────────────────────────
 
 export async function getAdminUsersApi(): Promise<AdminUser[]> {
   const { data } = await api.get<ApiResponse<AdminUser[]>>('/admin/users')
   return data.data
+}
+
+export interface AdminPersonasFilters {
+  search?: string
+  role?: string
+  page?: number
+  per_page?: number
+}
+
+export interface AdminPersonasListResult {
+  data: AdminPersona[]
+  current_page: number
+  last_page: number
+  total: number
+}
+
+export async function getAdminPersonasApi(
+  filters?: AdminPersonasFilters,
+): Promise<AdminPersonasListResult> {
+  const { data } = await api.get<ApiResponse<AdminPersonasListResult>>('/admin/personas', {
+    params: filters,
+  })
+  return data.data
+}
+
+export async function createAdminPersonaApi(payload: AdminPersonaPayload): Promise<AdminPersona> {
+  const { data } = await api.post<ApiResponse<AdminPersona>>('/admin/personas', payload)
+  return data.data
+}
+
+export async function updateAdminPersonaApi(id: string, payload: Partial<AdminPersonaPayload>): Promise<AdminPersona> {
+  const { data } = await api.put<ApiResponse<AdminPersona>>(`/admin/personas/${id}`, payload)
+  return data.data
+}
+
+export async function deleteAdminPersonaApi(id: string): Promise<void> {
+  await api.delete(`/admin/personas/${id}`)
 }
 
 export async function createAdminUserApi(payload: AdminUserPayload): Promise<AdminUser> {

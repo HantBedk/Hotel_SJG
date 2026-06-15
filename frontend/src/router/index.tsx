@@ -3,7 +3,6 @@ import { useAuthBootstrap } from '@/hooks/useAuth'
 import AppLayout from '@/components/layout/AppLayout'
 import LoginPage from '@/pages/auth/LoginPage'
 import SettingsIndexRedirect from '@/pages/settings/SettingsIndexRedirect'
-import ConfigIndexRedirect from '@/pages/settings/ConfigIndexRedirect'
 import { buildProtectedAppRoutes } from './buildProtectedAppRoutes'
 import { RequireAuth, RequireGuest } from './guards'
 import { PageLoader } from './PageLoader'
@@ -36,7 +35,9 @@ export const router = createBrowserRouter([
         children: [
           ...buildProtectedAppRoutes(),
           { path: 'settings', element: <SettingsIndexRedirect /> },
-          { path: 'settings/config', element: <ConfigIndexRedirect /> },
+          { path: 'settings/config/hotel', element: <Navigate to="/settings/config" replace /> },
+          { path: 'settings/config/inventory', element: <Navigate to="/settings/config" replace /> },
+          { path: 'settings/config/system', element: <Navigate to="/settings/config" replace /> },
         ],
       },
       {

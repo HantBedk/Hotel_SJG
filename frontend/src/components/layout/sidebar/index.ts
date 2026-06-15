@@ -11,4 +11,4 @@ export {
   getDefaultConfigPath,
   filterVisibleModules,
 } from './navigation'
-export type { NavItem, NavModule } from './navigation'
+export type { NavItem, NavModule, NavItemId } from './navigation'

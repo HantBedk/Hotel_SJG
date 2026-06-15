@@ -3,7 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\Hotel;
-use App\Models\User;
+use App\Support\PersonaProvisioner;
+use App\Support\PersonNameParser;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -45,26 +46,30 @@ class MultitenantDemoSeeder extends Seeder
             ]
         );
 
-        $admin = User::firstOrCreate(
-            ['email' => 'admin@demo.hotel'],
+        $admin = PersonaProvisioner::ensureStaffUser(
+            array_merge(
+                PersonNameParser::split('Admin Demo'),
+                ['document_type' => 'cc', 'document_number' => 'DEMO-ADMIN-001'],
+            ),
             [
-                'name'      => 'Admin Demo',
-                'password'  => Hash::make('Demo2024!'),
-                'is_active' => true,
-            ]
+                'email'    => 'admin@demo.hotel',
+                'password' => Hash::make('Demo2024!'),
+            ],
+            'admin',
         );
-        $admin->syncRoles(['admin']);
         $admin->hotels()->sync([$hotelA->id, $hotelB->id]);
 
-        $receptionist = User::firstOrCreate(
-            ['email' => 'recepcion@demo.hotel'],
+        $receptionist = PersonaProvisioner::ensureStaffUser(
+            array_merge(
+                PersonNameParser::split('Recepcionista Demo'),
+                ['document_type' => 'cc', 'document_number' => 'DEMO-RECEP-001'],
+            ),
             [
-                'name'      => 'Recepcionista Demo',
-                'password'  => Hash::make('Demo2024!'),
-                'is_active' => true,
-            ]
+                'email'    => 'recepcion@demo.hotel',
+                'password' => Hash::make('Demo2024!'),
+            ],
+            'receptionist',
         );
-        $receptionist->syncRoles(['receptionist']);
         $receptionist->hotels()->sync([$hotelA->id]);
     }
 }

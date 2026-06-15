@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToHotel;
+use App\Models\Concerns\HasPersonGuestRelation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -11,14 +12,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MinibarSale extends Model
 {
-    use HasUuids, BelongsToHotel;
+    use HasUuids, BelongsToHotel, HasPersonGuestRelation;
 
     protected $fillable = [
         'hotel_id',
         'sale_number',
         'customer_name',
         'customer_document',
-        'guest_id',
+        'person_id',
         'subtotal',
         'total',
         'payment_method',
@@ -54,11 +55,6 @@ class MinibarSale extends Model
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by_id');
-    }
-
-    public function guest(): BelongsTo
-    {
-        return $this->belongsTo(Guest::class);
     }
 
     public function scopePending(Builder $q): Builder

@@ -74,8 +74,9 @@ COPY backend/ .
 RUN cp .env.example .env \
     && composer install --no-dev --optimize-autoloader --no-interaction
 
-# Copy React build → public/
+# Copy React build → public/app
 COPY --from=frontend-builder /frontend/dist ./public/app
+COPY --from=frontend-builder /frontend/dist/favicon.svg ./public/favicon.svg
 COPY docker/nginx/spa-index.html ./public/index.html
 
 # Directorios Laravel + carpeta de backups

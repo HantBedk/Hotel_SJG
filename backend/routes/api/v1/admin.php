@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\Admin\AdminCatalogController;
 use App\Http\Controllers\Api\V1\Admin\AdminHotelController;
+use App\Http\Controllers\Api\V1\Admin\AdminPersonaController;
 use App\Http\Controllers\Api\V1\Admin\AdminPropertyController;
 use App\Http\Controllers\Api\V1\Admin\AdminRoleController;
 use App\Http\Controllers\Api\V1\Admin\AdminUserController;
@@ -50,6 +51,11 @@ Route::prefix('admin')->middleware('permission:manage_settings')->group(function
      Route::put('/extra-services/{extraService}',     [AdminCatalogController::class, 'updateExtraService']);
      Route::delete('/extra-services/{extraService}',  [AdminCatalogController::class, 'destroyExtraService']);
 
+     Route::get('/nationalities',                  [AdminCatalogController::class, 'getNationalities']);
+     Route::post('/nationalities',                 [AdminCatalogController::class, 'storeNationality']);
+     Route::put('/nationalities/{nationality}',  [AdminCatalogController::class, 'updateNationality']);
+     Route::delete('/nationalities/{nationality}', [AdminCatalogController::class, 'destroyNationality']);
+
      Route::get('/users',           [AdminUserController::class, 'getUsers'])
           ->withoutMiddleware('permission:manage_settings')
           ->middleware('permission:manage_users|manage_settings');
@@ -62,6 +68,19 @@ Route::prefix('admin')->middleware('permission:manage_settings')->group(function
      Route::delete('/users/{user}', [AdminUserController::class, 'destroyUser'])
           ->withoutMiddleware('permission:manage_settings')
           ->middleware('permission:manage_users');
+
+     Route::get('/personas', [AdminPersonaController::class, 'index'])
+          ->withoutMiddleware('permission:manage_settings')
+          ->middleware('role:admin|superadmin');
+     Route::post('/personas', [AdminPersonaController::class, 'store'])
+          ->withoutMiddleware('permission:manage_settings')
+          ->middleware('role:admin|superadmin');
+     Route::put('/personas/{persona}', [AdminPersonaController::class, 'update'])
+          ->withoutMiddleware('permission:manage_settings')
+          ->middleware('role:admin|superadmin');
+     Route::delete('/personas/{persona}', [AdminPersonaController::class, 'destroy'])
+          ->withoutMiddleware('permission:manage_settings')
+          ->middleware('role:admin|superadmin');
 
      Route::get('/roles',                          [AdminRoleController::class, 'getRoles'])
           ->withoutMiddleware('permission:manage_settings')

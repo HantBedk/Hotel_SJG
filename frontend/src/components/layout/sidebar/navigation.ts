@@ -16,11 +16,10 @@ import {
   Calendar,
   Shield,
   Database,
-  Cog,
-  Boxes,
   Sparkles,
   SlidersHorizontal,
   Network,
+  Contact,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -30,6 +29,8 @@ export interface NavItem {
   readonly pageTitle: string
   readonly icon: ElementType
   readonly permissions: readonly string[]
+  /** Si se define, el usuario debe tener al menos uno de estos roles. */
+  readonly roles?: readonly string[]
   readonly end?: boolean
 }
 
@@ -37,6 +38,8 @@ export interface NavModule {
   readonly id: string
   readonly label: string
   readonly items: readonly NavItem[]
+  /** Si es false, los ítems se muestran siempre visibles (sin acordeón). */
+  readonly collapsible?: boolean
 }
 
 /** Módulos de administración (/settings/*), en orden de prioridad para redirects. */
@@ -46,6 +49,7 @@ export const NAV_MODULES: readonly NavModule[] = [
   {
     id: 'overview',
     label: 'Inicio',
+    collapsible: false,
     items: [
       {
         id: 'dashboard',
@@ -61,6 +65,7 @@ export const NAV_MODULES: readonly NavModule[] = [
   {
     id: 'front-desk',
     label: 'Recepción',
+    collapsible: false,
     items: [
       {
         id: 'rooms',
@@ -218,29 +223,11 @@ export const NAV_MODULES: readonly NavModule[] = [
     label: 'Parámetros',
     items: [
       {
-        id: 'settings-config-hotel',
-        to: '/settings/config/hotel',
-        label: 'Ajustes hotel',
-        pageTitle: 'Ajustes hotel',
+        id: 'settings-config',
+        to: '/settings/config',
+        label: 'Parámetros generales',
+        pageTitle: 'Parámetros generales',
         icon: SlidersHorizontal,
-        permissions: ['manage_settings'],
-        end: true,
-      },
-      {
-        id: 'settings-config-inventory',
-        to: '/settings/config/inventory',
-        label: 'Ajustes inventario',
-        pageTitle: 'Ajustes inventario',
-        icon: Boxes,
-        permissions: ['manage_settings'],
-        end: true,
-      },
-      {
-        id: 'settings-config-system',
-        to: '/settings/config/system',
-        label: 'Ajustes sistema',
-        pageTitle: 'Ajustes sistema',
-        icon: Cog,
         permissions: ['manage_settings'],
         end: true,
       },
@@ -269,6 +256,16 @@ export const NAV_MODULES: readonly NavModule[] = [
         end: true,
       },
       {
+        id: 'settings-personas',
+        to: '/settings/personas',
+        label: 'Personas',
+        pageTitle: 'Directorio de personas',
+        icon: Contact,
+        permissions: [],
+        roles: ['admin', 'superadmin'],
+        end: true,
+      },
+      {
         id: 'settings-permissions',
         to: '/settings/permissions',
         label: 'Roles y permisos',
@@ -291,6 +288,9 @@ export const NAV_MODULES: readonly NavModule[] = [
 ] as const
 
 export const NAV_ITEMS: readonly NavItem[] = NAV_MODULES.flatMap((module) => module.items)
+
+/** Unión de todos los `id` definidos en el menú (debe coincidir con APP_ROUTE_COMPONENTS). */
+export type NavItemId = (typeof NAV_MODULES)[number]['items'][number]['id']
 
 export function matchesNavItemPath(pathname: string, item: NavItem): boolean {
   const exact = item.end ?? item.to === '/'
@@ -323,11 +323,16 @@ export function navItemRouteSegment(item: NavItem): string | null {
 export function filterVisibleModules(
   modules: readonly NavModule[],
   hasAnyPermission: (permissions: readonly string[]) => boolean,
+  hasAnyRole: (roles: readonly string[]) => boolean = () => false,
 ): NavModule[] {
   return modules
     .map((module) => ({
       ...module,
-      items: module.items.filter((item) => hasAnyPermission(item.permissions)),
+      items: module.items.filter((item) => {
+        if (item.roles?.length && !hasAnyRole(item.roles)) return false
+        if (item.permissions.length === 0) return true
+        return hasAnyPermission(item.permissions)
+      }),
     }))
     .filter((module) => module.items.length > 0)
 }

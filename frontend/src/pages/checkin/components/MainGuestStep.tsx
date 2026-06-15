@@ -3,35 +3,25 @@ import { Search, Plus, User } from 'lucide-react'
 import type { Guest } from '@/types'
 import { cn } from '@/lib/cn'
 import { DOCUMENT_TYPES, inputCls, inputStyle } from '@/pages/checkin/constants'
-import type { CompanionForm } from '@/pages/checkin/types'
-import { CompanionRow, GuestResultList } from '@/pages/checkin/components/WizardFieldComponents'
+import { GuestResultList } from '@/pages/checkin/components/WizardFieldComponents'
+import { PersonNameFieldsInput } from '@/components/person/PersonNameFields'
+import { NationalitySelect } from '@/components/person/NationalitySelect'
+import type { NewGuestFormState } from '@/pages/checkin/types'
 
 interface MainGuestStepProps {
   readonly guestInputRef: RefObject<HTMLInputElement | null>
   readonly isNewGuest: boolean
-  readonly newGuest: {
-    full_name: string
-    document_type: string
-    document_number: string
-    phone: string
-    email: string
-    nationality: string
-  }
+  readonly newGuest: NewGuestFormState
   readonly guest: Guest | null
   readonly guestSearch: string
   readonly guestResults: Guest[]
-  readonly companions: CompanionForm[]
   readonly withCompany: boolean
-  readonly onNewGuestChange: (patch: Partial<MainGuestStepProps['newGuest']>) => void
+  readonly onNewGuestChange: (patch: Partial<NewGuestFormState>) => void
   readonly onGuestSearchChange: (value: string) => void
   readonly onSelectGuest: (guest: Guest) => void
   readonly onClearGuest: () => void
   readonly onStartNewGuest: () => void
   readonly onBackToSearch: () => void
-  readonly onAddCompanion: () => void
-  readonly onCompanionNameChange: (formKey: string, value: string) => void
-  readonly onCompanionRelationshipChange: (formKey: string, value: string) => void
-  readonly onRemoveCompanion: (formKey: string) => void
   readonly onWithCompanyChange: (checked: boolean) => void
 }
 
@@ -42,7 +32,6 @@ export function MainGuestStep({
   guest,
   guestSearch,
   guestResults,
-  companions,
   withCompany,
   onNewGuestChange,
   onGuestSearchChange,
@@ -50,10 +39,6 @@ export function MainGuestStep({
   onClearGuest,
   onStartNewGuest,
   onBackToSearch,
-  onAddCompanion,
-  onCompanionNameChange,
-  onCompanionRelationshipChange,
-  onRemoveCompanion,
   onWithCompanyChange,
 }: MainGuestStepProps) {
   return (
@@ -64,17 +49,11 @@ export function MainGuestStep({
 
       {isNewGuest ? (
         <>
+          <PersonNameFieldsInput
+            value={newGuest}
+            onChange={onNewGuestChange}
+          />
           <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <input
-                ref={guestInputRef}
-                placeholder="Nombre completo *"
-                value={newGuest.full_name}
-                onChange={(e) => onNewGuestChange({ full_name: e.target.value })}
-                className={cn('w-full', inputCls)}
-                style={inputStyle}
-              />
-            </div>
             <select
               value={newGuest.document_type}
               onChange={(e) => onNewGuestChange({ document_type: e.target.value })}
@@ -104,6 +83,12 @@ export function MainGuestStep({
               className={inputCls}
               style={inputStyle}
             />
+            <div className="col-span-2">
+              <NationalitySelect
+                value={newGuest.nationality_id}
+                onChange={(nationality_id) => onNewGuestChange({ nationality_id })}
+              />
+            </div>
           </div>
           <button
             type="button"
@@ -164,31 +149,6 @@ export function MainGuestStep({
           </button>
         </>
       )}
-
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>ACOMPAÑANTES (OPCIONAL)</p>
-          <button
-            type="button"
-            onClick={onAddCompanion}
-            className="flex items-center gap-1 text-xs"
-            style={{ color: 'var(--color-primary)' }}
-          >
-            <Plus size={12} /> Agregar
-          </button>
-        </div>
-        {companions.map((c) => (
-          <CompanionRow
-            key={c.formKey}
-            formKey={c.formKey}
-            name={c.name}
-            relationship={c.relationship}
-            onNameChange={(value) => onCompanionNameChange(c.formKey, value)}
-            onRelationshipChange={(value) => onCompanionRelationshipChange(c.formKey, value)}
-            onRemove={() => onRemoveCompanion(c.formKey)}
-          />
-        ))}
-      </div>
 
       <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
         <input

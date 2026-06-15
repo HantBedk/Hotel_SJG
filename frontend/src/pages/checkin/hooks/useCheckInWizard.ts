@@ -4,15 +4,15 @@ import { useGuestSearch } from '@/hooks/useGuests'
 import { useCompanySearch } from '@/hooks/useCompanies'
 import { useStays } from '@/hooks/useStays'
 import { useHotelTimes } from '@/hooks/useHotelTimes'
-import { createGuestApi, updateGuestApi, searchGuestsApi, addCompanionApi } from '@/services/guests.service'
+import { createGuestApi, updateGuestApi, searchGuestsApi } from '@/services/guests.service'
 import { createCompanyApi } from '@/services/companies.service'
 import type { Room, Guest, Company } from '@/types'
 import { extractApiError } from '@/lib/apiError'
-import { makeCompanionForm, OCCUPANCY_KEYS } from '@/pages/checkin/constants'
+import { OCCUPANCY_KEYS } from '@/pages/checkin/constants'
+import { isPersonNameValid, personNameFromGuest } from '@/types/person'
 import {
   buildSteps,
   canAdvanceStep,
-  companionsPayload,
   createInitialWizardState,
   extraIndex,
   isConfirmValid,
@@ -82,18 +82,10 @@ export function useCheckInWizard(rooms: Room[], onClose: () => void) {
       }
 
       if (currentStep === 'main-guest') {
-        const companionsToSave = companionsPayload(state.companions)
-
         if (state.isNewGuest) {
-          const created = await createGuestApi({ ...state.newGuest, companions: companionsToSave })
-          setState((s) => ({ ...s, guest: created, isNewGuest: false, companions: [] }))
+          const created = await createGuestApi(state.newGuest)
+          setState((s) => ({ ...s, guest: created, isNewGuest: false }))
           toast.success('Huésped guardado.')
-        } else if (state.guest && companionsToSave.length > 0) {
-          for (const c of companionsToSave) {
-            await addCompanionApi(state.guest.id, c)
-          }
-          setState((s) => ({ ...s, companions: [] }))
-          toast.success('Acompañantes guardados.')
         }
       }
 
@@ -125,20 +117,18 @@ export function useCheckInWizard(rooms: Room[], onClose: () => void) {
   const persistExtraGuest = async (idx: number) => {
     const ag = state.additionalGuests[idx]
     if (!ag) return
-    if (!ag.newGuest.full_name.trim() || !ag.newGuest.document_number.trim()) return
+    if (!isPersonNameValid(ag.newGuest) || !ag.newGuest.document_number.trim()) return
     const isMinor = isExtraMinor(idx, state.adults)
 
     setIsSaving(true)
     try {
       const created = await createGuestApi({
-        full_name: ag.newGuest.full_name,
-        document_type: ag.newGuest.document_type,
-        document_number: ag.newGuest.document_number,
+        ...ag.newGuest,
         is_minor: isMinor,
         relationship: isMinor ? (ag.newGuest.relationship || undefined) : undefined,
         phone: isMinor ? undefined : ag.newGuest.phone,
         email: isMinor ? undefined : ag.newGuest.email,
-        nationality: ag.newGuest.nationality || undefined,
+        nationality_id: ag.newGuest.nationality_id || undefined,
       })
       setExtra(idx, { found: created, notFound: false, registered: true })
       toast.success('Huésped guardado.')
@@ -157,8 +147,15 @@ export function useCheckInWizard(rooms: Room[], onClose: () => void) {
     try {
       if (ag.isEditing) {
         const editPayload = isMinor
-          ? { full_name: ag.editData.full_name, relationship: ag.editData.relationship || null, is_minor: true }
-          : ag.editData
+          ? {
+              ...ag.editData,
+              relationship: ag.editData.relationship || null,
+              is_minor: true,
+            }
+          : {
+              ...ag.editData,
+              nationality_id: ag.editData.nationality_id || undefined,
+            }
         await updateGuestApi(ag.found.id, editPayload)
         toast.success('Datos actualizados.')
       }
@@ -178,10 +175,10 @@ export function useCheckInWizard(rooms: Room[], onClose: () => void) {
       notFound: false,
       documentInput: guest.full_name,
       editData: {
-        full_name: guest.full_name,
+        ...personNameFromGuest(guest),
         phone: guest.phone ?? '',
         email: guest.email ?? '',
-        nationality: guest.nationality ?? '',
+        nationality_id: guest.nationality_id ?? '',
         relationship: guest.relationship ?? '',
       },
     })
@@ -273,22 +270,6 @@ export function useCheckInWizard(rooms: Room[], onClose: () => void) {
       onClearGuest: () => setState((s) => ({ ...s, guest: null, guestSearch: '' })),
       onStartNewGuest: () => setState((s) => ({ ...s, isNewGuest: true, guest: null })),
       onBackToSearch: () => setState((s) => ({ ...s, isNewGuest: false })),
-      onAddCompanion: () => setState((s) => ({ ...s, companions: [...s.companions, makeCompanionForm()] })),
-      onCompanionNameChange: (formKey: string, value: string) => {
-        setState((s) => ({
-          ...s,
-          companions: s.companions.map((comp) => comp.formKey === formKey ? { ...comp, name: value } : comp),
-        }))
-      },
-      onCompanionRelationshipChange: (formKey: string, value: string) => {
-        setState((s) => ({
-          ...s,
-          companions: s.companions.map((comp) => comp.formKey === formKey ? { ...comp, relationship: value } : comp),
-        }))
-      },
-      onRemoveCompanion: (formKey: string) => {
-        setState((s) => ({ ...s, companions: s.companions.filter((comp) => comp.formKey !== formKey) }))
-      },
       onWithCompanyChange: (checked: boolean) => setState((s) => ({ ...s, withCompany: checked })),
     },
     company: {

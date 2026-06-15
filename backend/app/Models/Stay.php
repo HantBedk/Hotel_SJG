@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToHotel;
+use App\Models\Concerns\HasGuestPersonAlias;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Stay extends Model
 {
-    use HasUuids, BelongsToHotel;
+    use HasUuids, BelongsToHotel, HasGuestPersonAlias;
 
     public const STATUS_ACTIVE      = 'active';
     public const STATUS_EXTENDED    = 'extended';
@@ -32,7 +33,7 @@ class Stay extends Model
 
     protected $fillable = [
         'hotel_id',
-        'guest_id',
+        'person_id',
         'company_id',
         'reservation_id',
         'status',
@@ -59,11 +60,6 @@ class Stay extends Model
         ];
     }
 
-    public function guest(): BelongsTo
-    {
-        return $this->belongsTo(Guest::class);
-    }
-
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
@@ -82,11 +78,6 @@ class Stay extends Model
     public function stayRooms(): HasMany
     {
         return $this->hasMany(StayRoom::class);
-    }
-
-    public function stayGuests(): HasMany
-    {
-        return $this->hasMany(StayGuest::class);
     }
 
     public function activeStayRooms(): HasMany

@@ -1,6 +1,25 @@
 import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
+import type { NavItem } from '@/components/layout/sidebar/navigation'
 import { useAuthStore } from '@/store/authStore'
+
+interface RequireNavAccessProps {
+  readonly item: NavItem
+  readonly children: ReactNode
+}
+
+export function RequireNavAccess({ item, children }: RequireNavAccessProps) {
+  const hasAnyPermission = useAuthStore((s) => s.hasAnyPermission)
+  const hasAnyRole = useAuthStore((s) => s.hasAnyRole)
+
+  if (item.roles?.length && !hasAnyRole(item.roles)) {
+    return <Navigate to="/" replace />
+  }
+  if (item.permissions.length > 0 && !hasAnyPermission(item.permissions)) {
+    return <Navigate to="/" replace />
+  }
+  return <>{children}</>
+}
 
 interface RequireAuthProps {
   readonly children: ReactNode

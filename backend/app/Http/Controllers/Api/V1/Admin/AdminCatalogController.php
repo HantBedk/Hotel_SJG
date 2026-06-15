@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ExtraService;
+use App\Models\Nationality;
 use App\Models\Season;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -87,5 +88,65 @@ class AdminCatalogController extends Controller
         $extraService->update(['active' => false]);
 
         return response()->json(['success' => true, 'message' => 'Servicio desactivado.']);
+    }
+
+    public function getNationalities(): JsonResponse
+    {
+        $items = Nationality::query()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'name', 'iso_code', 'is_active', 'sort_order']);
+
+        return response()->json(['success' => true, 'data' => $items]);
+    }
+
+    public function storeNationality(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name'       => 'required|string|max:120|unique:nationalities,name',
+            'iso_code'   => 'nullable|string|size:2|unique:nationalities,iso_code',
+            'sort_order' => 'sometimes|integer|min:0|max:9999',
+            'is_active'  => 'sometimes|boolean',
+        ]);
+
+        $nationality = Nationality::create([
+            'name'       => $data['name'],
+            'iso_code'   => isset($data['iso_code']) ? strtoupper($data['iso_code']) : null,
+            'sort_order' => $data['sort_order'] ?? 50,
+            'is_active'  => $data['is_active'] ?? true,
+        ]);
+
+        return response()->json(['success' => true, 'data' => $nationality, 'message' => 'Nacionalidad creada.'], 201);
+    }
+
+    public function updateNationality(Request $request, Nationality $nationality): JsonResponse
+    {
+        $data = $request->validate([
+            'name'       => 'sometimes|string|max:120|unique:nationalities,name,' . $nationality->id,
+            'iso_code'   => 'nullable|string|size:2|unique:nationalities,iso_code,' . $nationality->id,
+            'sort_order' => 'sometimes|integer|min:0|max:9999',
+            'is_active'  => 'sometimes|boolean',
+        ]);
+
+        if (array_key_exists('iso_code', $data) && $data['iso_code'] !== null) {
+            $data['iso_code'] = strtoupper($data['iso_code']);
+        }
+
+        $nationality->update($data);
+
+        return response()->json(['success' => true, 'data' => $nationality->fresh(), 'message' => 'Nacionalidad actualizada.']);
+    }
+
+    public function destroyNationality(Nationality $nationality): JsonResponse
+    {
+        if ($nationality->personas()->exists()) {
+            $nationality->update(['is_active' => false]);
+
+            return response()->json(['success' => true, 'message' => 'Nacionalidad desactivada (en uso por personas registradas).']);
+        }
+
+        $nationality->delete();
+
+        return response()->json(['success' => true, 'message' => 'Nacionalidad eliminada.']);
     }
 }

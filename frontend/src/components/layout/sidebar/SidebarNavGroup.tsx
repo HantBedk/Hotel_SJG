@@ -1,7 +1,7 @@
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import SidebarNavLink from './SidebarNavLink'
-import { matchesNavItemPath, type NavModule } from './navigation'
+import { matchesNavItemPath, type NavItem, type NavModule } from './navigation'
 
 interface SidebarNavGroupProps {
   readonly module: NavModule
@@ -12,6 +12,54 @@ interface SidebarNavGroupProps {
   readonly onToggle: () => void
 }
 
+function NavItemList({
+  items,
+  collapsed,
+  listClassName,
+}: {
+  readonly items: readonly NavItem[]
+  readonly collapsed: boolean
+  readonly listClassName?: string
+}) {
+  return (
+    <ul className={cn('space-y-0.5', collapsed && 'space-y-1', listClassName)}>
+      {items.map((item) => (
+        <li key={item.id}>
+          <SidebarNavLink item={item} collapsed={collapsed} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function FlatNavGroup({
+  module,
+  collapsed,
+  isFirst,
+}: {
+  readonly module: NavModule
+  readonly collapsed: boolean
+  readonly isFirst: boolean
+}) {
+  const showSectionLabel = !collapsed && module.items.length > 1
+
+  return (
+    <li
+      className={cn(
+        !isFirst && collapsed && 'pt-2 mt-2 border-t border-white/10',
+        !isFirst && !collapsed && 'pt-1 mt-1',
+      )}
+    >
+      {showSectionLabel && (
+        <span className="block px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+          {module.label}
+        </span>
+      )}
+      <NavItemList items={module.items} collapsed={collapsed} />
+    </li>
+  )
+}
+
 export default function SidebarNavGroup({
   module,
   collapsed,
@@ -20,7 +68,12 @@ export default function SidebarNavGroup({
   expanded,
   onToggle,
 }: SidebarNavGroupProps) {
+  const isCollapsible = module.collapsible !== false
   const hasActiveItem = module.items.some((item) => matchesNavItemPath(pathname, item))
+
+  if (!isCollapsible) {
+    return <FlatNavGroup module={module} collapsed={collapsed} isFirst={isFirst} />
+  }
 
   if (collapsed) {
     return (
@@ -29,13 +82,7 @@ export default function SidebarNavGroup({
           !isFirst && 'pt-2 mt-2 border-t border-white/10',
         )}
       >
-        <ul className="space-y-1">
-          {module.items.map((item) => (
-            <li key={item.id}>
-              <SidebarNavLink item={item} collapsed />
-            </li>
-          ))}
-        </ul>
+        <NavItemList items={module.items} collapsed />
       </li>
     )
   }
@@ -82,13 +129,7 @@ export default function SidebarNavGroup({
           expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
         )}
       >
-        <ul className="overflow-hidden space-y-0.5 pt-0.5 pb-1">
-          {module.items.map((item) => (
-            <li key={item.id}>
-              <SidebarNavLink item={item} collapsed={false} />
-            </li>
-          ))}
-        </ul>
+        <NavItemList items={module.items} collapsed={false} listClassName="overflow-hidden pt-0.5 pb-1" />
       </div>
     </li>
   )

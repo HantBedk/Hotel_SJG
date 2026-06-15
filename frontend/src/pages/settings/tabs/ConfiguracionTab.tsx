@@ -6,9 +6,9 @@ import { SkeletonText } from '@/components/ui/Skeleton'
 import { cn } from '@/lib/cn'
 
 export const SETTINGS_CONFIG_GROUPS = [
-  { key: 'hotel', label: 'Hotel' },
-  { key: 'inventory', label: 'Inventario' },
-  { key: 'system', label: 'Sistema' },
+  { key: 'hotel', label: 'Operación del hotel', description: 'IVA, horarios, reservas y limpieza' },
+  { key: 'inventory', label: 'Inventario', description: 'Alertas de vencimiento y stock bajo' },
+  { key: 'system', label: 'Sistema', description: 'Formato de fecha y hora en la interfaz' },
 ] as const
 
 export type SettingsConfigGroup = typeof SETTINGS_CONFIG_GROUPS[number]['key']
@@ -27,6 +27,7 @@ const LABELS: Record<string, string> = {
   'hotel.cleaning_alerts':          'Alertas de limpieza',
   'hotel.cleaning_hour':            'Hora de limpieza',
   'hotel.notify_cleaning_done':     'Notificar habitación lista',
+  'hotel.admin_alert_hours':        'Horarios resumen alertas admin',
   'system.date_format':             'Formato de fecha',
   'system.time_format':             'Formato de hora',
   'inventory.expiry_alert_days':    'Alertar productos próximos a vencer (días)',
@@ -177,16 +178,18 @@ interface SettingsFormProps {
 function SettingsForm({ data, unsaved, hasUnsaved, isSaving, onChange, onSave }: SettingsFormProps) {
   return (
     <>
-      {Object.entries(data).map(([key, value]) => (
-        <div key={key}>
-          <SettingField
-            settingKey={key}
-            value={value}
-            isUnsaved={key in unsaved}
-            onChange={onChange}
-          />
-        </div>
-      ))}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {Object.entries(data).map(([key, value]) => (
+          <div key={key} className={isBooleanSetting(value) ? 'sm:col-span-2' : ''}>
+            <SettingField
+              settingKey={key}
+              value={value}
+              isUnsaved={key in unsaved}
+              onChange={onChange}
+            />
+          </div>
+        ))}
+      </div>
 
       {hasUnsaved && (
         <button
@@ -215,10 +218,7 @@ export default function ConfiguracionForm({ group }: ConfiguracionFormProps) {
   } = useSettings(group)
 
   return (
-    <div
-      className="rounded-xl p-5 space-y-4"
-      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
-    >
+    <div className="space-y-4">
       {hasUnsaved && (
         <div
           className="flex items-center justify-between px-3 py-2 rounded-lg text-xs"

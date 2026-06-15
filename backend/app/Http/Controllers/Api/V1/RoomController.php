@@ -159,9 +159,11 @@ class RoomController extends Controller
     {
         $users = User::role(['housekeeping', 'admin', 'superadmin'])
             ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn($u) => ['id' => $u->id, 'name' => $u->name]);
+            ->with('persona')
+            ->get()
+            ->sortBy(fn (User $u) => mb_strtolower($u->name ?? ''))
+            ->values()
+            ->map(fn (User $u) => ['id' => $u->id, 'name' => $u->name]);
 
         return $this->success($users);
     }

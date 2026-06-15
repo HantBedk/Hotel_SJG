@@ -7,7 +7,7 @@ import { disconnectEcho } from '@/hooks/useReverb'
 import type { LoginPayload } from '@/types'
 
 export function useAuth() {
-  const { setAuth, clearAuth, isAuthenticated, user, hasPermission, hasAnyPermission, hasRole } = useAuthStore()
+  const { setAuth, clearAuth, isAuthenticated, user, hasPermission, hasAnyPermission, hasAnyRole, hasRole } = useAuthStore()
   const queryClient = useQueryClient()
 
   const login = async (payload: LoginPayload) => {
@@ -38,7 +38,7 @@ export function useAuth() {
     }
   }
 
-  return { login, logout, isAuthenticated, user, hasPermission, hasAnyPermission, hasRole }
+  return { login, logout, isAuthenticated, user, hasPermission, hasAnyPermission, hasAnyRole, hasRole }
 }
 
 // On app mount: if a token exists in the store, validate it via /me.

@@ -36,7 +36,9 @@ export function ConfirmationStep({
   onRoomPriceChange,
   onNotesChange,
 }: ConfirmationStepProps) {
-  const mainName = state.isNewGuest ? state.newGuest.full_name : (state.guest?.full_name ?? '—')
+  const mainName = state.isNewGuest
+    ? [state.newGuest.primer_nombre, state.newGuest.segundo_nombre, state.newGuest.primer_apellido, state.newGuest.segundo_apellido].filter(Boolean).join(' ').trim() || '—'
+    : (state.guest?.full_name ?? '—')
   const registeredAdditional = state.additionalGuests.filter((ag) => ag.registered)
   const allRegistered = registeredAdditional.length === state.additionalGuests.length
   const pendingCount = state.additionalGuests.length - registeredAdditional.length

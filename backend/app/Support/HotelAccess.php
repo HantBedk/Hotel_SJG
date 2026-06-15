@@ -46,4 +46,51 @@ class HotelAccess
 
         return $hotels->first()?->id;
     }
+
+    /** @param  array<int, string>  $roles */
+    public static function rolesRequireHotels(array $roles): bool
+    {
+        if (in_array('superadmin', $roles, true)) {
+            return false;
+        }
+
+        $staffRoles = ['admin', 'receptionist', 'housekeeping', 'maintenance'];
+
+        return count(array_intersect($roles, $staffRoles)) > 0;
+    }
+
+    /**
+     * Sincroniza hoteles de un usuario según los roles de su persona.
+     *
+     * @param  array<int, string>  $roles
+     * @param  array<int, string>  $hotelIds
+     */
+    public static function syncHotelsForRoles(User $user, array $roles, array $hotelIds, User $actor): void
+    {
+        if (in_array('superadmin', $roles, true)) {
+            $user->hotels()->detach();
+
+            return;
+        }
+
+        if (! self::rolesRequireHotels($roles)) {
+            $user->hotels()->detach();
+
+            return;
+        }
+
+        abort_if($hotelIds === [], 422, 'Asigna al menos un hotel para roles de personal.');
+
+        if (! self::isSuperAdmin($actor)) {
+            foreach ($hotelIds as $hotelId) {
+                abort_unless(
+                    self::canAccess($actor, $hotelId),
+                    403,
+                    'No puedes asignar un hotel al que no tienes acceso.',
+                );
+            }
+        }
+
+        $user->hotels()->sync($hotelIds);
+    }
 }

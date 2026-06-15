@@ -1,4 +1,5 @@
 import { lazy, type LazyExoticComponent, type ComponentType } from 'react'
+import type { NavItemId } from '@/components/layout/sidebar/navigation'
 
 type AppPage = LazyExoticComponent<ComponentType>
 
@@ -21,12 +22,11 @@ export const APP_ROUTE_COMPONENTS = {
   'settings-houses':      lazy(() => import('@/pages/settings/tabs/CasasTiposTab')),
   'settings-seasons':     lazy(() => import('@/pages/settings/tabs/TemporadasTab')),
   'settings-services':    lazy(() => import('@/pages/settings/tabs/ServiciosTab')),
-  'settings-config-hotel':      lazy(() => import('@/pages/settings/ConfiguracionGroupPage')),
-  'settings-config-inventory':  lazy(() => import('@/pages/settings/ConfiguracionGroupPage')),
-  'settings-config-system':     lazy(() => import('@/pages/settings/ConfiguracionGroupPage')),
+  'settings-config':      lazy(() => import('@/pages/settings/ConfiguracionPage')),
   'settings-users':       lazy(() => import('@/pages/settings/tabs/UsuariosTab')),
+  'settings-personas':    lazy(() => import('@/pages/settings/tabs/PersonasTab')),
   'settings-permissions': lazy(() => import('@/pages/settings/tabs/PermisosTab')),
   'settings-backups':     lazy(() => import('@/pages/settings/tabs/BackupsTab')),
-} as const satisfies Record<string, AppPage>
+} as const satisfies Record<NavItemId, AppPage>
 
-export type AppRouteId = keyof typeof APP_ROUTE_COMPONENTS
+export type AppRouteId = NavItemId

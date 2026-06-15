@@ -1,5 +1,3 @@
-import type { CompanionForm } from '@/pages/checkin/types'
-
 export const DOCUMENT_TYPES = [
   { value: 'cc', label: 'Cédula de ciudadanía' },
   { value: 'ce', label: 'Cédula de extranjería' },
@@ -18,11 +16,4 @@ export const inputStyle = {
   background: 'var(--bg-input)',
   border: '1px solid var(--border-default)',
   color: 'var(--text-primary)',
-}
-
-let companionFormKeySeq = 0
-
-export function makeCompanionForm(): CompanionForm {
-  companionFormKeySeq += 1
-  return { formKey: `companion-${companionFormKeySeq}`, name: '', document_type: 'cc', relationship: '' }
 }

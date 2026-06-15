@@ -18,13 +18,6 @@ export function StayGuestSection({ guest }: StayGuestSectionProps) {
         {DOC_LABELS[guest.document_type] ?? guest.document_type} {guest.document_number}
       </p>
       {guest.phone && <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>{guest.phone}</p>}
-      {guest.companions && guest.companions.length > 0 && (
-        <div className="mt-2 pl-3 border-l-2" style={{ borderColor: 'var(--border-default)' }}>
-          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            {guest.companions.length} acompañante(s)
-          </p>
-        </div>
-      )}
     </section>
   )
 }

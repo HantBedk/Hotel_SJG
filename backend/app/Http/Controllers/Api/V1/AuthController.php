@@ -46,7 +46,7 @@ class AuthController extends Controller
 
         return $this->success([
             'token' => $token,
-            'user'  => AuthUserPayload::build($user->load('roles', 'permissions', 'hotels')),
+            'user'  => AuthUserPayload::build($user->load('persona', 'hotels')),
         ], 'Sesión iniciada.');
     }
 
@@ -111,7 +111,7 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $user = $request->user()->load('roles', 'permissions', 'hotels');
+        $user = $request->user()->load('persona', 'hotels');
 
         return $this->success(AuthUserPayload::build($user));
     }

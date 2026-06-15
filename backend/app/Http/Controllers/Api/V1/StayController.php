@@ -21,7 +21,7 @@ use App\Support\HotelInventoryService;
 use App\Support\RoomCleaningNotifier;
 use App\Support\TenantContext;
 use App\Models\Stay;
-use App\Models\StayGuest;
+use App\Models\StayPerson;
 use App\Models\StayRoom;
 use App\Models\User;
 use App\Traits\Paginates;
@@ -56,7 +56,7 @@ class StayController extends Controller
     public function show(Stay $stay): JsonResponse
     {
         $stay->load([
-            'guest.companions',
+            'guest.nationality',
             'company',
             'stayRooms.room.roomType',
             'stayGuests.guest',
@@ -73,7 +73,7 @@ class StayController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'guest_id'               => 'required|uuid|exists:guests,id',
+            'guest_id'               => 'required|uuid|exists:personas,id',
             'company_id'             => 'nullable|uuid|exists:companies,id',
             'room_ids'               => 'required|array|min:1',
             'room_ids.*'             => 'uuid|exists:rooms,id',
@@ -83,7 +83,7 @@ class StayController extends Controller
             'prices.*'               => 'numeric|min:0',
             'notes'                  => 'nullable|string',
             'additional_guest_ids'   => 'nullable|array',
-            'additional_guest_ids.*' => 'uuid|exists:guests,id|distinct',
+            'additional_guest_ids.*' => 'uuid|exists:personas,id|distinct',
         ]);
 
         $checkIn  = Carbon::parse($data['check_in_datetime']);

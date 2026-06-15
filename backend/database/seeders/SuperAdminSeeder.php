@@ -2,7 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Support\PersonaProvisioner;
+use App\Support\PersonNameParser;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -10,26 +11,28 @@ class SuperAdminSeeder extends Seeder
 {
     public function run(): void
     {
-        $superadmin = User::firstOrCreate(
-            ['email' => 'superadmin@hotelsjg.com'],
+        PersonaProvisioner::ensureStaffUser(
+            array_merge(
+                PersonNameParser::split('Super Administrador'),
+                ['document_type' => 'cc', 'document_number' => 'SUPER-ADMIN-001'],
+            ),
             [
-                'name'      => 'Super Administrador',
-                'password'  => Hash::make('Hotel2024!'),
-                'is_active' => true,
-            ]
+                'email'    => 'superadmin@hotelsjg.com',
+                'password' => Hash::make('Hotel2024!'),
+            ],
+            'superadmin',
         );
 
-        $superadmin->syncRoles(['superadmin']);
-
-        $hant = User::firstOrCreate(
-            ['email' => 'hantbedk@gmail.com'],
+        PersonaProvisioner::ensureStaffUser(
+            array_merge(
+                PersonNameParser::split('Hant'),
+                ['document_type' => 'cc', 'document_number' => 'SUPER-ADMIN-002'],
+            ),
             [
-                'name'      => 'Hant',
-                'password'  => Hash::make('199412=Hbm'),
-                'is_active' => true,
-            ]
+                'email'    => 'hantbedk@gmail.com',
+                'password' => Hash::make('199412=Hbm'),
+            ],
+            'superadmin',
         );
-
-        $hant->syncRoles(['superadmin']);
     }
 }

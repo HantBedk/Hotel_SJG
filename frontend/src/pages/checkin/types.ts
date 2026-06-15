@@ -1,5 +1,6 @@
 import type { Room, Guest, Company } from '@/types'
 import type { AdditionalGuestForm } from '@/pages/checkin/ExtraGuestStep'
+import type { PersonNameFields } from '@/types/person'
 
 export type StepId = 'occupancy' | 'main-guest' | `extra-${number}` | 'company' | 'confirmation'
 
@@ -8,11 +9,12 @@ export interface CheckInWizardProps {
   readonly onClose: () => void
 }
 
-export interface CompanionForm {
-  formKey: string
-  name: string
+export interface NewGuestFormState extends PersonNameFields {
   document_type: string
-  relationship: string
+  document_number: string
+  phone: string
+  email: string
+  nationality_id: string
 }
 
 export interface WizardState {
@@ -21,15 +23,7 @@ export interface WizardState {
   guest: Guest | null
   guestSearch: string
   isNewGuest: boolean
-  newGuest: {
-    full_name: string
-    document_type: string
-    document_number: string
-    phone: string
-    email: string
-    nationality: string
-  }
-  companions: CompanionForm[]
+  newGuest: NewGuestFormState
   withCompany: boolean
   additionalGuests: AdditionalGuestForm[]
   company: Company | null

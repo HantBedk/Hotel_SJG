@@ -157,14 +157,28 @@ body {
   display: flex;
 }
 
-/* ── Touch targets mínimos 44×44px (A11y) ───────────────────────────────── */
-button, [role="button"], a, input[type="checkbox"], input[type="radio"] {
+/* ── Touch targets mínimos 44×44px (A11y) — botones, no checkboxes ───────── */
+button, [role="button"] {
   min-height: 44px;
   min-width: 44px;
 }
 button.icon-sm, a.icon-sm {
   min-height: 36px;
   min-width: 36px;
+}
+
+/* Checkboxes y radios: tamaño estándar; el label absorbe el área táctil en móvil */
+input[type="checkbox"],
+input[type="radio"] {
+  width: 1rem;
+  height: 1rem;
+  min-width: 1rem;
+  min-height: 1rem;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+  vertical-align: middle;
 }
 
 /* ── Scrollbar ───────────────────────────────────────────────────────────── */
@@ -224,13 +238,26 @@ button.icon-sm, a.icon-sm {
 
 /* ── Touch targets (A11y) — mínimo 44×44px en móvil ────────────────────── */
 @media (pointer: coarse) {
-  button, [role="button"], a, input[type="checkbox"], input[type="radio"], select {
+  button, [role="button"], a, select {
     min-height: 44px;
     min-width: 44px;
   }
   input[type="text"], input[type="email"], input[type="password"],
   input[type="number"], input[type="date"], input[type="search"], textarea {
     min-height: 44px;
+  }
+  label:has(> input[type="checkbox"]),
+  label:has(> input[type="radio"]) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 1rem;
+    min-height: 1rem;
   }
 }
 

@@ -10,6 +10,9 @@ import { formatCOP } from '@/lib/format'
 import { SkeletonCard, SkeletonTable } from '@/components/ui/Skeleton'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Modal } from '@/components/ui/Modal'
+import { PersonNameFieldsInput } from '@/components/person/PersonNameFields'
+import { NationalitySelect } from '@/components/person/NationalitySelect'
+import { emptyPersonName, isPersonNameValid } from '@/types/person'
 import type {
   Guest,
   MinibarProduct,
@@ -49,15 +52,20 @@ const DOCUMENT_TYPES = [
   { value: 'nit', label: 'NIT' },
 ]
 
-type NewGuestForm = {
-  full_name: string
+type NewGuestForm = ReturnType<typeof emptyPersonName> & {
   document_type: string
   document_number: string
   phone: string
   email: string
+  nationality_id: string
 }
 const EMPTY_NEW_GUEST: NewGuestForm = {
-  full_name: '', document_type: 'cc', document_number: '', phone: '', email: '',
+  ...emptyPersonName(),
+  document_type: 'cc',
+  document_number: '',
+  phone: '',
+  email: '',
+  nationality_id: '',
 }
 
 const STATUS_LABEL: Record<MinibarSaleStatus, string> = {
@@ -491,13 +499,9 @@ function Cart({
 
             {isNewGuestMode ? (
               <div className="space-y-1.5">
-                <input
-                  type="text"
-                  placeholder="Nombre completo *"
-                  value={newGuestForm.full_name}
-                  onChange={(e) => onSetNewGuestForm({ full_name: e.target.value })}
-                  className="w-full px-2 py-1.5 rounded-lg border text-xs"
-                  style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
+                <PersonNameFieldsInput
+                  value={newGuestForm}
+                  onChange={(patch) => onSetNewGuestForm(patch)}
                 />
                 <div className="grid grid-cols-2 gap-1.5">
                   <select
@@ -535,13 +539,17 @@ function Cart({
                     style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)', color: 'var(--text-primary)' }}
                   />
                 </div>
+                <NationalitySelect
+                  value={newGuestForm.nationality_id}
+                  onChange={(nationality_id) => onSetNewGuestForm({ nationality_id })}
+                />
                 {guestError && (
                   <p className="text-[10px]" style={{ color: '#EF4444' }}>{guestError}</p>
                 )}
                 <button
                   type="button"
                   onClick={onCreateGuest}
-                  disabled={creatingGuest || !newGuestForm.full_name.trim() || !newGuestForm.document_number.trim()}
+                  disabled={creatingGuest || !isPersonNameValid(newGuestForm) || !newGuestForm.document_number.trim()}
                   className="w-full px-2 py-1.5 rounded-lg text-xs text-white font-medium disabled:opacity-40"
                   style={{ background: 'var(--color-primary)' }}
                 >
@@ -1150,11 +1158,12 @@ export default function MinibarSalesPage() {
     setGuestError(null)
     try {
       const created = await createGuestApi({
-        full_name:        newGuestForm.full_name.trim(),
+        ...newGuestForm,
         document_type:    newGuestForm.document_type,
         document_number:  newGuestForm.document_number.trim(),
         phone:            newGuestForm.phone.trim() || undefined,
         email:            newGuestForm.email.trim() || undefined,
+        nationality_id:   newGuestForm.nationality_id || undefined,
       })
       setSelectedGuest(created)
       setIsNewGuestMode(false)

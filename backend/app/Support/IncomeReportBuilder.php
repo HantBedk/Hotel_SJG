@@ -31,59 +31,59 @@ class IncomeReportBuilder
     {
         return [
             'payments' => Payment::active()
-                ->with(['stay.guest:id,full_name', 'stay.company:id,name', 'receptionist:id,name'])
+                ->with(['stay.guest', 'stay.company:id,name', 'receptionist.persona'])
                 ->whereBetween('payment_date', [$start, $end])
                 ->orderBy('payment_date')
                 ->get(),
             'cancelledPayments' => Payment::cancelled()
                 ->with([
-                    'stay.guest:id,full_name',
+                    'stay.guest',
                     'stay.company:id,name',
-                    'receptionist:id,name',
-                    'cancelledBy:id,name',
+                    'receptionist.persona',
+                    'cancelledBy.persona',
                 ])
                 ->whereBetween('cancelled_at', [$start, $end])
                 ->orderBy('cancelled_at')
                 ->get(),
             'minibarActive' => MinibarConsumption::query()
                 ->with([
-                    'stay.guest:id,full_name',
+                    'stay.guest',
                     'stay.company:id,name',
                     'room:id,number',
-                    'registeredBy:id,name',
+                    'registeredBy.persona',
                 ])
                 ->whereBetween('registered_at', [$start, $end])
                 ->orderBy('registered_at')
                 ->get(),
             'minibarCancelled' => ActivityLog::query()
-                ->with('user:id,name')
+                ->with('user.persona')
                 ->where('action', 'stay.minibar_cancelled')
                 ->whereBetween('created_at', [$start, $end])
                 ->orderBy('created_at')
                 ->get(),
             'services' => StayService::query()
                 ->with([
-                    'stay.guest:id,full_name',
+                    'stay.guest',
                     'stay.company:id,name',
                     'extraService:id,name',
-                    'appliedBy:id,name',
+                    'appliedBy.persona',
                 ])
                 ->whereBetween('applied_at', [$start, $end])
                 ->orderBy('applied_at')
                 ->get(),
             'checkIns' => Stay::query()
                 ->with([
-                    'guest:id,full_name',
+                    'guest',
                     'company:id,name',
                     'stayRooms.room:id,number',
-                    'createdBy:id,name',
+                    'createdBy.persona',
                 ])
                 ->whereBetween('check_in_datetime', [$start, $end])
                 ->orderBy('check_in_datetime')
                 ->get(),
             'checkOuts' => Stay::query()
                 ->with([
-                    'guest:id,full_name',
+                    'guest',
                     'company:id,name',
                     'stayRooms.room:id,number',
                 ])
@@ -93,10 +93,10 @@ class IncomeReportBuilder
                 ->get(),
             'transfers' => RoomTransfer::query()
                 ->with([
-                    'stay.guest:id,full_name',
+                    'stay.guest',
                     'fromRoom:id,number',
                     'toRoom:id,number',
-                    'transferredBy:id,name',
+                    'transferredBy.persona',
                 ])
                 ->whereBetween('transferred_at', [$start, $end])
                 ->orderBy('transferred_at')
