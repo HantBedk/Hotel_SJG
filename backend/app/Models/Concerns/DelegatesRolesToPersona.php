@@ -52,7 +52,12 @@ trait DelegatesRolesToPersona
             return false;
         }
 
-        return $this->persona->can($ability, $arguments);
+        // Persona usa HasRoles (hasPermissionTo), no Authorizable::can().
+        if (is_string($ability) && ! str_contains($ability, '\\')) {
+            return $this->hasPermissionTo($ability);
+        }
+
+        return false;
     }
 
     public function getRoleNames(): Collection

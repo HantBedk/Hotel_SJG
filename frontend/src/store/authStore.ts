@@ -11,6 +11,25 @@ interface AuthPersistedState {
   isAuthenticated: boolean
 }
 
+function normalizeStringList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string')
+  if (value && typeof value === 'object') {
+    return Object.values(value as Record<string, unknown>).filter(
+      (item): item is string => typeof item === 'string',
+    )
+  }
+  return []
+}
+
+function normalizeAuthUser(user: AuthUser): AuthUser {
+  return {
+    ...user,
+    roles: normalizeStringList(user.roles),
+    permissions: normalizeStringList(user.permissions),
+    hotels: Array.isArray(user.hotels) ? user.hotels : [],
+  }
+}
+
 interface AuthState extends AuthPersistedState {
   isBootstrapping: boolean
   setAuth: (user: AuthUser, token: string) => void
@@ -51,9 +70,9 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isBootstrapping: true,
 
-      setAuth: (user, token) => set({ user, token, isAuthenticated: true }),
+      setAuth: (user, token) => set({ user: normalizeAuthUser(user), token, isAuthenticated: true }),
 
-      setUser: (user) => set({ user, isAuthenticated: true }),
+      setUser: (user) => set({ user: normalizeAuthUser(user), isAuthenticated: true }),
 
       clearAuth: () => set({ user: null, token: null, isAuthenticated: false }),
 
