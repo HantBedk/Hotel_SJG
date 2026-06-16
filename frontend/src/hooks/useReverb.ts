@@ -38,14 +38,16 @@ function getEcho(): Echo<'reverb'> | null {
       wsPort = Number(configuredPort)
     }
 
+    const useTls = scheme === 'https'
+
     echoInstance = new Echo({
       broadcaster:       'reverb',
       key:               import.meta.env.VITE_REVERB_APP_KEY ?? 'hotel_reverb_key',
       wsHost:            import.meta.env.VITE_REVERB_HOST || browser.location.hostname,
       wsPort,
       wssPort:           wsPort,
-      forceTLS:          scheme === 'https',
-      enabledTransports: ['ws', 'wss'],
+      forceTLS:          useTls,
+      enabledTransports: useTls ? ['wss'] : ['ws'],
       // Custom authorizer: routes broadcasting auth through our axios instance
       // so it inherits withCredentials + XSRF token (Sanctum SPA session).
       authorizer: (channel: { name: string }) => ({

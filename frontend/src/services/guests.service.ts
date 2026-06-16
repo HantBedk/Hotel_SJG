@@ -1,5 +1,6 @@
 import api from '@/lib/axios'
 import type { ApiResponse, Guest } from '@/types'
+import type { PaginationMeta } from '@/types/pagination'
 import type { PersonNameFields } from '@/types/person'
 import type { Stay } from '@/types/stay'
 
@@ -54,6 +55,21 @@ export function extractGuestList(payload: GuestsListResult | Guest[] | undefined
   if (!payload) return []
   if (Array.isArray(payload)) return payload
   return payload.data ?? []
+}
+
+/** Paginación Laravel (`paginate()`) envuelta en `data` de la API. */
+export function extractGuestPagination(
+  payload: GuestsListResult | Guest[] | undefined,
+): PaginationMeta | null {
+  if (!payload || Array.isArray(payload)) return null
+  const raw = payload as GuestsListResult & Partial<PaginationMeta>
+  if (typeof raw.total !== 'number' || typeof raw.current_page !== 'number') return null
+  return {
+    total: raw.total,
+    per_page: raw.per_page ?? 20,
+    current_page: raw.current_page,
+    last_page: raw.last_page ?? 1,
+  }
 }
 
 export async function getGuestsApi(

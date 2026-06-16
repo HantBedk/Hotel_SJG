@@ -15,9 +15,14 @@ export interface IncomeTonightRoom {
   room_id: string
   room_number: string | null
   guest_name: string | null
+  document_type: string | null
+  document_number: string | null
+  phone: string | null
   company_name: string | null
   check_in: string
   check_out: string
+  check_in_datetime: string | null
+  check_out_datetime: string | null
   price: number
   status: string | null
 }
@@ -45,15 +50,33 @@ export interface IncomeByMethod {
 export interface IncomeNight {
   date: string
   rooms_count: number
+  total_rooms: number
   room_revenue: number
+  potential_revenue: number
+  occupancy_pct: number
+  revenue_vs_potential_pct: number
   rooms: IncomeTonightRoom[]
+}
+
+export interface IncomeOccupancySummary {
+  total_rooms: number
+  avg_occupancy_pct: number
+  total_potential_revenue: number
+  total_room_revenue: number
+  revenue_vs_potential_pct: number
+  payments_vs_potential_pct: number
 }
 
 export interface IncomeSummary {
   period: { from: string; to: string; days: number }
+  occupancy_summary: IncomeOccupancySummary
   tonight: {
     room_revenue: number
     rooms_count: number
+    total_rooms: number
+    potential_revenue: number
+    occupancy_pct: number
+    revenue_vs_potential_pct: number
     rooms: IncomeTonightRoom[]
   }
   nights: IncomeNight[]
@@ -73,6 +96,9 @@ export interface IncomeDailyPoint {
   date: string
   label: string
   total: number
+  expected: number
+  room_revenue: number
+  occupancy_pct: number
 }
 
 export type IncomeGranularity = 'hour' | 'day'
@@ -81,6 +107,14 @@ export interface IncomeDaily {
   period: { from: string; to: string }
   granularity: IncomeGranularity
   data: IncomeDailyPoint[]
+}
+
+/** Clave estable para React Query (evita objetos anidados en queryKey). */
+export function incomeQueryRangeKey(params: IncomeRangeParams): readonly unknown[] {
+  if (params.preset) {
+    return ['preset', params.preset]
+  }
+  return ['range', params.from ?? '', params.to ?? '']
 }
 
 export async function getIncomeSummaryApi(params: IncomeRangeParams = {}): Promise<IncomeSummary> {

@@ -3,7 +3,7 @@ import type { Guest } from './guest'
 import type { MinibarConsumption } from './minibar'
 import type { Room } from './room'
 
-export type StayStatus = 'active' | 'extended' | 'checked_out'
+export type StayStatus = 'active' | 'extended' | 'checked_out' | 'void_pending' | 'voided' | 'void_rejected'
 export type PaymentMethod = 'cash' | 'transfer' | 'card' | 'credito'
 export type PaymentType = 'deposit' | 'partial' | 'final'
 export type PaidBy = 'guest' | 'company' | 'mixed'

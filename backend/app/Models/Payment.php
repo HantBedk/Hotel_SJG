@@ -62,6 +62,12 @@ class Payment extends Model
         return $query->whereNotNull('cancelled_at');
     }
 
+    /** Restringe pagos al hotel activo (vía estadía con scope multitenant). */
+    public function scopeForCurrentHotel(Builder $query): Builder
+    {
+        return $query->whereHas('stay');
+    }
+
     public function isCancelled(): bool
     {
         return $this->cancelled_at !== null;

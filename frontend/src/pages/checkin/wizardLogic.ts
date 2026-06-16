@@ -1,4 +1,5 @@
 import { addDaysLocal, nowLocalISO, todayLocalISO } from '@/lib/format'
+import { calendarNightsBetween } from '@/lib/formatDate'
 import { createGuestApi } from '@/services/guests.service'
 import { createCompanyApi } from '@/services/companies.service'
 import type { Room } from '@/types'
@@ -33,8 +34,8 @@ export function toISOLocal(dateStr: string): string {
 }
 
 export function nightCount(from: string, to: string): number {
-  if (!from || !to) return 0
-  return Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000))
+  const nights = calendarNightsBetween(from, to)
+  return nights > 0 ? Math.max(1, nights) : 0
 }
 
 export function createInitialWizardState(rooms: Room[]): WizardState {

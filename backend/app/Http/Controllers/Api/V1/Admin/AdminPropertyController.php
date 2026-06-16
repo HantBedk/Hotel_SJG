@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\House;
 use App\Models\Room;
+use App\Models\RoomFeature;
 use App\Models\RoomType;
 use App\Support\TenantContext;
 use Illuminate\Http\JsonResponse;
@@ -97,7 +98,7 @@ class AdminPropertyController extends Controller
 
     public function getAllRooms(): JsonResponse
     {
-        $rooms = Room::with(['roomType', 'house'])->ordered()->get();
+        $rooms = Room::with(['roomType', 'house', 'features'])->ordered()->get();
 
         return response()->json(['success' => true, 'data' => $rooms]);
     }
@@ -113,12 +114,20 @@ class AdminPropertyController extends Controller
             ],
             'floor'        => 'nullable|integer|min:1|max:50',
             'notes'        => 'nullable|string|max:500',
+            'feature_ids'  => 'nullable|array',
+            'feature_ids.*'=> 'uuid|exists:room_features,id',
         ]);
+
+        $featureIds = $data['feature_ids'] ?? [];
+        unset($data['feature_ids']);
+
+        $this->assertFeatureIdsBelongToTenant($featureIds);
 
         $data['status'] = 'available';
         $room           = Room::create($data);
+        $room->features()->sync($featureIds);
 
-        return response()->json(['success' => true, 'data' => $room->load(['roomType', 'house']), 'message' => 'Habitación creada.'], 201);
+        return response()->json(['success' => true, 'data' => $room->load(['roomType', 'house', 'features']), 'message' => 'Habitación creada.'], 201);
     }
 
     public function updateRoom(Request $request, Room $room): JsonResponse
@@ -133,16 +142,29 @@ class AdminPropertyController extends Controller
             'floor'        => 'nullable|integer|min:1|max:50',
             'notes'        => 'nullable|string|max:500',
             'is_active'    => 'sometimes|boolean',
+            'feature_ids'  => 'nullable|array',
+            'feature_ids.*'=> 'uuid|exists:room_features,id',
         ]);
 
+        $featureIds = null;
+        if (array_key_exists('feature_ids', $data)) {
+            $featureIds = $data['feature_ids'] ?? [];
+            unset($data['feature_ids']);
+            $this->assertFeatureIdsBelongToTenant($featureIds);
+        }
+
         $room->update($data);
+
+        if ($featureIds !== null) {
+            $room->features()->sync($featureIds);
+        }
 
         ActivityLog::record('room_updated', $request->user()->id, [
             'room_id'     => $room->id,
             'room_number' => $room->number,
         ]);
 
-        return response()->json(['success' => true, 'data' => $room->load(['roomType', 'house']), 'message' => 'Habitación actualizada.']);
+        return response()->json(['success' => true, 'data' => $room->load(['roomType', 'house', 'features']), 'message' => 'Habitación actualizada.']);
     }
 
     public function destroyRoom(Request $request, Room $room): JsonResponse
@@ -173,5 +195,20 @@ class AdminPropertyController extends Controller
             'data'    => $type,
             'message' => "Precio actualizado para tipo \"{$type->name}\".",
         ]);
+    }
+
+    /** @param list<string> $featureIds */
+    private function assertFeatureIdsBelongToTenant(array $featureIds): void
+    {
+        if ($featureIds === []) {
+            return;
+        }
+
+        $validCount = RoomFeature::query()
+            ->whereIn('id', $featureIds)
+            ->where('is_active', true)
+            ->count();
+
+        abort_if($validCount !== count($featureIds), 422, 'Una o más características no son válidas para este hotel.');
     }
 }

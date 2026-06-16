@@ -7,6 +7,7 @@ import {
   deleteAllBackupsApi,
   createExtraServiceApi,
   createNationalityApi,
+  createRoomFeatureApi,
   createHouseApi,
   createRoomTypeApi,
   createSeasonApi,
@@ -14,11 +15,13 @@ import {
   deleteAdminUserApi,
   deleteExtraServiceApi,
   deleteNationalityApi,
+  deleteRoomFeatureApi,
   deleteHouseApi,
   deleteRoomTypeApi,
   deleteSeasonApi,
   getAdminExtraServicesApi,
   getAdminNationalitiesApi,
+  getAdminRoomFeaturesApi,
   getAdminHousesApi,
   getAdminPermissionsApi,
   getAdminRolesApi,
@@ -41,6 +44,7 @@ import {
   updateAdminUserApi,
   updateExtraServiceApi,
   updateNationalityApi,
+  updateRoomFeatureApi,
   updateHotelInfoApi,
   updateHouseApi,
   updateRolePermissionsApi,
@@ -50,7 +54,7 @@ import {
   wipeDatabaseApi,
 } from '../services/admin.service'
 import type { Nationality } from '@/types/person'
-import type { AdminUserPayload, AdminPersonaPayload, ExtraService, House, Room, RoomType, Season } from '../types'
+import type { AdminUserPayload, AdminPersonaPayload, ExtraService, House, Room, RoomFeature, RoomType, Season } from '../types'
 
 // ── Hotel ─────────────────────────────────────────────────────────────────────
 
@@ -208,6 +212,33 @@ export function useNationalityMutations() {
     onSuccess: inv,
   })
   const remove = useMutation({ mutationFn: deleteNationalityApi, onSuccess: inv })
+
+  return { create, update, remove }
+}
+
+// ── Room features ─────────────────────────────────────────────────────────────
+
+export function useAdminRoomFeatures() {
+  return useQuery({ queryKey: hotelQueryKey('admin', 'room-features'), queryFn: getAdminRoomFeaturesApi })
+}
+
+export function useRoomFeatureMutations() {
+  const qc = useQueryClient()
+  const inv = () => {
+    qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'room-features') })
+    qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'rooms') })
+  }
+
+  const create = useMutation({
+    mutationFn: (payload: Pick<RoomFeature, 'name' | 'sort_order' | 'is_active'>) => createRoomFeatureApi(payload),
+    onSuccess: inv,
+  })
+  const update = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Pick<RoomFeature, 'name' | 'sort_order' | 'is_active'>> }) =>
+      updateRoomFeatureApi(id, data),
+    onSuccess: inv,
+  })
+  const remove = useMutation({ mutationFn: deleteRoomFeatureApi, onSuccess: inv })
 
   return { create, update, remove }
 }

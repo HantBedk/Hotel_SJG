@@ -4,6 +4,7 @@ import { useCompanies } from '@/hooks/useCompanies'
 import { useAuth } from '@/hooks/useAuth'
 import { CompanyModal, CompanyFormData } from './components/CompanyModal'
 import { SkeletonCard } from '@/components/ui/Skeleton'
+import { DeleteConfirmDialog } from '@/components/ui/DeleteConfirmDialog'
 import type { Company } from '@/types'
 
 const COMPANY_SKELETON_KEYS = [
@@ -34,7 +35,7 @@ export default function CompaniesPage() {
 
   const [search, setSearch]     = useState('')
   const [modal, setModal]       = useState<{ company: Company | null } | null>(null)
-  const [deleting, setDeleting] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Company | null>(null)
 
   const { companies, isLoading, createCompany, updateCompany, deleteCompany, isCreating, isUpdating, isDeleting } = useCompanies(
     search.length >= 2 ? search : undefined
@@ -57,9 +58,8 @@ export default function CompaniesPage() {
     }
   }
 
-  const handleDelete = (id: string) => {
-    if (deleting !== id) { setDeleting(id); return }
-    deleteCompany(id, { onSuccess: () => setDeleting(null) })
+  const confirmDelete = (company: Company) => {
+    deleteCompany(company.id, { onSuccess: () => setDeleteTarget(null) })
   }
 
   let listContent: React.ReactNode
@@ -126,12 +126,12 @@ export default function CompaniesPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDelete(company.id)}
+                      onClick={() => setDeleteTarget(company)}
                       disabled={isDeleting}
-                      className="p-1.5 rounded hover:opacity-80 transition-colors"
-                      style={{ color: deleting === company.id ? 'var(--status-occupied)' : 'var(--text-muted)' }}
-                      aria-label={deleting === company.id ? 'Confirmar eliminación' : 'Eliminar'}
-                      title={deleting === company.id ? 'Haz clic de nuevo para confirmar' : 'Eliminar'}
+                      className="compact-control p-1.5 rounded hover:opacity-80 transition-colors"
+                      style={{ color: 'var(--text-muted)' }}
+                      aria-label={`Eliminar ${company.name}`}
+                      title="Eliminar"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -189,6 +189,20 @@ export default function CompaniesPage() {
           isSaving={isCreating || isUpdating}
         />
       )}
+
+      <DeleteConfirmDialog
+        target={deleteTarget}
+        title="Eliminar empresa"
+        message={
+          deleteTarget
+            ? `¿Estás seguro de eliminar la empresa ${deleteTarget.name}? Esta acción no se puede deshacer.`
+            : ''
+        }
+        confirmLabel="Sí, eliminar"
+        loading={isDeleting}
+        onConfirm={confirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }

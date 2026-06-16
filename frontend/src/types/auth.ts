@@ -41,6 +41,8 @@ export type Permission =
   | 'manage_reservations'
   | 'check_in'
   | 'check_out'
+  | 'request_stay_void'
+  | 'approve_stay_void'
   | 'view_inventory'
   | 'manage_inventory'
   | 'view_settings'

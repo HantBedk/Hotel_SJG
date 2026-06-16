@@ -5,6 +5,7 @@ import { useAdminUsers } from '@/hooks/useAdmin'
 import { useAuth } from '@/hooks/useAuth'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { SkeletonTable } from '@/components/ui/Skeleton'
+import { DeleteConfirmDialog } from '@/components/ui/DeleteConfirmDialog'
 import { cn } from '@/lib/cn'
 import type { InventoryItem, InventoryCategory, AdminUser } from '@/types'
 
@@ -646,6 +647,7 @@ export default function ConsumiblesTab() {
   const [modalItem, setModalItem] = useState<InventoryItem | null | undefined>(undefined)
   const [restockItem, setRestockItem] = useState<InventoryItem | null>(null)
   const [deliverItem, setDeliverItem] = useState<InventoryItem | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<InventoryItem | null>(null)
 
   const { data: categoriesData } = useInventoryCategories()
   const categories = categoriesData ?? []
@@ -796,7 +798,7 @@ export default function ConsumiblesTab() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { if (confirm('¿Eliminar este producto?')) deleteMutation.mutate(item.id) }}
+                    onClick={() => setDeleteTarget(item)}
                     className="p-2 rounded-lg border text-red-500"
                     style={{ borderColor: 'var(--border-default)' }}
                   >
@@ -889,9 +891,7 @@ export default function ConsumiblesTab() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (confirm('¿Eliminar este producto?')) deleteMutation.mutate(item.id)
-                            }}
+                            onClick={() => setDeleteTarget(item)}
                             title="Eliminar"
                             className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500"
                           >
@@ -1045,6 +1045,19 @@ export default function ConsumiblesTab() {
           saving={deliverMutation.isPending}
         />
       )}
+
+      <DeleteConfirmDialog
+        target={deleteTarget}
+        title="Eliminar producto"
+        message={
+          deleteTarget
+            ? `¿Estás seguro de eliminar ${deleteTarget.name}?`
+            : ''
+        }
+        loading={deleteMutation.isPending}
+        onConfirm={(item) => deleteMutation.mutate(item.id, { onSuccess: () => setDeleteTarget(null) })}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }

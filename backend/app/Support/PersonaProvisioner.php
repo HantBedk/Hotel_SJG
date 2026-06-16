@@ -46,9 +46,14 @@ final class PersonaProvisioner
     public static function findOrCreateGuest(array $data): Persona
     {
         $personFields = self::extractPersonFields($data);
-        $persona = Persona::query()->where('document_number', $personFields['document_number'])->first();
+        $persona = Persona::withTrashed()
+            ->where('document_number', $personFields['document_number'])
+            ->first();
 
         if ($persona) {
+            if ($persona->trashed()) {
+                $persona->restore();
+            }
             $persona->update($personFields);
         } else {
             $persona = Persona::create($personFields);

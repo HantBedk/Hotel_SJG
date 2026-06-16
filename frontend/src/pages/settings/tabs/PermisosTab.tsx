@@ -40,6 +40,14 @@ const PERMISSION_META: Record<string, { label: string; description: string }> = 
     label: 'Hacer check-out',
     description: 'Procesar la salida de huéspedes y cerrar estadías.',
   },
+  request_stay_void: {
+    label: 'Solicitar anulación de estadía',
+    description: 'Solicitar anulación por check-in erróneo; libera la habitación de inmediato.',
+  },
+  approve_stay_void: {
+    label: 'Aprobar anulación de estadía',
+    description: 'Revisar, aprobar o rechazar solicitudes de anulación de estadías.',
+  },
   view_inventory: {
     label: 'Ver inventario',
     description: 'Consultar productos, stock, activos y órdenes de reparación.',

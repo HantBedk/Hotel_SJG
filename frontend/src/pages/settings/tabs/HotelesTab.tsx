@@ -1,5 +1,18 @@
-import { useState, useEffect, type SubmitEvent } from 'react'
-import { Plus, Pencil, Trash2, Building2, X } from 'lucide-react'
+import { useMemo, useState, type SubmitEvent } from 'react'
+import {
+  Building2,
+  Check,
+  Hash,
+  Mail,
+  MapPin,
+  Network,
+  Pencil,
+  Phone,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -10,10 +23,17 @@ import {
 } from '@/services/admin.service'
 import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import { useAuth } from '@/hooks/useAuth'
-import { useFocusTrap } from '@/hooks/useFocusTrap'
+import { useSwitchHotel } from '@/hooks/useSwitchHotel'
 import { useHotelStore } from '@/store/hotelStore'
 import type { HotelSummary } from '@/types'
+import { FormField } from '@/components/person/FormField'
+import { personInputClass, personInputStyle } from '@/components/person/personFormStyles'
+import { CitySelect } from '@/components/forms/CitySelect'
+import { Modal } from '@/components/ui/Modal'
+import { ModalFooter } from '@/components/ui/ModalFooter'
 import { SkeletonText } from '@/components/ui/Skeleton'
+import { DeleteConfirmDialog } from '@/components/ui/DeleteConfirmDialog'
+import KpiCard from '@/pages/dashboard/components/KpiCard'
 import { cn } from '@/lib/cn'
 
 type HotelForm = {
@@ -28,11 +48,10 @@ type HotelForm = {
 
 type AdminHotelDetail = HotelSummary & Partial<HotelForm>
 
-const FORM_FIELDS = ['name', 'nit', 'city', 'address', 'phone', 'email'] as const
-type FormFieldKey = (typeof FORM_FIELDS)[number]
+type FormFieldKey = keyof Omit<HotelForm, 'country'>
 
 const FIELD_LABELS: Record<FormFieldKey, string> = {
-  name: 'Nombre',
+  name: 'Nombre comercial',
   nit: 'NIT',
   city: 'Ciudad',
   address: 'Dirección',
@@ -50,42 +69,15 @@ const EMPTY: HotelForm = {
   country: 'CO',
 }
 
-function useDialogLifecycle(onClose: () => void) {
-  const dialogRef = useFocusTrap<HTMLDialogElement>(true, onClose)
-  const backdropClassName = 'absolute inset-0 border-0 p-0 cursor-default'
-
-  useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
-    if (!dialog.open) dialog.showModal()
-    return () => {
-      if (dialog.open) dialog.close()
-    }
-  }, [dialogRef])
-
-  useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [])
-
-  return { dialogRef, backdropClassName }
-}
+const KPI_SKELETON_KEYS = ['hotels-kpi-total', 'hotels-kpi-active'] as const
 
 function hotelFieldId(field: FormFieldKey): string {
   return `hotel-field-${field}`
 }
 
 function hotelFormTitle(editing: HotelSummary | null): string {
-  if (editing) return 'Editar hotel'
-  return 'Nuevo hotel'
-}
-
-function hotelSaveLabel(saving: boolean): string {
-  if (saving) return 'Guardando…'
-  return 'Guardar'
+  if (editing) return 'Editar establecimiento'
+  return 'Nuevo establecimiento'
 }
 
 function hotelToForm(hotel: HotelSummary): HotelForm {
@@ -101,12 +93,31 @@ function hotelToForm(hotel: HotelSummary): HotelForm {
   }
 }
 
-function hotelCardBorderColor(isActive: boolean): string {
-  if (isActive) return 'var(--color-primary)'
-  return 'var(--border-default)'
+function displayMeta(value: string | null | undefined): string {
+  if (value?.trim()) return value.trim()
+  return '—'
+}
+
+function filterHotels(hotels: HotelSummary[], term: string): HotelSummary[] {
+  const q = term.trim().toLowerCase()
+  if (!q) return hotels
+
+  return hotels.filter((hotel) => {
+    const detail = hotel as AdminHotelDetail
+    const haystack = [
+      hotel.name,
+      hotel.city ?? '',
+      detail.nit ?? '',
+      detail.address ?? '',
+      detail.phone ?? '',
+      detail.email ?? '',
+    ].join(' ').toLowerCase()
+    return haystack.includes(q)
+  })
 }
 
 interface HotelFormModalProps {
+  readonly open: boolean
   readonly editing: HotelSummary | null
   readonly form: HotelForm
   readonly saving: boolean
@@ -115,57 +126,113 @@ interface HotelFormModalProps {
   readonly onSubmit: (e: SubmitEvent<HTMLFormElement>) => void
 }
 
-function HotelFormModal({ editing, form, saving, onClose, onChange, onSubmit }: HotelFormModalProps) {
-  const { dialogRef, backdropClassName } = useDialogLifecycle(onClose)
-
+function HotelFormModal({
+  open,
+  editing,
+  form,
+  saving,
+  onClose,
+  onChange,
+  onSubmit,
+}: HotelFormModalProps) {
   return (
-    <dialog
-      ref={dialogRef}
-      aria-label={hotelFormTitle(editing)}
-      className={cn(
-        'app-modal fixed inset-0 z-50 m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
-        'flex items-center justify-center pointer-events-none p-4',
-      )}
-    >
-      <button
-        type="button"
-        aria-label="Cerrar modal"
-        className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
-        onClick={onClose}
-      />
-      <form
-        onSubmit={onSubmit}
-        className="relative z-10 pointer-events-auto w-full max-w-md rounded-xl p-6 space-y-3 border shadow-xl"
-        style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>
+    <Modal open={open} onClose={onClose} size="md" ariaLabel={hotelFormTitle(editing)}>
+      <form onSubmit={onSubmit} className="flex flex-col min-h-0 max-h-[90vh]">
+        <div className="flex items-center justify-between px-5 pt-5 pb-2 shrink-0">
+          <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
             {hotelFormTitle(editing)}
-          </h3>
-          <button type="button" onClick={onClose} aria-label="Cerrar" style={{ color: 'var(--text-muted)' }}>
-            <X size={16} />
-          </button>
-        </div>
-        {FORM_FIELDS.map(field => (
-          <div key={field}>
-            <label htmlFor={hotelFieldId(field)} className="block text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {FIELD_LABELS[field]}
-            </label>
-            <input
-              id={hotelFieldId(field)}
-              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-              style={{ borderColor: 'var(--border-default)', background: 'var(--bg-base)', color: 'var(--text-primary)' }}
-              value={form[field]}
-              onChange={e => onChange(field, e.target.value)}
-              required={field === 'name' || field === 'nit'}
-            />
-          </div>
-        ))}
-        <div className="flex justify-end gap-2 pt-2">
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-2 text-sm rounded-lg border"
+            aria-label="Cerrar"
+            className="w-8 h-8 flex items-center justify-center rounded-full"
+            style={{ background: 'var(--bg-input)', color: 'var(--text-secondary)' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4 overflow-y-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <FormField id={hotelFieldId('name')} label={FIELD_LABELS.name} required className="sm:col-span-2">
+              <input
+                id={hotelFieldId('name')}
+                type="text"
+                required
+                value={form.name}
+                placeholder="Ej. Hotel Centro Plaza"
+                onChange={(e) => onChange('name', e.target.value)}
+                className={personInputClass}
+                style={personInputStyle}
+              />
+            </FormField>
+
+            <FormField id={hotelFieldId('nit')} label={FIELD_LABELS.nit} required>
+              <input
+                id={hotelFieldId('nit')}
+                type="text"
+                required
+                value={form.nit}
+                placeholder="900.123.456-7"
+                onChange={(e) => onChange('nit', e.target.value)}
+                className={personInputClass}
+                style={personInputStyle}
+              />
+            </FormField>
+
+            <FormField id={hotelFieldId('city')} label={FIELD_LABELS.city}>
+              <CitySelect
+                id={hotelFieldId('city')}
+                value={form.city}
+                onChange={(city) => onChange('city', city)}
+              />
+            </FormField>
+
+            <FormField id={hotelFieldId('address')} label={FIELD_LABELS.address} className="sm:col-span-2">
+              <input
+                id={hotelFieldId('address')}
+                type="text"
+                value={form.address}
+                placeholder="Calle, número, barrio"
+                onChange={(e) => onChange('address', e.target.value)}
+                className={personInputClass}
+                style={personInputStyle}
+              />
+            </FormField>
+
+            <FormField id={hotelFieldId('phone')} label={FIELD_LABELS.phone}>
+              <input
+                id={hotelFieldId('phone')}
+                type="tel"
+                value={form.phone}
+                placeholder="+57 300 000 0000"
+                onChange={(e) => onChange('phone', e.target.value)}
+                className={personInputClass}
+                style={personInputStyle}
+              />
+            </FormField>
+
+            <FormField id={hotelFieldId('email')} label={FIELD_LABELS.email}>
+              <input
+                id={hotelFieldId('email')}
+                type="email"
+                value={form.email}
+                placeholder="contacto@hotel.com"
+                onChange={(e) => onChange('email', e.target.value)}
+                className={personInputClass}
+                style={personInputStyle}
+              />
+            </FormField>
+          </div>
+        </div>
+
+        <ModalFooter>
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 py-2.5 rounded-lg text-sm border disabled:opacity-60"
             style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
           >
             Cancelar
@@ -173,68 +240,195 @@ function HotelFormModal({ editing, form, saving, onClose, onChange, onSubmit }: 
           <button
             type="submit"
             disabled={saving}
-            className="px-3 py-2 text-sm rounded-lg text-white disabled:opacity-60"
+            className="flex-1 py-2.5 rounded-lg text-sm font-semibold text-white disabled:opacity-60"
             style={{ background: 'var(--color-primary)' }}
           >
-            {hotelSaveLabel(saving)}
+            {saving ? 'Guardando…' : 'Guardar'}
           </button>
-        </div>
+        </ModalFooter>
       </form>
-    </dialog>
+    </Modal>
   )
 }
 
 interface HotelCardProps {
   readonly hotel: HotelSummary
   readonly isActive: boolean
+  readonly canManage: boolean
   readonly canDelete: boolean
+  readonly canSwitch: boolean
+  readonly isSwitching: boolean
+  readonly onActivate: (hotelId: string) => void
   readonly onEdit: (hotel: HotelSummary) => void
   readonly onDelete: (hotel: HotelSummary) => void
 }
 
-function HotelCard({ hotel, isActive, canDelete, onEdit, onDelete }: HotelCardProps) {
+function HotelCard({
+  hotel,
+  isActive,
+  canManage,
+  canDelete,
+  canSwitch,
+  isSwitching,
+  onActivate,
+  onEdit,
+  onDelete,
+}: HotelCardProps) {
+  const detail = hotel as AdminHotelDetail
+
   return (
-    <div
-      className="flex items-center gap-3 p-4 rounded-xl border"
+    <article
+      className={cn(
+        'rounded-xl overflow-hidden flex flex-col transition-shadow hover:shadow-md',
+        isActive && 'ring-2 ring-[var(--color-primary)] ring-offset-2 ring-offset-[var(--bg-base)]',
+      )}
       style={{
-        borderColor: hotelCardBorderColor(isActive),
         background: 'var(--bg-surface)',
+        border: `1px solid ${isActive ? 'var(--color-primary)' : 'var(--border-default)'}`,
       }}
     >
-      <Building2 size={20} style={{ color: 'var(--color-primary)' }} />
-      <div className="flex-1 min-w-0">
-        <p className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>
-          {hotel.name}
-          {isActive && (
-            <span className="ml-2 text-xs font-normal" style={{ color: 'var(--color-primary)' }}>
-              (activo)
-            </span>
+      <div className="p-4 flex-1 space-y-3">
+        <div className="flex items-start gap-3">
+          <div
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl overflow-hidden"
+            style={{
+              background: isActive ? 'var(--color-primary-light)' : 'var(--bg-muted)',
+              color: 'var(--color-primary)',
+            }}
+          >
+            {hotel.logo_url ? (
+              <img src={hotel.logo_url} alt="" className="h-full w-full object-contain" />
+            ) : (
+              <Building2 size={22} aria-hidden="true" />
+            )}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="font-semibold text-sm leading-snug truncate" style={{ color: 'var(--text-primary)' }}>
+                {hotel.name}
+              </h3>
+              {isActive && (
+                <span
+                  className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                  style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary)' }}
+                >
+                  <Check size={11} aria-hidden="true" />
+                  Activo
+                </span>
+              )}
+            </div>
+            <p className="text-xs mt-1 flex items-center gap-1 truncate" style={{ color: 'var(--text-muted)' }}>
+              <Hash size={11} className="shrink-0" aria-hidden="true" />
+              {displayMeta(detail.nit)}
+              <span className="opacity-40">·</span>
+              <MapPin size={11} className="shrink-0" aria-hidden="true" />
+              {displayMeta(hotel.city)}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+          {detail.address?.trim() && (
+            <p className="flex items-start gap-2 min-w-0">
+              <MapPin size={13} className="shrink-0 mt-0.5 opacity-70" aria-hidden="true" />
+              <span className="line-clamp-2">{detail.address}</span>
+            </p>
           )}
-        </p>
-        <p className="text-sm truncate" style={{ color: 'var(--text-muted)' }}>
-          {hotel.city ?? '—'}
-        </p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            {detail.phone?.trim() && (
+              <span className="inline-flex items-center gap-1.5 min-w-0">
+                <Phone size={12} className="shrink-0 opacity-70" aria-hidden="true" />
+                <span className="truncate">{detail.phone}</span>
+              </span>
+            )}
+            {detail.email?.trim() && (
+              <span className="inline-flex items-center gap-1.5 min-w-0">
+                <Mail size={12} className="shrink-0 opacity-70" aria-hidden="true" />
+                <span className="truncate">{detail.email}</span>
+              </span>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="flex gap-1">
-        <button
-          type="button"
-          onClick={() => onEdit(hotel)}
-          className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-          aria-label={`Editar ${hotel.name}`}
-        >
-          <Pencil size={16} />
-        </button>
+
+      <div
+        className="flex flex-wrap gap-2 px-4 py-3 border-t"
+        style={{ borderColor: 'var(--border-default)', background: 'var(--bg-muted)' }}
+      >
+        {canSwitch && !isActive && (
+          <button
+            type="button"
+            disabled={isSwitching}
+            onClick={() => onActivate(hotel.id)}
+            className="flex-1 min-w-[7rem] py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-60 transition-opacity hover:opacity-90"
+            style={{ background: 'var(--color-primary)' }}
+          >
+            Activar
+          </button>
+        )}
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => onEdit(hotel)}
+            className={cn(
+              'py-2 rounded-lg text-xs font-medium border transition-colors hover:opacity-90',
+              canSwitch && !isActive ? 'px-3' : 'flex-1 min-w-[5rem]',
+            )}
+            style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
+          >
+            <span className="inline-flex items-center justify-center gap-1.5">
+              <Pencil size={12} aria-hidden="true" />
+              Editar
+            </span>
+          </button>
+        )}
         {canDelete && (
           <button
             type="button"
             onClick={() => onDelete(hotel)}
-            className="p-2 rounded-lg hover:bg-red-50 text-red-600"
+            className="py-2 px-3 rounded-lg text-xs font-medium border transition-colors hover:opacity-90"
+            style={{ borderColor: '#FECACA', color: '#DC2626' }}
             aria-label={`Eliminar ${hotel.name}`}
           >
-            <Trash2 size={16} />
+            <Trash2 size={12} className="inline" aria-hidden="true" />
           </button>
         )}
       </div>
+    </article>
+  )
+}
+
+function HotelsEmptyState({
+  canManage,
+  onCreate,
+}: {
+  readonly canManage: boolean
+  readonly onCreate: () => void
+}) {
+  return (
+    <div
+      className="rounded-xl py-12 px-6 text-center"
+      style={{ background: 'var(--bg-muted)', border: '1px dashed var(--border-default)' }}
+    >
+      <Network size={32} className="mx-auto mb-3" style={{ color: 'var(--text-muted)' }} />
+      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+        Sin establecimientos registrados
+      </p>
+      <p className="text-xs mt-1 max-w-sm mx-auto" style={{ color: 'var(--text-muted)' }}>
+        Crea el primer hotel de la red para configurar habitaciones, tarifas y operación multitenant.
+      </p>
+      {canManage && (
+        <button
+          type="button"
+          onClick={onCreate}
+          className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white"
+          style={{ background: 'var(--color-primary)' }}
+        >
+          <Plus size={14} />
+          Crear primer hotel
+        </button>
+      )}
     </div>
   )
 }
@@ -243,16 +437,25 @@ export default function HotelesTab() {
   const { hasPermission } = useAuth()
   const canManage = hasPermission('manage_hotels')
   const qc = useQueryClient()
-  const currentHotelId = useHotelStore(s => s.currentHotelId)
+  const currentHotelId = useHotelStore((s) => s.currentHotelId)
+  const canSwitchHotel = useHotelStore((s) => s.canSwitchHotel)
+  const isSwitchingHotel = useHotelStore((s) => s.isSwitchingHotel)
+  const switchHotel = useSwitchHotel()
 
   const { data: hotels = [], isLoading } = useQuery({
     queryKey: hotelQueryKey('admin', 'hotels'),
     queryFn: getAdminHotelsApi,
   })
 
+  const [search, setSearch] = useState('')
   const [form, setForm] = useState<HotelForm>(EMPTY)
   const [editing, setEditing] = useState<HotelSummary | null>(null)
   const [open, setOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<HotelSummary | null>(null)
+
+  const activeHotel = hotels.find((h) => h.id === currentHotelId)
+  const filteredHotels = useMemo(() => filterHotels(hotels, search), [hotels, search])
+  const showSearch = hotels.length > 1
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: hotelQueryKey('admin', 'hotels') })
@@ -290,8 +493,14 @@ export default function HotelesTab() {
     setOpen(true)
   }
 
-  const handleDelete = (hotel: HotelSummary) => {
-    if (confirm(`¿Eliminar "${hotel.name}"?`)) deleteMut.mutate(hotel.id)
+  const confirmDelete = (hotel: HotelSummary) => {
+    deleteMut.mutate(hotel.id, { onSuccess: () => setDeleteTarget(null) })
+  }
+
+  const handleActivate = (hotelId: string) => {
+    switchHotel(hotelId).catch(() => {
+      toast.error('No se pudo cambiar de hotel.')
+    })
   }
 
   const submit = (e: SubmitEvent<HTMLFormElement>) => {
@@ -304,59 +513,187 @@ export default function HotelesTab() {
   }
 
   const handleFieldChange = (field: FormFieldKey, value: string) => {
-    setForm(f => ({ ...f, [field]: value }))
+    setForm((f) => ({ ...f, [field]: value }))
   }
-
-  if (isLoading) return <SkeletonText lines={6} />
 
   const saving = createMut.isPending || updateMut.isPending
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 max-w-5xl pb-4">
+      <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
-            Establecimientos
-          </h2>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            Hoteles a los que tienes acceso. El hotel activo se cambia desde el encabezado.
+          <h1 className="text-lg font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Red de hoteles
+          </h1>
+          <p className="text-sm mt-1 max-w-xl" style={{ color: 'var(--text-muted)' }}>
+            Establecimientos de la plataforma. El hotel activo se cambia desde el menú lateral y define
+            los datos operativos que ves en el resto del sistema.
           </p>
         </div>
         {canManage && (
           <button
             type="button"
             onClick={openCreate}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white"
+            className="shrink-0 inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
             style={{ background: 'var(--color-primary)' }}
           >
-            <Plus size={16} /> Nuevo hotel
+            <Plus size={15} />
+            Nuevo hotel
           </button>
         )}
+      </header>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {isLoading
+          ? KPI_SKELETON_KEYS.map((key) => (
+            <div key={key} className="h-[84px] rounded-xl animate-pulse" style={{ background: 'var(--bg-input)' }} />
+          ))
+          : (
+            <>
+              <KpiCard
+                label="Establecimientos"
+                value={hotels.length}
+                sub={hotels.length === 1 ? '1 hotel en la red' : `${hotels.length} hoteles en la red`}
+                icon={Network}
+                color="var(--color-primary)"
+                colorBg="var(--color-primary-light)"
+              />
+              <KpiCard
+                label="Hotel activo"
+                value={activeHotel?.name ?? '—'}
+                sub={canSwitchHotel && hotels.length > 1 ? 'Cámbialo en el menú lateral' : 'Sesión actual'}
+                icon={Building2}
+                color="#059669"
+                colorBg="#D1FAE5"
+              />
+            </>
+          )}
       </div>
 
-      <div className="grid gap-3">
-        {hotels.map(hotel => (
-          <HotelCard
-            key={hotel.id}
-            hotel={hotel}
-            isActive={hotel.id === currentHotelId}
-            canDelete={canManage && hotels.length > 1}
-            onEdit={openEdit}
-            onDelete={handleDelete}
-          />
-        ))}
-      </div>
+      <section
+        className={cn('rounded-xl shadow-sm flex flex-col min-h-0', isLoading && 'opacity-80')}
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
+      >
+        <div
+          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-b"
+          style={{ borderColor: 'var(--border-default)' }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Network size={16} style={{ color: 'var(--color-primary)' }} />
+            <span className="text-sm font-medium truncate" style={{ color: 'var(--text-primary)' }}>
+              Catálogo de establecimientos
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {!isLoading && (
+              <span
+                className="text-xs font-medium px-2.5 py-1 rounded-full"
+                style={{ background: 'var(--bg-muted)', color: 'var(--text-secondary)' }}
+              >
+                {filteredHotels.length} / {hotels.length}
+              </span>
+            )}
+          </div>
+        </div>
 
-      {open && (
-        <HotelFormModal
-          editing={editing}
-          form={form}
-          saving={saving}
-          onClose={() => setOpen(false)}
-          onChange={handleFieldChange}
-          onSubmit={submit}
-        />
-      )}
+        {showSearch && !isLoading && (
+          <div className="px-4 pt-3">
+            <div className="relative">
+              <Search
+                size={15}
+                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: 'var(--text-muted)' }}
+              />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nombre, NIT, ciudad…"
+                aria-label="Buscar hotel"
+                className={cn(personInputClass, 'pl-9 pr-8 py-2 text-sm')}
+                style={personInputStyle}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  aria-label="Limpiar búsqueda"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:opacity-70"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="p-4">
+          {isLoading && <SkeletonText lines={4} />}
+
+          {!isLoading && hotels.length === 0 && (
+            <HotelsEmptyState canManage={canManage} onCreate={openCreate} />
+          )}
+
+          {!isLoading && hotels.length > 0 && filteredHotels.length === 0 && (
+            <div
+              className="rounded-xl py-10 px-6 text-center"
+              style={{ background: 'var(--bg-muted)', border: '1px dashed var(--border-default)' }}
+            >
+              <Search size={28} className="mx-auto mb-2 opacity-50" style={{ color: 'var(--text-muted)' }} />
+              <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                Sin resultados
+              </p>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                Prueba otro término o limpia la búsqueda.
+              </p>
+            </div>
+          )}
+
+          {!isLoading && filteredHotels.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {filteredHotels.map((hotel) => (
+                <HotelCard
+                  key={hotel.id}
+                  hotel={hotel}
+                  isActive={hotel.id === currentHotelId}
+                  canManage={canManage}
+                  canDelete={canManage && hotels.length > 1}
+                  canSwitch={canSwitchHotel && hotels.length > 1}
+                  isSwitching={isSwitchingHotel}
+                  onActivate={handleActivate}
+                  onEdit={openEdit}
+                  onDelete={setDeleteTarget}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <HotelFormModal
+        open={open}
+        editing={editing}
+        form={form}
+        saving={saving}
+        onClose={() => setOpen(false)}
+        onChange={handleFieldChange}
+        onSubmit={submit}
+      />
+
+      <DeleteConfirmDialog
+        target={deleteTarget}
+        title="Eliminar hotel"
+        message={
+          deleteTarget
+            ? `¿Estás seguro de eliminar el hotel ${deleteTarget.name}? Esta acción no se puede deshacer.`
+            : ''
+        }
+        confirmLabel="Sí, eliminar"
+        loading={deleteMut.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }

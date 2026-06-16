@@ -15,6 +15,7 @@ import { useRooms } from '@/hooks/useRooms'
 import { useAuth } from '@/hooks/useAuth'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { SkeletonTable } from '@/components/ui/Skeleton'
+import { DeleteConfirmDialog } from '@/components/ui/DeleteConfirmDialog'
 import { cn } from '@/lib/cn'
 import type { Minibar, MinibarProduct, Room, RoomMinibar } from '@/types'
 
@@ -792,6 +793,7 @@ function CatalogueSection() {
   const [modalProduct, setModalProduct] = useState<MinibarProduct | null | undefined>(undefined)
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [deleteProductTarget, setDeleteProductTarget] = useState<MinibarProduct | null>(null)
 
   const { data: products = [], isLoading } = useMinibarProducts()
   const { createMutation, updateMutation, deleteMutation } = useMinibarProductMutations()
@@ -951,7 +953,7 @@ function CatalogueSection() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => { if (confirm('¿Desactivar este producto?')) deleteMutation.mutate(p.id) }}
+                        onClick={() => setDeleteProductTarget(p)}
                         className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500">
                         <Trash2 size={14} />
                       </button>
@@ -994,6 +996,20 @@ function CatalogueSection() {
           saving={createMutation.isPending || updateMutation.isPending}
         />
       )}
+
+      <DeleteConfirmDialog
+        target={deleteProductTarget}
+        title="Desactivar producto"
+        message={
+          deleteProductTarget
+            ? `¿Estás seguro de desactivar ${deleteProductTarget.name}?`
+            : ''
+        }
+        confirmLabel="Sí, desactivar"
+        loading={deleteMutation.isPending}
+        onConfirm={(p) => deleteMutation.mutate(p.id, { onSuccess: () => setDeleteProductTarget(null) })}
+        onClose={() => setDeleteProductTarget(null)}
+      />
     </div>
   )
 }
@@ -1155,6 +1171,7 @@ function MinibarsSection() {
   const [savingRestock, setSavingRestock] = useState(false)
   const [returning, setReturning] = useState(false)
   const [savingReturn, setSavingReturn] = useState(false)
+  const [deleteMinibarTarget, setDeleteMinibarTarget] = useState<Minibar | null>(null)
 
   const { data: roomMinibars = [], isLoading: loadingItems } = useRoomMinibars(selectedRoomId)
 
@@ -1194,12 +1211,11 @@ function MinibarsSection() {
     setShowNew(false)
   }
 
-  const handleDelete = (m: Minibar) => {
-    const label = m.name ?? `Hab. ${m.room?.number ?? ''}`
-    if (!confirm(`¿Eliminar minibar "${label}"? Sus productos asignados se desvinculan.`)) return
+  const confirmDeleteMinibar = (m: Minibar) => {
     deleteMutation.mutate(m.id, {
       onSuccess: () => {
         if (selectedRoomId === m.room_id) setSelectedRoomId(null)
+        setDeleteMinibarTarget(null)
       },
     })
   }
@@ -1358,7 +1374,7 @@ function MinibarsSection() {
                 {canManage && (
                   <button
                     type="button"
-                    onClick={() => handleDelete(m)}
+                    onClick={() => setDeleteMinibarTarget(m)}
                     className="p-1.5 mr-2 rounded-lg hover:bg-red-50 transition-colors text-red-500 shrink-0"
                     title="Eliminar minibar">
                     <Trash2 size={14} />
@@ -1453,6 +1469,20 @@ function MinibarsSection() {
           saving={savingReturn}
         />
       )}
+
+      <DeleteConfirmDialog
+        target={deleteMinibarTarget}
+        title="Eliminar minibar"
+        message={
+          deleteMinibarTarget
+            ? `¿Estás seguro de eliminar el minibar "${deleteMinibarTarget.name ?? `Hab. ${deleteMinibarTarget.room?.number ?? ''}`}"? Sus productos asignados se desvincularán.`
+            : ''
+        }
+        confirmLabel="Sí, eliminar"
+        loading={deleteMutation.isPending}
+        onConfirm={confirmDeleteMinibar}
+        onClose={() => setDeleteMinibarTarget(null)}
+      />
     </div>
   )
 }

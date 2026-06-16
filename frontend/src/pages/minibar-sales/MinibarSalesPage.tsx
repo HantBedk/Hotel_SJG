@@ -216,7 +216,7 @@ function Catalog({ products, loading, cartById, onAdd }: CatalogProps) {
 
   return (
     <div
-      className="rounded-xl border flex flex-col h-full min-h-0"
+      className="rounded-xl border flex flex-col lg:h-full lg:min-h-0"
       style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
     >
       <div className="p-3 border-b" style={{ borderColor: 'var(--border-default)' }}>
@@ -295,7 +295,7 @@ function Cart({
 
   return (
     <div
-      className="rounded-xl border flex flex-col h-full min-h-0"
+      className="rounded-xl border flex flex-col lg:h-full lg:min-h-0"
       style={{ background: 'var(--bg-surface)', borderColor: 'var(--border-default)' }}
     >
       <div
@@ -1284,7 +1284,7 @@ export default function MinibarSalesPage() {
   const saving = createMutation.isPending || payMutation.isPending
 
   return (
-    <div className="h-full flex flex-col gap-3">
+    <div className="flex flex-col gap-3 lg:h-full lg:min-h-0">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
@@ -1299,7 +1299,7 @@ export default function MinibarSalesPage() {
             <button
               key={k}
               onClick={() => setTab(k)}
-              className="px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5"
+              className="compact-control px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5"
               style={
                 tab === k
                   ? { background: 'var(--bg-surface)', color: 'var(--color-primary)', boxShadow: '0 1px 3px rgba(0,0,0,.08)' }
@@ -1313,7 +1313,7 @@ export default function MinibarSalesPage() {
       </div>
 
       {tab === 'pos' ? (
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="flex flex-col gap-3 lg:flex-1 lg:min-h-0 lg:grid lg:grid-cols-3">
           <div className="lg:col-span-2 min-h-0">
             <Catalog
               products={products}

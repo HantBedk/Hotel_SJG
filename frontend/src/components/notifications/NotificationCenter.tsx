@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, Bell, CheckCheck, AlertTriangle, Package, Wrench, ChevronRight } from 'lucide-react'
+import { X, Bell, CheckCheck, AlertTriangle, Package, Wrench, ChevronRight, Ban } from 'lucide-react'
 import { useNotifications } from '@/hooks/useNotifications'
 import { Skeleton } from '@/components/ui/Skeleton'
 import type { AppNotification } from '@/types'
@@ -10,6 +10,9 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   expiring_product: <AlertTriangle size={16} className="text-orange-500" />,
   maintenance_due: <Wrench size={16} className="text-blue-500" />,
   reservation_alert: <Bell size={16} className="text-purple-500" />,
+  stay_void_request: <Ban size={16} className="text-red-500" />,
+  stay_void_approved: <CheckCheck size={16} className="text-green-500" />,
+  stay_void_rejected: <AlertTriangle size={16} className="text-amber-500" />,
 }
 
 const NOTIF_SKELETON_KEYS = [

@@ -30,11 +30,15 @@ export function useActivityActions() {
   })
 }
 
-export function usePaymentsHistory(filters: PaymentFilters = {}) {
+export function usePaymentsHistory(
+  filters: PaymentFilters = {},
+  options: { keepPrevious?: boolean } = {},
+) {
   return useQuery({
     queryKey: hotelQueryKey('payments-history', filters),
     queryFn: () => getPaymentsHistoryApi(filters),
-    placeholderData: prev => prev,
+    placeholderData: options.keepPrevious ? (prev) => prev : undefined,
+    staleTime: 0,
   })
 }
 

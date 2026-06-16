@@ -4,6 +4,7 @@ import { useAssets, useAssetMutations } from '@/hooks/useInventory'
 import { useAuth } from '@/hooks/useAuth'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { SkeletonTable } from '@/components/ui/Skeleton'
+import { DeleteConfirmDialog } from '@/components/ui/DeleteConfirmDialog'
 import { cn } from '@/lib/cn'
 import type { Asset, AssetLocationType, AssetStatus } from '@/types'
 
@@ -182,6 +183,7 @@ export default function ActivosTab() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [modalAsset, setModalAsset] = useState<Asset | null | undefined>(undefined)
+  const [retireTarget, setRetireTarget] = useState<Asset | null>(null)
 
   const { data, isLoading } = useAssets({ search: search || undefined, status: statusFilter || undefined })
   const assets = data?.data ?? []
@@ -257,7 +259,7 @@ export default function ActivosTab() {
                         {asset.status !== 'retired' && (
                           <button
                             type="button"
-                            onClick={() => { if (confirm('¿Retirar este activo?')) retireMutation.mutate(asset.id) }}
+                            onClick={() => setRetireTarget(asset)}
                             className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-red-500"
                             aria-label="Retirar activo"
                           >
@@ -325,6 +327,20 @@ export default function ActivosTab() {
           saving={createMutation.isPending || updateMutation.isPending}
         />
       )}
+
+      <DeleteConfirmDialog
+        target={retireTarget}
+        title="Retirar activo"
+        message={
+          retireTarget
+            ? `¿Estás seguro de retirar ${retireTarget.name}?`
+            : ''
+        }
+        confirmLabel="Sí, retirar"
+        loading={retireMutation.isPending}
+        onConfirm={(asset) => retireMutation.mutate(asset.id, { onSuccess: () => setRetireTarget(null) })}
+        onClose={() => setRetireTarget(null)}
+      />
     </div>
   )
 }

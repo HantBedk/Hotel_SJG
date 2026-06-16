@@ -123,6 +123,14 @@ export const NAV_MODULES: readonly NavModule[] = [
         icon: ShoppingCart,
         permissions: ['check_in'],
       },
+      {
+        id: 'income',
+        to: '/income',
+        label: 'Ingresos',
+        pageTitle: 'Ingresos',
+        icon: DollarSign,
+        permissions: ['view_reports'],
+      },
     ],
   },
   {
@@ -136,20 +144,6 @@ export const NAV_MODULES: readonly NavModule[] = [
         pageTitle: 'Inventario',
         icon: Package,
         permissions: ['view_inventory', 'manage_inventory'],
-      },
-    ],
-  },
-  {
-    id: 'finance',
-    label: 'Finanzas',
-    items: [
-      {
-        id: 'income',
-        to: '/income',
-        label: 'Ingresos',
-        pageTitle: 'Ingresos',
-        icon: DollarSign,
-        permissions: ['view_reports'],
       },
     ],
   },
@@ -171,6 +165,15 @@ export const NAV_MODULES: readonly NavModule[] = [
     id: 'property',
     label: 'Propiedad',
     items: [
+      {
+        id: 'settings-hotels',
+        to: '/settings/hotels',
+        label: 'Red de hoteles',
+        pageTitle: 'Red de hoteles',
+        icon: Network,
+        permissions: ['view_hotels'],
+        end: true,
+      },
       {
         id: 'settings-hotel',
         to: '/settings/hotel',
@@ -237,15 +240,6 @@ export const NAV_MODULES: readonly NavModule[] = [
     id: 'platform',
     label: 'Plataforma',
     items: [
-      {
-        id: 'settings-hotels',
-        to: '/settings/hotels',
-        label: 'Red de hoteles',
-        pageTitle: 'Red de hoteles',
-        icon: Network,
-        permissions: ['view_hotels'],
-        end: true,
-      },
       {
         id: 'settings-users',
         to: '/settings/users',

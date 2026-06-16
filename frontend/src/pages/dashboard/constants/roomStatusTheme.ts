@@ -17,3 +17,9 @@ export const ROOM_LABEL: Record<RoomStatus, string> = {
   maintenance: 'Mant.',
   blocked: 'Bloqueada',
 }
+
+/** Fondo suave para celdas del plano (hex + alpha). */
+export function roomStatusSoftBg(status: RoomStatus): string {
+  const base = ROOM_COLOR[status] ?? '#94A3B8'
+  return `${base}1A`
+}

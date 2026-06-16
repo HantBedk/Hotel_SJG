@@ -5,6 +5,7 @@ import { useRooms } from '@/hooks/useRooms'
 import { useReservations } from '@/hooks/useReservations'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { cn } from '@/lib/cn'
+import { calendarNightsBetween } from '@/lib/formatDate'
 import type { Guest, Room } from '@/types'
 
 interface Props {
@@ -74,11 +75,10 @@ export default function BulkReservationWizard({ onClose, onSuccess }: Props) {
 
   const { createBulk, isCreatingBulk } = useReservations()
 
-  const nights = useMemo(() => {
-    const d1 = new Date(startDate)
-    const d2 = new Date(endDate)
-    return Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86_400_000))
-  }, [startDate, endDate])
+  const nights = useMemo(
+    () => Math.max(0, calendarNightsBetween(startDate, endDate)),
+    [startDate, endDate],
+  )
 
   const total = useMemo(() => {
     return selectedRoomIds.reduce((sum, id) => sum + (Number(prices[id]) || 0) * nights, 0)

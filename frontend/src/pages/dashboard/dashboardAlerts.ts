@@ -1,7 +1,7 @@
 import type { AppNotification, Room } from '@/types'
 
 const ACTIVE_ALERT_TYPES =
-  /inventory|stock|expir|maintenance|asset|repair|room_inconsistency|payment_cancelled|minibar_cancelled|daily_summary/i
+  /inventory|stock|expir|maintenance|asset|repair|room_inconsistency|payment_cancelled|minibar_cancelled|daily_summary|stay_void/i
 
 const PERSISTENT_ROOM_ALERT_TYPES = new Set(['room_cleaning', 'room_maintenance'])
 

@@ -16,6 +16,7 @@ import {
 } from '@/lib/personaRoles'
 import { PersonaRoleBadgeList } from '@/components/settings/PersonaRoleBadge'
 import { SkeletonText } from '@/components/ui/Skeleton'
+import { DeleteConfirmDialog } from '@/components/ui/DeleteConfirmDialog'
 import { PersonaFormModal, type PersonaFormData } from '../components/PersonaFormModal'
 import type { AdminPersona } from '@/types/admin'
 import { cn } from '@/lib/cn'
@@ -135,27 +136,23 @@ function LoginBadge({ persona }: { readonly persona: AdminPersona }) {
 interface PersonaRowProps {
   readonly persona: AdminPersona
   readonly isSuperadmin: boolean
-  readonly deletingId: string | null
   readonly onEdit: (persona: AdminPersona) => void
-  readonly onDelete: (id: string) => void
+  readonly onDelete: (persona: AdminPersona) => void
 }
 
-function deleteButtonTitle(persona: AdminPersona, isConfirmingDelete: boolean): string {
+function deleteButtonTitle(persona: AdminPersona): string {
   if (persona.has_login) return 'Tiene cuenta de usuario'
-  if (isConfirmingDelete) return 'Clic para confirmar'
   return 'Eliminar'
 }
 
-function PersonaRow({ persona, isSuperadmin, deletingId, onEdit, onDelete }: PersonaRowProps) {
+function PersonaRow({ persona, isSuperadmin, onEdit, onDelete }: PersonaRowProps) {
   const editable = canEditPersona(persona, isSuperadmin)
-  const isConfirmingDelete = deletingId === persona.id
 
   return (
     <tr
       className={cn(
         'group transition-colors',
         editable && 'cursor-pointer hover:bg-[var(--bg-base)]',
-        isConfirmingDelete && 'bg-red-50/50',
       )}
       style={{ borderBottom: '1px solid var(--border-default)' }}
       onClick={editable ? () => onEdit(persona) : undefined}
@@ -227,15 +224,12 @@ function PersonaRow({ persona, isSuperadmin, deletingId, onEdit, onDelete }: Per
             </button>
             <button
               type="button"
-              onClick={() => onDelete(persona.id)}
+              onClick={() => onDelete(persona)}
               disabled={persona.has_login}
-              className={cn(
-                'p-1.5 rounded-lg hover:bg-[var(--bg-input)] transition-colors disabled:opacity-30',
-                isConfirmingDelete && 'bg-red-100',
-              )}
-              style={{ color: isConfirmingDelete ? '#DC2626' : 'var(--text-muted)' }}
-              aria-label={isConfirmingDelete ? 'Confirmar eliminación' : 'Eliminar'}
-              title={deleteButtonTitle(persona, isConfirmingDelete)}
+              className="compact-control p-1.5 rounded-lg hover:bg-[var(--bg-input)] transition-colors disabled:opacity-30"
+              style={{ color: 'var(--text-muted)' }}
+              aria-label="Eliminar"
+              title={deleteButtonTitle(persona)}
             >
               <Trash2 size={15} />
             </button>
@@ -263,7 +257,6 @@ function PersonasTableBody({
   search,
   roleFilter,
   isSuperadmin,
-  deletingId,
   onEdit,
   onDelete,
   onCreate,
@@ -273,9 +266,8 @@ function PersonasTableBody({
   readonly search: string
   readonly roleFilter: string
   readonly isSuperadmin: boolean
-  readonly deletingId: string | null
   readonly onEdit: (persona: AdminPersona) => void
-  readonly onDelete: (id: string) => void
+  readonly onDelete: (persona: AdminPersona) => void
   readonly onCreate: () => void
 }) {
   if (isLoading) {
@@ -344,7 +336,6 @@ function PersonasTableBody({
               key={persona.id}
               persona={persona}
               isSuperadmin={isSuperadmin}
-              deletingId={deletingId}
               onEdit={onEdit}
               onDelete={onDelete}
             />
@@ -364,7 +355,7 @@ export default function PersonasTab() {
   const [roleFilter, setRoleFilter] = useState('')
   const [page, setPage] = useState(1)
   const [modal, setModal] = useState<{ persona: AdminPersona | null } | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<AdminPersona | null>(null)
 
   const filters = useMemo(() => ({
     search: search.length >= 2 ? search : undefined,
@@ -396,8 +387,6 @@ export default function PersonasTab() {
     return PERSONA_ROLE_FILTER_OPTIONS.filter((o) => o.value !== 'superadmin')
   }, [isSuperadmin])
 
-  const deletingPersona = personas.find((p) => p.id === deletingId)
-
   const handleSave = (form: PersonaFormData) => {
     if (!hasValidHotelAssignment(form.roles, form.hotel_ids, assignableHotels.length)) {
       toast.error('Selecciona al menos un hotel para los roles de personal.')
@@ -420,11 +409,10 @@ export default function PersonasTab() {
     }
   }
 
-  const handleDelete = (id: string) => {
-    if (deletingId !== id) { setDeletingId(id); return }
-    remove.mutate(id, {
-      onSuccess: () => { toast.success('Persona eliminada.'); setDeletingId(null) },
-      onError: (err) => { toast.error(extractApiError(err, 'Error al eliminar persona.')); setDeletingId(null) },
+  const confirmDelete = (persona: AdminPersona) => {
+    remove.mutate(persona.id, {
+      onSuccess: () => { toast.success('Persona eliminada.'); setDeleteTarget(null) },
+      onError: (err) => { toast.error(extractApiError(err, 'Error al eliminar persona.')); setDeleteTarget(null) },
     })
   }
 
@@ -527,25 +515,6 @@ export default function PersonasTab() {
         )}
       </div>
 
-      {deletingId && deletingPersona && (
-        <div
-          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
-          style={{ borderColor: '#FECACA', background: '#FEF2F2', color: '#991B1B' }}
-        >
-          <p className="text-sm">
-            ¿Eliminar a <strong>{deletingPersona.full_name}</strong>? Pulsa eliminar otra vez para confirmar.
-          </p>
-          <button
-            type="button"
-            onClick={() => setDeletingId(null)}
-            className="text-sm px-3 py-1.5 rounded-lg border"
-            style={{ borderColor: '#FECACA', color: '#991B1B', background: '#fff' }}
-          >
-            Cancelar
-          </button>
-        </div>
-      )}
-
       <div
         className="rounded-xl overflow-hidden"
         style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
@@ -556,9 +525,8 @@ export default function PersonasTab() {
           search={search}
           roleFilter={roleFilter}
           isSuperadmin={isSuperadmin}
-          deletingId={deletingId}
           onEdit={(persona) => setModal({ persona })}
-          onDelete={handleDelete}
+          onDelete={setDeleteTarget}
           onCreate={() => setModal({ persona: null })}
         />
       </div>
@@ -605,6 +573,20 @@ export default function PersonasTab() {
           isSaving={isSaving}
         />
       )}
+
+      <DeleteConfirmDialog
+        target={deleteTarget}
+        title="Eliminar persona"
+        message={
+          deleteTarget
+            ? `¿Estás seguro de eliminar a ${deleteTarget.full_name}? Esta acción no se puede deshacer.`
+            : ''
+        }
+        confirmLabel="Sí, eliminar"
+        loading={remove.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }

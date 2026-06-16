@@ -4,6 +4,7 @@ import { useAdminSeasons, useSeasonMutations } from '@/hooks/useAdmin'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import type { Season } from '@/types'
 import { SkeletonText } from '@/components/ui/Skeleton'
+import { DeleteConfirmDialog } from '@/components/ui/DeleteConfirmDialog'
 import { cn } from '@/lib/cn'
 
 type SeasonForm = {
@@ -256,6 +257,7 @@ export default function TemporadasTab() {
   const [form, setForm] = useState<SeasonForm>(EMPTY)
   const [editing, setEditing] = useState<Season | null>(null)
   const [open, setOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Season | null>(null)
 
   const openCreate = () => {
     setEditing(null)
@@ -282,10 +284,9 @@ export default function TemporadasTab() {
     close()
   }
 
-  const del = async (season: Season) => {
-    if (confirm(`¿Eliminar temporada "${season.name}"?`)) {
-      await remove.mutateAsync(season.id)
-    }
+  const confirmDelete = async (season: Season) => {
+    await remove.mutateAsync(season.id)
+    setDeleteTarget(null)
   }
 
   const handleFieldChange = (field: SeasonFormField, value: string) => {
@@ -327,7 +328,7 @@ export default function TemporadasTab() {
           </thead>
           <tbody>
             {seasons.map(season => (
-              <SeasonTableRow key={season.id} season={season} onEdit={openEdit} onDelete={del} />
+              <SeasonTableRow key={season.id} season={season} onEdit={openEdit} onDelete={setDeleteTarget} />
             ))}
           </tbody>
         </table>
@@ -344,6 +345,20 @@ export default function TemporadasTab() {
           onSubmit={submit}
         />
       )}
+
+      <DeleteConfirmDialog
+        target={deleteTarget}
+        title="Eliminar temporada"
+        message={
+          deleteTarget
+            ? `¿Estás seguro de eliminar la temporada ${deleteTarget.name}? Esta acción no se puede deshacer.`
+            : ''
+        }
+        confirmLabel="Sí, eliminar"
+        loading={remove.isPending}
+        onConfirm={confirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }

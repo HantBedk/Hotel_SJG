@@ -9,10 +9,10 @@ class HotelSeeder extends Seeder
 {
     public function run(): void
     {
-        Hotel::firstOrCreate(
+        Hotel::updateOrCreate(
             ['nit' => '900000000-0'],
             [
-                'name'              => 'Hotel San José del Guaviare',
+                'name'              => 'Hotel de Prueba',
                 'address'           => 'Carrera 1 # 1-01',
                 'phone'             => '+57 300 000 0000',
                 'email'             => 'hotel@sjg.com',

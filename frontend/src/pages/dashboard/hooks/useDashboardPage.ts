@@ -6,6 +6,7 @@ import { useStays } from '@/hooks/useStays'
 import { useActivityLogs } from '@/hooks/useActivity'
 import { useNotifications } from '@/hooks/useNotifications'
 import { useAuth } from '@/hooks/useAuth'
+import { useStayVoidRequests } from '@/hooks/useStayVoidRequests'
 import { useReverb } from '@/hooks/useReverb'
 import { useHotelStore } from '@/store/hotelStore'
 import { isPersistentRoomAlert } from '../dashboardAlerts'
@@ -25,6 +26,18 @@ export function useDashboardPage() {
   const { data: activityData } = useActivityLogs({ page: 1 }, { enabled: canViewActivity })
   const { data: housekeepers = [] } = useHousekeepers()
   const canCheckOut = hasPermission('check_out')
+  const canApproveVoid = hasPermission('approve_stay_void')
+  const {
+    requestVoid,
+    isRequesting,
+    requests: pendingVoidRequests,
+    total: pendingVoidTotal,
+    approve,
+    reject,
+    isApproving,
+    isRejecting,
+  } = useStayVoidRequests('pending', canApproveVoid)
+  const [reviewVoidId, setReviewVoidId] = useState<string | null>(null)
 
   useReverb<{ id: string; status: RoomStatus }>({
     channel: currentHotelId ? `hotel.${currentHotelId}.rooms` : 'hotel.rooms',
@@ -102,6 +115,14 @@ export function useDashboardPage() {
       }
     }
 
+    if (n.type === 'stay_void_request') {
+      const voidRequestId = (n.payload as { void_request_id?: string } | null)?.void_request_id
+      if (voidRequestId) {
+        setReviewVoidId(voidRequestId)
+        return
+      }
+    }
+
     if (n.action_url) navigate(n.action_url)
   }
 
@@ -141,5 +162,16 @@ export function useDashboardPage() {
     extend,
     activeStays,
     navigate,
+    requestVoid,
+    isRequestingVoid: isRequesting,
+    canApproveVoid,
+    pendingVoidTotal,
+    pendingVoidRequests,
+    reviewVoidId,
+    setReviewVoidId,
+    approveVoid: approve,
+    rejectVoid: reject,
+    isApprovingVoid: isApproving,
+    isRejectingVoid: isRejecting,
   }
 }

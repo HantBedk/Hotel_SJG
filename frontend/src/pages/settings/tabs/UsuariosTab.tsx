@@ -3,6 +3,7 @@ import { Plus, Pencil, UserX } from 'lucide-react'
 import { useAdminUsers, useAdminUserMutations, useAdminRoles } from '@/hooks/useAdmin'
 import type { AdminUser } from '@/types'
 import { SkeletonText } from '@/components/ui/Skeleton'
+import { DeleteConfirmDialog } from '@/components/ui/DeleteConfirmDialog'
 import { useAuth } from '@/hooks/useAuth'
 import { useHotelStore } from '@/store/hotelStore'
 import { emptyPersonName, personNameFromGuest } from '@/types/person'
@@ -235,6 +236,7 @@ export default function UsuariosTab() {
   const [form, setForm] = useState<UserForm>(EMPTY)
   const [editing, setEditing] = useState<AdminUser | null>(null)
   const [open, setOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
 
   const isSuperadmin = hasRole('superadmin')
   const visibleUsers = filterVisibleUsers(users, isSuperadmin)
@@ -275,8 +277,8 @@ export default function UsuariosTab() {
     close()
   }
 
-  const deactivate = (user: AdminUser) => {
-    if (confirm(`¿Desactivar a "${user.name}"?`)) remove.mutate(user.id)
+  const confirmDeactivate = (user: AdminUser) => {
+    remove.mutate(user.id, { onSuccess: () => setDeleteTarget(null) })
   }
 
   const saving = create.isPending || update.isPending
@@ -319,7 +321,7 @@ export default function UsuariosTab() {
                 currentUserId={me?.id}
                 isSuperadmin={isSuperadmin}
                 onEdit={openEdit}
-                onDeactivate={deactivate}
+                onDeactivate={setDeleteTarget}
               />
             ))}
           </tbody>
@@ -339,6 +341,20 @@ export default function UsuariosTab() {
           onSubmit={submit}
         />
       )}
+
+      <DeleteConfirmDialog
+        target={deleteTarget}
+        title="Desactivar usuario"
+        message={
+          deleteTarget
+            ? `¿Estás seguro de desactivar a ${deleteTarget.name}? No podrá iniciar sesión.`
+            : ''
+        }
+        confirmLabel="Sí, desactivar"
+        loading={remove.isPending}
+        onConfirm={confirmDeactivate}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }

@@ -43,8 +43,11 @@ class IncomeController extends Controller
         $periodEnd   = $to->copy()->endOfDay();
 
         $breakdown = $this->nightBreakdown->build($from, $to);
+        $nightsCollection = collect($breakdown['nights']);
 
-        $payments = Payment::active()->whereBetween('payment_date', [$periodStart, $periodEnd]);
+        $payments = Payment::active()
+            ->forCurrentHotel()
+            ->whereBetween('payment_date', [$periodStart, $periodEnd]);
         $paymentsReceived = (float) (clone $payments)->sum('amount');
         $paymentsCount    = (clone $payments)->count();
 
@@ -58,8 +61,12 @@ class IncomeController extends Controller
                 'total'  => (float) $payment->total,
             ]);
 
-        $servicesBilled = (float) StayService::whereBetween('applied_at', [$periodStart, $periodEnd])->sum('total');
-        $minibarBilled  = (float) MinibarConsumption::whereBetween('registered_at', [$periodStart, $periodEnd])->sum('total');
+        $servicesBilled = (float) StayService::whereHas('stay')
+            ->whereBetween('applied_at', [$periodStart, $periodEnd])
+            ->sum('total');
+        $minibarBilled  = (float) MinibarConsumption::whereHas('stay')
+            ->whereBetween('registered_at', [$periodStart, $periodEnd])
+            ->sum('total');
 
         $roomsBilled = (float) StayRoom::where('is_active', true)
             ->whereHas('stay', function ($q) use ($periodStart, $periodEnd) {
@@ -69,6 +76,7 @@ class IncomeController extends Controller
             ->value('total');
 
         $recentPayments = Payment::active()
+            ->forCurrentHotel()
             ->with(['stay.guest', 'stay.company:id,name', 'receptionist.persona'])
             ->whereBetween('payment_date', [$periodStart, $periodEnd])
             ->orderByDesc('payment_date')
@@ -94,10 +102,29 @@ class IncomeController extends Controller
                 'to'   => $to->toDateString(),
                 'days' => $from->diffInDays($to) + 1,
             ],
+            'occupancy_summary' => [
+                'total_rooms'              => (int) ($breakdown['tonight']['total_rooms'] ?? 0),
+                'avg_occupancy_pct'        => round((float) $nightsCollection->avg('occupancy_pct'), 1),
+                'total_potential_revenue'  => (float) $nightsCollection->sum('potential_revenue'),
+                'total_room_revenue'       => (float) $nightsCollection->sum('room_revenue'),
+                'revenue_vs_potential_pct' => $nightsCollection->sum('potential_revenue') > 0
+                    ? round(
+                        $nightsCollection->sum('room_revenue') / $nightsCollection->sum('potential_revenue') * 100,
+                        1,
+                    )
+                    : 0.0,
+                'payments_vs_potential_pct' => $nightsCollection->sum('potential_revenue') > 0
+                    ? round($paymentsReceived / $nightsCollection->sum('potential_revenue') * 100, 1)
+                    : 0.0,
+            ],
             'tonight' => [
-                'room_revenue' => (float) $breakdown['tonight']['room_revenue'],
-                'rooms_count'  => (int) $breakdown['tonight']['rooms_count'],
-                'rooms'        => $breakdown['tonight']['rooms'],
+                'room_revenue'             => (float) $breakdown['tonight']['room_revenue'],
+                'rooms_count'              => (int) $breakdown['tonight']['rooms_count'],
+                'total_rooms'              => (int) ($breakdown['tonight']['total_rooms'] ?? 0),
+                'potential_revenue'        => (float) ($breakdown['tonight']['potential_revenue'] ?? 0),
+                'occupancy_pct'            => (float) ($breakdown['tonight']['occupancy_pct'] ?? 0),
+                'revenue_vs_potential_pct' => (float) ($breakdown['tonight']['revenue_vs_potential_pct'] ?? 0),
+                'rooms'                    => $breakdown['tonight']['rooms'],
             ],
             'nights' => $breakdown['nights'],
             'range' => [
@@ -119,7 +146,11 @@ class IncomeController extends Controller
         $periodStart = $from->copy()->startOfDay();
         $periodEnd   = $to->copy()->endOfDay();
 
+        $breakdown   = $this->nightBreakdown->build($from, $to);
+        $nightsByDate = collect($breakdown['nights'])->keyBy('date');
+
         $payments = Payment::active()
+            ->forCurrentHotel()
             ->whereBetween('payment_date', [$periodStart, $periodEnd])
             ->get(['payment_date', 'amount']);
 
@@ -127,12 +158,18 @@ class IncomeController extends Controller
             $byHour = $payments->groupBy(fn ($payment) => (int) $payment->payment_date->hour)
                 ->map(fn ($group) => (float) $group->sum('amount'));
 
+            $dayKey  = $from->toDateString();
+            $dayNight = $nightsByDate->get($dayKey);
+
             $data = [];
             for ($h = 0; $h < 24; $h++) {
                 $data[] = [
-                    'date'  => sprintf('%s %02d:00', $from->toDateString(), $h),
-                    'label' => sprintf('%02dh', $h),
-                    'total' => (float) ($byHour[$h] ?? 0),
+                    'date'          => sprintf('%s %02d:00', $dayKey, $h),
+                    'label'         => sprintf('%02dh', $h),
+                    'total'         => (float) ($byHour[$h] ?? 0),
+                    'expected'      => (float) ($dayNight['potential_revenue'] ?? 0),
+                    'room_revenue'  => (float) ($dayNight['room_revenue'] ?? 0),
+                    'occupancy_pct' => (float) ($dayNight['occupancy_pct'] ?? 0),
                 ];
             }
 
@@ -148,11 +185,15 @@ class IncomeController extends Controller
 
         $data = [];
         for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
-            $key = $d->toDateString();
-            $data[] = [
-                'date'  => $key,
-                'label' => $d->translatedFormat('D d/M'),
-                'total' => (float) ($byDate[$key] ?? 0),
+            $key      = $d->toDateString();
+            $dayNight = $nightsByDate->get($key);
+            $data[]   = [
+                'date'          => $key,
+                'label'         => $d->translatedFormat('D d/M'),
+                'total'         => (float) ($byDate[$key] ?? 0),
+                'expected'      => (float) ($dayNight['potential_revenue'] ?? 0),
+                'room_revenue'  => (float) ($dayNight['room_revenue'] ?? 0),
+                'occupancy_pct' => (float) ($dayNight['occupancy_pct'] ?? 0),
             ];
         }
 

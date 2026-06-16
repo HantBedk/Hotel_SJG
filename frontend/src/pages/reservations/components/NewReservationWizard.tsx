@@ -14,6 +14,7 @@ import { cn } from '@/lib/cn'
 import { PersonNameFieldsInput } from '@/components/person/PersonNameFields'
 import { NationalitySelect } from '@/components/person/NationalitySelect'
 import { emptyPersonName, isPersonNameValid, type PersonNameFields } from '@/types/person'
+import { calendarNightsBetween } from '@/lib/formatDate'
 import type { Guest, Company, Room, DocumentType } from '@/types'
 
 interface Props {
@@ -67,8 +68,7 @@ interface WizardState {
 }
 
 function nightsBetween(start: string, end: string): number {
-  if (!start || !end) return 0
-  return Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86_400_000))
+  return Math.max(0, calendarNightsBetween(start, end))
 }
 
 function addDays(date: string, n: number): string {

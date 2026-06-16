@@ -157,14 +157,10 @@ body {
   display: flex;
 }
 
-/* ── Touch targets mínimos 44×44px (A11y) — botones, no checkboxes ───────── */
-button, [role="button"] {
-  min-height: 44px;
-  min-width: 44px;
-}
-button.icon-sm, a.icon-sm {
-  min-height: 36px;
-  min-width: 36px;
+/* ── Controles compactos (listas, tabs, toggles) — excluidos de touch targets globales ── */
+.compact-control {
+  min-height: unset;
+  min-width: unset;
 }
 
 /* Checkboxes y radios: tamaño estándar; el label absorbe el área táctil en móvil */
@@ -236,11 +232,12 @@ input[type="radio"] {
   background: rgba(0, 0, 0, 0.4);
 }
 
-/* ── Touch targets (A11y) — mínimo 44×44px en móvil ────────────────────── */
+/* ── Touch targets (A11y) — solo en pantallas táctiles, sin forzar ancho mínimo ── */
 @media (pointer: coarse) {
-  button, [role="button"], a, select {
+  button:not(.compact-control),
+  [role="button"]:not(.compact-control),
+  select {
     min-height: 44px;
-    min-width: 44px;
   }
   input[type="text"], input[type="email"], input[type="password"],
   input[type="number"], input[type="date"], input[type="search"], textarea {

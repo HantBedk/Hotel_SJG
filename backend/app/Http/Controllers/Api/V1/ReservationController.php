@@ -15,6 +15,7 @@ use App\Models\Stay;
 use App\Models\StayPerson;
 use App\Models\StayRoom;
 use App\Models\User;
+use App\Support\StayNights;
 use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,7 +36,7 @@ class ReservationController extends Controller
         }
 
         if ($guestId = $request->query('guest_id')) {
-            $query->where('guest_id', $guestId);
+            $query->where('person_id', $guestId);
         }
 
         if ($roomId = $request->query('room_id')) {
@@ -80,7 +81,7 @@ class ReservationController extends Controller
 
         $start  = Carbon::parse($data['start_date']);
         $end    = Carbon::parse($data['end_date']);
-        $nights = max(1, (int) $start->diffInDays($end));
+        $nights = StayNights::between($start, $end);
 
         $reservation = DB::transaction(function () use ($data, $nights, $request) {
             if (!empty($data['room_id'])) {
@@ -152,7 +153,7 @@ class ReservationController extends Controller
 
         $start  = Carbon::parse($data['start_date']);
         $end    = Carbon::parse($data['end_date']);
-        $nights = max(1, (int) $start->diffInDays($end));
+        $nights = StayNights::between($start, $end);
         $groupId = (string) \Illuminate\Support\Str::uuid();
 
         $reservations = DB::transaction(function () use ($data, $nights, $groupId, $request) {
@@ -306,7 +307,7 @@ class ReservationController extends Controller
             }
 
             $newEnd    = Carbon::parse($data['end_date']);
-            $newNights = max(1, (int) $reservation->start_date->diffInDays($newEnd));
+            $newNights = StayNights::between($reservation->start_date, $newEnd);
 
             $reservation->update([
                 'end_date'     => $data['end_date'],
@@ -334,7 +335,7 @@ class ReservationController extends Controller
 
         $checkIn  = Carbon::parse($data['check_in_datetime'] ?? now());
         $checkOut = Carbon::parse($data['check_out_datetime'] ?? $reservation->end_date);
-        $nights   = max(1, (int) $checkIn->diffInDays($checkOut));
+        $nights   = StayNights::between($checkIn, $checkOut);
 
         $stay = DB::transaction(function () use ($reservation, $data, $checkIn, $checkOut, $nights, $request) {
             $rooms = Room::whereIn('id', $data['room_ids'])->lockForUpdate()->get()->keyBy('id');
@@ -558,7 +559,7 @@ class ReservationController extends Controller
 
         $start = Carbon::parse($newStart);
         $end   = Carbon::parse($newEnd);
-        $data['nights'] = max(1, (int) $start->diffInDays($end));
+        $data['nights'] = StayNights::between($start, $end);
     }
 
     private function syncRoomsOnUpdate(Reservation $reservation, array $data): void

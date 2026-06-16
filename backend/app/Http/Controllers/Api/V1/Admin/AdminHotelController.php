@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Hotel;
 use App\Support\HotelAccess;
+use App\Support\RoomFeatureDefaults;
 use App\Support\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +14,15 @@ use Illuminate\Support\Facades\Storage;
 class AdminHotelController extends Controller
 {
     private const MSG_NO_ACTIVE_HOTEL = 'Selecciona un hotel activo.';
+
+    /** @var array<string, string> */
+    private const HOTEL_CONTACT_RULES = [
+        'address' => 'nullable|string|max:200',
+        'phone'   => 'nullable|string|max:30',
+        'email'   => 'nullable|email|max:100',
+        'city'    => 'nullable|string|max:100',
+        'country' => 'nullable|string|size:2|alpha',
+    ];
 
     public function indexHotels(Request $request): JsonResponse
     {
@@ -29,11 +39,7 @@ class AdminHotelController extends Controller
         $data = $request->validate([
             'name'              => 'required|string|max:150',
             'nit'               => 'required|string|max:30|unique:hotels,nit',
-            'address'           => 'nullable|string|max:200',
-            'phone'             => 'nullable|string|max:30',
-            'email'             => 'nullable|email|max:100',
-            'city'              => 'nullable|string|max:100',
-            'country'           => 'nullable|string|max:100',
+            ...self::HOTEL_CONTACT_RULES,
             'check_in_time'     => 'nullable|date_format:H:i',
             'check_out_time'    => 'nullable|date_format:H:i',
             'late_checkout_fee' => 'nullable|numeric|min:0',
@@ -41,7 +47,8 @@ class AdminHotelController extends Controller
             'tax_rate'          => 'nullable|numeric|min:0|max:1',
         ]);
 
-        $hotel = Hotel::create($data);
+        $hotel = Hotel::create($this->normalizeHotelContact($data));
+        RoomFeatureDefaults::seedForHotel($hotel->id);
 
         return response()->json(['success' => true, 'data' => $hotel, 'message' => 'Hotel creado.'], 201);
     }
@@ -58,11 +65,7 @@ class AdminHotelController extends Controller
         $data = $request->validate([
             'name'              => 'sometimes|string|max:150',
             'nit'               => 'sometimes|string|max:30|unique:hotels,nit,' . $hotel->id,
-            'address'           => 'nullable|string|max:200',
-            'phone'             => 'nullable|string|max:30',
-            'email'             => 'nullable|email|max:100',
-            'city'              => 'nullable|string|max:100',
-            'country'           => 'nullable|string|max:100',
+            ...self::HOTEL_CONTACT_RULES,
             'check_in_time'     => 'nullable|date_format:H:i',
             'check_out_time'    => 'nullable|date_format:H:i',
             'late_checkout_fee' => 'nullable|numeric|min:0',
@@ -70,7 +73,7 @@ class AdminHotelController extends Controller
             'tax_rate'          => 'nullable|numeric|min:0|max:1',
         ]);
 
-        $hotel->update($data);
+        $hotel->update($this->normalizeHotelContact($data));
 
         return response()->json(['success' => true, 'data' => $hotel, 'message' => 'Hotel actualizado.']);
     }
@@ -101,16 +104,12 @@ class AdminHotelController extends Controller
         );
 
         $data = $request->validate([
-            'name'    => 'sometimes|string|max:150',
-            'nit'     => 'sometimes|string|max:30',
-            'address' => 'nullable|string|max:200',
-            'phone'   => 'nullable|string|max:30',
-            'email'   => 'nullable|email|max:100',
-            'city'    => 'nullable|string|max:100',
-            'country' => 'nullable|string|max:100',
+            'name' => 'sometimes|string|max:150',
+            'nit'  => 'sometimes|string|max:30',
+            ...self::HOTEL_CONTACT_RULES,
         ]);
 
-        $hotel->update($data);
+        $hotel->update($this->normalizeHotelContact($data));
 
         return response()->json(['success' => true, 'data' => $hotel, 'message' => 'Información del hotel actualizada.']);
     }
@@ -142,5 +141,15 @@ class AdminHotelController extends Controller
         abort_unless($hotel, 400, self::MSG_NO_ACTIVE_HOTEL);
 
         return $hotel;
+    }
+
+    /** @param  array<string, mixed>  $data */
+    private function normalizeHotelContact(array $data): array
+    {
+        if (isset($data['country']) && is_string($data['country'])) {
+            $data['country'] = strtoupper($data['country']);
+        }
+
+        return $data;
     }
 }

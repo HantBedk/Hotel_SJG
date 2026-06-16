@@ -9,7 +9,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getUnreadCountApi } from '@/services/notifications.service'
 import NotificationCenter from '@/components/notifications/NotificationCenter'
 import { useReverb } from '@/hooks/useReverb'
-import { useSwitchHotel } from '@/hooks/useSwitchHotel'
 import { hotelQueryKey, useHotelQueryKey } from '@/lib/hotelQueryKey'
 import { getDefaultSettingsPath } from '@/components/layout/sidebar'
 
@@ -48,12 +47,8 @@ export default function Header({ title, onToggleSidebar, darkMode, onToggleDark 
   const { logout, hasAnyPermission } = useAuth()
   const navigate = useNavigate()
   const settingsPath = getDefaultSettingsPath(hasAnyPermission)
-  const switchHotel = useSwitchHotel()
   const queryClient = useQueryClient()
-  const hotels = useHotelStore((s) => s.hotels)
   const currentHotelId = useHotelStore((s) => s.currentHotelId)
-  const canSwitchHotel = useHotelStore((s) => s.canSwitchHotel)
-  const isSwitchingHotel = useHotelStore((s) => s.isSwitchingHotel)
   const [notifOpen, setNotifOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
@@ -106,7 +101,7 @@ export default function Header({ title, onToggleSidebar, darkMode, onToggleDark 
 
   return (
     <header
-      className="flex items-center gap-4 px-6 h-16 border-b"
+      className="flex items-center gap-2 sm:gap-4 px-3 sm:px-6 h-16 border-b min-w-0"
       style={{
         background: 'var(--bg-surface)',
         borderColor: 'var(--border-default)',
@@ -123,43 +118,11 @@ export default function Header({ title, onToggleSidebar, darkMode, onToggleDark 
 
       {/* Page title */}
       <h1
-        className="text-lg font-semibold flex-1"
+        className="text-base sm:text-lg font-semibold flex-1 min-w-0 truncate"
         style={{ color: 'var(--text-primary)' }}
       >
         {title}
       </h1>
-
-      {/* Hotel selector / label */}
-      {hotels.length > 0 && (
-        canSwitchHotel ? (
-          <select
-            value={currentHotelId ?? ''}
-            disabled={isSwitchingHotel}
-            onChange={(e) => {
-              void switchHotel(e.target.value)
-            }}
-            className="hidden sm:block text-sm rounded-lg border px-2 py-1.5 max-w-[200px] truncate disabled:opacity-60 disabled:cursor-wait"
-            style={{
-              borderColor: 'var(--border-default)',
-              color: 'var(--text-primary)',
-              background: 'var(--bg-surface)',
-            }}
-            aria-label="Hotel activo"
-          >
-            {hotels.map((h) => (
-              <option key={h.id} value={h.id}>{h.name}</option>
-            ))}
-          </select>
-        ) : (
-          <span
-            className="hidden sm:block text-sm truncate max-w-[180px]"
-            style={{ color: 'var(--text-muted)' }}
-            title={hotels.find((h) => h.id === currentHotelId)?.name}
-          >
-            {hotels.find((h) => h.id === currentHotelId)?.name ?? hotels[0]?.name}
-          </span>
-        )
-      )}
 
       {/* Actions */}
       <div className="flex items-center gap-2">

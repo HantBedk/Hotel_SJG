@@ -1,27 +1,41 @@
 import { useQuery } from '@tanstack/react-query'
-import { hotelQueryKey } from '@/lib/hotelQueryKey'
+import { useHotelQueryKey } from '@/lib/hotelQueryKey'
+import { useHotelStore } from '@/store/hotelStore'
 import {
   getIncomeDailyApi,
   getIncomeSummaryApi,
+  incomeQueryRangeKey,
   type IncomeRangeParams,
 } from '@/services/income.service'
 
 export function useIncomeSummary(params: IncomeRangeParams) {
+  const hotelId = useHotelStore((s) => s.currentHotelId)
+  const rangeKey = incomeQueryRangeKey(params)
+  const queryKey = useHotelQueryKey('income', 'summary', ...rangeKey)
+
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: hotelQueryKey('income', 'summary', params),
-    queryFn:  () => getIncomeSummaryApi(params),
+    queryKey,
+    queryFn: () => getIncomeSummaryApi(params),
+    enabled: !!hotelId,
     refetchInterval: 60_000,
-    staleTime: 30_000,
+    staleTime: 0,
   })
+
   return { summary: data, isLoading, isFetching }
 }
 
 export function useIncomeDaily(params: IncomeRangeParams) {
-  const { data, isLoading } = useQuery({
-    queryKey: hotelQueryKey('income', 'daily', params),
-    queryFn:  () => getIncomeDailyApi(params),
+  const hotelId = useHotelStore((s) => s.currentHotelId)
+  const rangeKey = incomeQueryRangeKey(params)
+  const queryKey = useHotelQueryKey('income', 'daily', ...rangeKey)
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey,
+    queryFn: () => getIncomeDailyApi(params),
+    enabled: !!hotelId,
     refetchInterval: 60_000,
-    staleTime: 30_000,
+    staleTime: 0,
   })
-  return { daily: data, isLoading }
+
+  return { daily: data, isLoading, isFetching }
 }

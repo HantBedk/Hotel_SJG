@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToHotel;
 use App\Models\Concerns\HasGuestPersonAlias;
+use App\Models\Concerns\HasStayVoidWorkflow;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Stay extends Model
 {
-    use HasUuids, BelongsToHotel, HasGuestPersonAlias;
+    use HasUuids, BelongsToHotel, HasGuestPersonAlias, HasStayVoidWorkflow;
 
     public const STATUS_ACTIVE      = 'active';
     public const STATUS_EXTENDED    = 'extended';

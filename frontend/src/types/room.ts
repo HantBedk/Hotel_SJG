@@ -17,6 +17,13 @@ export interface RoomType {
   amenities: string[] | null
 }
 
+export interface RoomFeature {
+  id: string
+  name: string
+  sort_order: number
+  is_active: boolean
+}
+
 export interface Room {
   id: string
   hotel_id: string
@@ -29,6 +36,7 @@ export interface Room {
   is_active: boolean
   room_type: RoomType
   house?: House | null
+  features?: RoomFeature[]
   open_repair_orders_count?: number
   created_at: string
   updated_at: string

@@ -31,11 +31,13 @@ class IncomeReportBuilder
     {
         return [
             'payments' => Payment::active()
+                ->forCurrentHotel()
                 ->with(['stay.guest', 'stay.company:id,name', 'receptionist.persona'])
                 ->whereBetween('payment_date', [$start, $end])
                 ->orderBy('payment_date')
                 ->get(),
             'cancelledPayments' => Payment::cancelled()
+                ->forCurrentHotel()
                 ->with([
                     'stay.guest',
                     'stay.company:id,name',
@@ -46,6 +48,7 @@ class IncomeReportBuilder
                 ->orderBy('cancelled_at')
                 ->get(),
             'minibarActive' => MinibarConsumption::query()
+                ->whereHas('stay')
                 ->with([
                     'stay.guest',
                     'stay.company:id,name',
@@ -62,6 +65,7 @@ class IncomeReportBuilder
                 ->orderBy('created_at')
                 ->get(),
             'services' => StayService::query()
+                ->whereHas('stay')
                 ->with([
                     'stay.guest',
                     'stay.company:id,name',
@@ -193,7 +197,7 @@ class IncomeReportBuilder
         $preset       = $request->query('preset');
         $presetLabels = [
             'today'   => 'Hoy',
-            'week'    => 'Últimos 7 días',
+            'week'    => 'Última semana',
             'month'   => 'Mes en curso',
             'last_30' => 'Últimos 30 días',
         ];

@@ -15,6 +15,7 @@ Route::middleware(['auth:sanctum', SetCurrentHotel::class])->group(function () {
     require __DIR__ . '/v1/nationalities.php';
     require __DIR__ . '/v1/companies.php';
     require __DIR__ . '/v1/stays.php';
+    require __DIR__ . '/v1/stay-void-requests.php';
     require __DIR__ . '/v1/reservations.php';
     require __DIR__ . '/v1/inventory-shared.php';
     require __DIR__ . '/v1/inventory.php';

@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStays, useStay } from '@/hooks/useStays'
+import { useStayVoidRequest, useStayVoidRequests } from '@/hooks/useStayVoidRequests'
 import { useAuth } from '@/hooks/useAuth'
 import { StayDrawer } from './components/StayDrawer'
 import { CheckoutWizard } from './components/CheckoutWizard'
+import { StayVoidReviewModal } from './components/StayVoidReviewModal'
 import { StaysFiltersBar } from './stays-page/StaysFiltersBar'
 import { StaysTable } from './stays-page/StaysTable'
 import { filterStaysByGuest, toStayList } from './stays-page/utils'
@@ -16,11 +18,18 @@ export default function StaysPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const deepLinkId = searchParams.get('id')
   const deepLinkAction = searchParams.get('action')
+  const voidRequestParam = searchParams.get('void_request')
 
   const [statusFilter, setStatusFilter] = useState('active')
   const [guestSearch, setGuestSearch] = useState('')
   const [selected, setSelected] = useState<Stay | null>(null)
   const [checkoutStay, setCheckoutStay] = useState<Stay | null>(null)
+  const [reviewVoidId, setReviewVoidId] = useState<string | null>(null)
+
+  const canApproveVoid = hasPermission('approve_stay_void')
+  const { approve, reject, isApproving, isRejecting } = useStayVoidRequests('pending', canApproveVoid)
+  const { data: deepLinkVoidRequest } = useStayVoidRequest(voidRequestParam ?? '', !!voidRequestParam)
+  const { data: reviewVoidRequest } = useStayVoidRequest(reviewVoidId ?? '', !!reviewVoidId)
 
   const { stays: rawStays, isLoading, transfer, addPayment, addService, addMinibar, extend } = useStays({ status: statusFilter })
   const { data: deepLinkStay } = useStay(deepLinkId ?? '')
@@ -51,6 +60,16 @@ export default function StaysPage() {
       return next
     }, { replace: true })
   }, [deepLinkId, deepLinkStay, deepLinkAction, setSearchParams])
+
+  useEffect(() => {
+    if (!voidRequestParam || !deepLinkVoidRequest) return
+    setReviewVoidId(voidRequestParam)
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('void_request')
+      return next
+    }, { replace: true })
+  }, [voidRequestParam, deepLinkVoidRequest, setSearchParams])
 
   const handleCheckoutSuccess = () => {
     setCheckoutStay(null)
@@ -107,6 +126,16 @@ export default function StaysPage() {
           onSuccess={handleCheckoutSuccess}
         />
       )}
+
+      <StayVoidReviewModal
+        open={!!reviewVoidId && !!reviewVoidRequest}
+        request={reviewVoidRequest ?? null}
+        onClose={() => setReviewVoidId(null)}
+        onApprove={(notes) => approve({ id: reviewVoidId!, adminNotes: notes })}
+        onReject={(notes) => reject({ id: reviewVoidId!, adminNotes: notes })}
+        isApproving={isApproving}
+        isRejecting={isRejecting}
+      />
     </div>
   )
 }

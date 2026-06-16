@@ -3,17 +3,18 @@ import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import toast from 'react-hot-toast'
 import {
   getGuestsApi, createGuestApi, updateGuestApi, deleteGuestApi, searchGuestsApi,
-  extractGuestList,
+  extractGuestList, extractGuestPagination,
   type CreateGuestPayload,
+  type GuestFilters,
 } from '@/services/guests.service'
 import { extractApiError } from '@/lib/apiError'
 
-export function useGuests(search?: string) {
+export function useGuests(filters?: GuestFilters) {
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery({
-    queryKey: hotelQueryKey('guests', search),
-    queryFn:  () => getGuestsApi(search),
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: hotelQueryKey('guests', filters),
+    queryFn:  () => getGuestsApi(filters),
   })
 
   const createMutation = useMutation({
@@ -39,15 +40,16 @@ export function useGuests(search?: string) {
     mutationFn: deleteGuestApi,
     onSuccess: () => {
       toast.success('Huésped eliminado.')
-      queryClient.invalidateQueries({ queryKey: hotelQueryKey('guests') })
+      void queryClient.invalidateQueries({ queryKey: hotelQueryKey('guests'), refetchType: 'all' })
     },
     onError: (err: unknown) => toast.error(extractApiError(err, 'Error al eliminar huésped.')),
   })
 
   return {
-    guests:       extractGuestList(data ?? []),
-    meta:         (data as { meta: unknown })?.meta,
+    guests:       extractGuestList(data),
+    pagination:   extractGuestPagination(data),
     isLoading,
+    isFetching,
     createGuest:  createMutation.mutate,
     updateGuest:  updateMutation.mutate,
     deleteGuest:  deleteMutation.mutate,

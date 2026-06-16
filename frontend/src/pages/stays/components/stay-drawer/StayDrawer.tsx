@@ -33,6 +33,9 @@ export function StayDrawer({
   const activeRooms = stay.stay_rooms?.filter((sr) => sr.is_active) ?? []
   const nights = nightsElapsed(stay.check_in_datetime)
   const pendingBalance = Number(stay.total_amount ?? 0) - Number(stay.paid_amount ?? 0)
+  const isOperable = stay.status === 'active' || stay.status === 'extended'
+  const isVoidPending = stay.status === 'void_pending'
+  const isVoidFinal = stay.status === 'voided' || stay.status === 'void_rejected'
 
   const [cancelTarget, setCancelTarget] = useState<Payment | null>(null)
   const [cancelMinibarTarget, setCancelMinibarTarget] = useState<MinibarConsumption | null>(null)
@@ -79,6 +82,25 @@ export function StayDrawer({
           <StayDrawerHeader activeRooms={activeRooms} isLoading={isLoading} onClose={onClose} />
 
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+            {isVoidPending && (
+              <div
+                className="rounded-xl p-3 text-xs"
+                style={{ background: '#FEF3C7', border: '1px solid #F59E0B', color: '#92400E' }}
+              >
+                Esta estadía tiene una solicitud de anulación pendiente. La habitación ya fue liberada;
+                las operaciones están bloqueadas hasta que un administrador resuelva la solicitud.
+              </div>
+            )}
+            {isVoidFinal && (
+              <div
+                className="rounded-xl p-3 text-xs"
+                style={{ background: '#F1F5F9', border: '1px solid #CBD5E1', color: '#475569' }}
+              >
+                {stay.status === 'voided'
+                  ? 'Estadía anulada (registro histórico de auditoría).'
+                  : 'Anulación rechazada. La habitación permanece disponible; no se admiten cambios.'}
+              </div>
+            )}
             {stay.guest && <StayGuestSection guest={stay.guest} />}
             {stay.company && <StayCompanySection company={stay.company} />}
             {stay.stay_rooms && stay.stay_rooms.length > 0 && (
@@ -94,27 +116,31 @@ export function StayDrawer({
               paidAmount={stay.paid_amount}
               pendingBalance={pendingBalance}
             />
-            <StayExtendSection stayId={stayId} stay={stay} onExtend={onExtend} />
-            {stay.status === 'active' && (
+            {isOperable && (
+              <StayExtendSection stayId={stayId} stay={stay} onExtend={onExtend} />
+            )}
+            {isOperable && stay.status === 'active' && (
               <StayTransferSection
                 stayId={stayId}
                 activeRooms={activeRooms}
                 onTransfer={onTransfer}
               />
             )}
-            <StayServicesSection stayId={stayId} stay={stay} onAddService={onAddService} />
+            {isOperable && (
+              <StayServicesSection stayId={stayId} stay={stay} onAddService={onAddService} />
+            )}
             <StayMinibarSection
               stayId={stayId}
               stay={stay}
               activeRooms={activeRooms}
-              canCancelMinibar={canCancelMinibar}
+              canCancelMinibar={canCancelMinibar && isOperable}
               onAddMinibar={onAddMinibar}
               onRequestCancel={setCancelMinibarTarget}
             />
             <StayPaymentsSection
               stayId={stayId}
               stay={stay}
-              canCancelPayments={canCancelPayments}
+              canCancelPayments={canCancelPayments && isOperable}
               onAddPayment={onAddPayment}
               onRequestCancel={setCancelTarget}
             />
@@ -122,7 +148,7 @@ export function StayDrawer({
             {stay.notes && <StayNotesSection notes={stay.notes} />}
           </div>
 
-          {stay.status === 'active' && canCheckOut && (
+          {isOperable && stay.status === 'active' && canCheckOut && (
             <StayDrawerFooter onCheckOut={() => onCheckOut(stay.id)} />
           )}
         </div>

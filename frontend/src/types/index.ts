@@ -11,7 +11,7 @@ export type {
 export type { Setting } from './settings'
 export type { HotelInfo, HotelInfoPayload, HotelLogoUploadResult } from './hotel'
 export type { House } from './house'
-export type { RoomStatus, RoomType, Room } from './room'
+export type { RoomStatus, RoomType, RoomFeature, Room } from './room'
 export type { DocumentType, Guest } from './guest'
 export type { Company } from './company'
 export type {

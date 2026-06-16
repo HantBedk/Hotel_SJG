@@ -22,7 +22,7 @@ class RoomController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Room::with(['roomType', 'house'])
+        $query = Room::with(['roomType', 'house', 'features'])
             ->withCount([
                 'repairOrders as open_repair_orders_count' => fn ($q) => $q
                     ->whereIn('status', ['pending', 'in_progress']),
@@ -55,7 +55,7 @@ class RoomController extends Controller
 
     public function show(Room $room): JsonResponse
     {
-        return $this->success($room->load('roomType'));
+        return $this->success($room->load(['roomType', 'features']));
     }
 
     public function update(Request $request, Room $room): JsonResponse

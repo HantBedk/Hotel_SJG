@@ -10,6 +10,7 @@ class IncomeNightBreakdown
 {
     public function __construct(
         private readonly StayRoomOccupancy $occupancy = new StayRoomOccupancy(),
+        private readonly IncomeRoomPotential $roomPotential = new IncomeRoomPotential(),
     ) {}
 
     /**
@@ -19,8 +20,8 @@ class IncomeNightBreakdown
     {
         $rangeStayRooms = StayRoom::with([
             'room:id,number',
-            'stay:id,guest_id,company_id,status,actual_check_out_datetime',
-            'stay.guest',
+            'stay:id,person_id,company_id,status,check_in_datetime,check_out_datetime,actual_check_out_datetime',
+            'stay.guest:id,primer_nombre,segundo_nombre,primer_apellido,segundo_apellido,document_type,document_number,phone',
             'stay.company:id,name',
         ])
             ->where('is_active', true)
@@ -30,6 +31,10 @@ class IncomeNightBreakdown
                 $q->whereIn('status', Stay::REVENUE_STATUSES);
             })
             ->get();
+
+        $inventory = $this->roomPotential->sellableInventory();
+        $totalRooms = $inventory['total_rooms'];
+        $potentialRevenue = $inventory['potential_revenue'];
 
         $nights = [];
         for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
@@ -42,13 +47,22 @@ class IncomeNightBreakdown
                 return $items->sortByDesc('price_per_night')->first();
             })->values();
 
+            $roomsCount   = $nightByRoom->count();
             $nightRevenue = $nightByRoom->sum(fn ($stayRoom) => (float) $stayRoom->price_per_night);
 
             $nights[] = [
-                'date'         => $dateStr,
-                'rooms_count'  => $nightByRoom->count(),
-                'room_revenue' => (float) $nightRevenue,
-                'rooms'        => $nightByRoom->map(fn ($stayRoom) => $this->mapStayRoom($stayRoom))
+                'date'                     => $dateStr,
+                'rooms_count'              => $roomsCount,
+                'total_rooms'              => $totalRooms,
+                'room_revenue'             => (float) $nightRevenue,
+                'potential_revenue'        => $potentialRevenue,
+                'occupancy_pct'            => $totalRooms > 0
+                    ? round($roomsCount / $totalRooms * 100, 1)
+                    : 0.0,
+                'revenue_vs_potential_pct' => $potentialRevenue > 0
+                    ? round($nightRevenue / $potentialRevenue * 100, 1)
+                    : 0.0,
+                'rooms'                    => $nightByRoom->map(fn ($stayRoom) => $this->mapStayRoom($stayRoom))
                     ->sortBy('room_number')
                     ->values(),
             ];
@@ -56,10 +70,14 @@ class IncomeNightBreakdown
 
         $todayStr     = today()->toDateString();
         $tonightEntry = collect($nights)->firstWhere('date', $todayStr) ?? [
-            'date'         => $todayStr,
-            'rooms_count'  => 0,
-            'room_revenue' => 0.0,
-            'rooms'        => [],
+            'date'                     => $todayStr,
+            'rooms_count'              => 0,
+            'total_rooms'              => $totalRooms,
+            'room_revenue'             => 0.0,
+            'potential_revenue'        => $potentialRevenue,
+            'occupancy_pct'            => 0.0,
+            'revenue_vs_potential_pct' => 0.0,
+            'rooms'                    => [],
         ];
 
         return [
@@ -70,17 +88,26 @@ class IncomeNightBreakdown
 
     private function mapStayRoom(StayRoom $stayRoom): array
     {
+        $stay  = $stayRoom->stay;
+        $guest = $stay?->guest;
+        $checkOutAt = $stay?->actual_check_out_datetime ?? $stay?->check_out_datetime;
+
         return [
-            'stay_room_id' => $stayRoom->id,
-            'stay_id'      => $stayRoom->stay_id,
-            'room_id'      => $stayRoom->room_id,
-            'room_number'  => $stayRoom->room?->number,
-            'guest_name'   => $stayRoom->stay?->guest?->full_name,
-            'company_name' => $stayRoom->stay?->company?->name,
-            'check_in'     => $stayRoom->check_in_date,
-            'check_out'    => $stayRoom->check_out_date,
-            'price'        => (float) $stayRoom->price_per_night,
-            'status'       => $stayRoom->stay?->status,
+            'stay_room_id'        => $stayRoom->id,
+            'stay_id'             => $stayRoom->stay_id,
+            'room_id'             => $stayRoom->room_id,
+            'room_number'         => $stayRoom->room?->number,
+            'guest_name'          => $guest?->full_name,
+            'document_type'       => $guest?->document_type,
+            'document_number'     => $guest?->document_number,
+            'phone'               => $guest?->phone,
+            'company_name'        => $stay?->company?->name,
+            'check_in'            => $stayRoom->check_in_date,
+            'check_out'           => $stayRoom->check_out_date,
+            'check_in_datetime'   => $stay?->check_in_datetime,
+            'check_out_datetime'  => $checkOutAt,
+            'price'               => (float) $stayRoom->price_per_night,
+            'status'              => $stay?->status,
         ];
     }
 }

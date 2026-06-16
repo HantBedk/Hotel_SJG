@@ -19,6 +19,7 @@ use App\Models\RoomMinibar;
 use App\Models\Setting;
 use App\Support\HotelInventoryService;
 use App\Support\RoomCleaningNotifier;
+use App\Support\StayNights;
 use App\Support\TenantContext;
 use App\Models\Stay;
 use App\Models\StayPerson;
@@ -34,6 +35,21 @@ use Illuminate\Support\Facades\DB;
 class StayController extends Controller
 {
     use Paginates;
+
+    private function ensureStayOperable(Stay $stay): void
+    {
+        if ($stay->isVoidPending()) {
+            abort(409, 'Esta estadía tiene una solicitud de anulación pendiente.');
+        }
+
+        if ($stay->status === Stay::STATUS_VOIDED) {
+            abort(409, 'Esta estadía fue anulada.');
+        }
+
+        if ($stay->status === Stay::STATUS_VOID_REJECTED) {
+            abort(409, 'Esta estadía tiene una anulación rechazada y no admite cambios.');
+        }
+    }
 
     public function index(Request $request): JsonResponse
     {
@@ -88,7 +104,7 @@ class StayController extends Controller
 
         $checkIn  = Carbon::parse($data['check_in_datetime']);
         $checkOut = Carbon::parse($data['check_out_datetime']);
-        $nights   = max(1, (int) $checkIn->diffInDays($checkOut));
+        $nights   = StayNights::between($checkIn, $checkOut);
 
         $stay = DB::transaction(function () use ($data, $checkIn, $checkOut, $nights, $request) {
             $rooms = Room::whereIn('id', $data['room_ids'])
@@ -167,6 +183,7 @@ class StayController extends Controller
 
     public function checkout(Request $request, Stay $stay): JsonResponse
     {
+        $this->ensureStayOperable($stay);
         abort_if($stay->status === 'checked_out', 409, 'Esta estadía ya fue cerrada.');
 
         $data = $request->validate([
@@ -294,6 +311,7 @@ class StayController extends Controller
 
     public function extend(Request $request, Stay $stay): JsonResponse
     {
+        $this->ensureStayOperable($stay);
         abort_if(!in_array($stay->status, ['active', 'extended']), 409, 'Solo se puede extender una estadía activa.');
 
         $data = $request->validate([
@@ -302,7 +320,7 @@ class StayController extends Controller
 
         $newCheckOut = Carbon::parse($data['check_out_datetime']);
         $checkIn     = Carbon::parse($stay->check_in_datetime);
-        $newNights   = max(1, (int) $checkIn->diffInDays($newCheckOut));
+        $newNights   = StayNights::between($checkIn, $newCheckOut);
 
         DB::transaction(function () use ($stay, $newCheckOut, $newNights) {
             foreach ($stay->activeStayRooms as $sr) {
@@ -341,6 +359,7 @@ class StayController extends Controller
 
     public function addRoom(Request $request, Stay $stay): JsonResponse
     {
+        $this->ensureStayOperable($stay);
         abort_if(!in_array($stay->status, ['active', 'extended']), 409, 'Solo se puede agregar habitaciones a una estadía activa.');
 
         $data = $request->validate([
@@ -350,7 +369,7 @@ class StayController extends Controller
 
         $checkIn  = Carbon::parse($stay->check_in_datetime);
         $checkOut = Carbon::parse($stay->check_out_datetime);
-        $nights   = max(1, (int) $checkIn->diffInDays($checkOut));
+        $nights   = StayNights::between($checkIn, $checkOut);
         $subtotal = $data['price_per_night'] * $nights;
 
         DB::transaction(function () use ($stay, $data, $checkIn, $checkOut, $nights, $subtotal) {
@@ -384,6 +403,7 @@ class StayController extends Controller
 
     public function minibarCharges(Request $request, Stay $stay): JsonResponse
     {
+        $this->ensureStayOperable($stay);
         abort_if($stay->status === 'checked_out', 409, 'La estadía ya está cerrada.');
 
         // unit_price NO se acepta del cliente: lo resolvemos desde el producto en
@@ -567,6 +587,7 @@ class StayController extends Controller
      */
     public function cancelMinibarConsumption(Request $request, Stay $stay, MinibarConsumption $consumption): JsonResponse
     {
+        $this->ensureStayOperable($stay);
         abort_if($consumption->stay_id !== $stay->id, 404, 'Consumo no encontrado en esta estadía.');
         abort_if($stay->status === 'checked_out', 409, 'La estadía ya está cerrada; no se puede anular el consumo.');
 
@@ -719,6 +740,7 @@ class StayController extends Controller
 
     public function transfer(Request $request, Stay $stay): JsonResponse
     {
+        $this->ensureStayOperable($stay);
         abort_if($stay->status !== 'active', 409, 'Solo se puede transferir una estadía activa.');
 
         $data = $request->validate([
@@ -741,7 +763,7 @@ class StayController extends Controller
 
             $oldStayRoom->update(['is_active' => false, 'check_out_date' => now()->toDateString()]);
 
-            $newNights = max(1, (int) now()->diffInDays(Carbon::parse($stay->check_out_datetime)));
+            $newNights = StayNights::between(now(), $stay->check_out_datetime);
 
             StayRoom::create([
                 'stay_id'         => $stay->id,
@@ -809,6 +831,7 @@ class StayController extends Controller
 
     public function addPayment(Request $request, Stay $stay): JsonResponse
     {
+        $this->ensureStayOperable($stay);
         $data = $request->validate([
             'amount'                => 'required|numeric|min:0.01',
             'payment_method'        => 'required|in:cash,transfer,card,credito',
@@ -851,6 +874,7 @@ class StayController extends Controller
 
     public function cancelPayment(Request $request, Stay $stay, Payment $payment): JsonResponse
     {
+        $this->ensureStayOperable($stay);
         abort_if($payment->stay_id !== $stay->id, 404, 'Pago no encontrado en esta estadia.');
         abort_if($payment->isCancelled(), 409, 'Este pago ya fue anulado.');
 
@@ -941,6 +965,7 @@ class StayController extends Controller
 
     public function addService(Request $request, Stay $stay): JsonResponse
     {
+        $this->ensureStayOperable($stay);
         abort_if($stay->status !== 'active', 409, 'Solo se pueden agregar servicios a estadías activas.');
 
         $data = $request->validate([

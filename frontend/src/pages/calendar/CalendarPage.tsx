@@ -302,7 +302,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <div className="flex flex-col h-full gap-3">
+    <div className="flex flex-col gap-3 lg:h-full lg:min-h-0">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-2">
         {/* View mode — hidden on smallest screens */}

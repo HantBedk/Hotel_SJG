@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn'
 import { useAuth } from '@/hooks/useAuth'
 import { NAV_MODULES, filterVisibleModules, getModuleIdForPath } from './navigation'
 import SidebarHeader from './SidebarHeader'
+import SidebarHotelSwitcher from './SidebarHotelSwitcher'
 import SidebarNavGroup from './SidebarNavGroup'
 import SidebarFooter from './SidebarFooter'
 
@@ -46,6 +47,7 @@ export default function Sidebar({ collapsed = false, onClose }: SidebarProps) {
       aria-label="Navegación principal"
     >
       <SidebarHeader collapsed={collapsed} onClose={onClose} />
+      <SidebarHotelSwitcher collapsed={collapsed} />
 
       <nav className="flex-1 py-3 overflow-y-auto min-h-0" aria-label="Menú principal">
         <ul className="px-2 space-y-0">

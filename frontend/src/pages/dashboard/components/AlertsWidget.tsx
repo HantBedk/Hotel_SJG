@@ -1,6 +1,7 @@
-import { Bell, ChevronRight, X, AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Bell, ChevronRight, X } from 'lucide-react'
 import { useNotifications } from '@/hooks/useNotifications'
 import { collectActiveAlerts, isPersistentRoomAlert } from '../dashboardAlerts'
+import DashboardSection from './DashboardSection'
 import type { AppNotification, Room } from '@/types'
 
 function resolveCta(n: AppNotification): string {
@@ -12,6 +13,7 @@ function resolveCta(n: AppNotification): string {
   if (/asset|repair/i.test(n.type)) return 'Ver reparación'
   if (/daily_summary/i.test(n.type)) return 'Ver resumen'
   if (/payment|cancelled/i.test(n.type)) return 'Ver pagos'
+  if (/stay_void/i.test(n.type)) return 'Revisar anulación'
   return 'Ver detalle'
 }
 
@@ -25,54 +27,59 @@ export default function AlertsWidget({ rooms, onResolve }: AlertsWidgetProps) {
   const recent = collectActiveAlerts(notifications, rooms)
 
   return (
-    <div
-      className="rounded-xl p-3 flex flex-col flex-1 min-h-0"
-      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)' }}
-    >
-      <div className="flex items-center gap-2 mb-2 shrink-0">
-        <AlertTriangle size={13} style={{ color: '#F59E0B' }} />
-        <h3 className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>
-          Alertas activas
-        </h3>
-        {recent.length > 0 && (
+    <DashboardSection
+      id="dashboard-alerts"
+      title="Alertas activas"
+      description="Incidencias que requieren atención en recepción"
+      icon={AlertTriangle}
+      iconColor="#F59E0B"
+      className="lg:flex-1"
+      bodyClassName="!p-3"
+      badge={
+        recent.length > 0 ? (
           <span
-            className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+            className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
             style={{ background: '#FEE2E2', color: '#991B1B' }}
           >
             {recent.length}
           </span>
-        )}
-      </div>
+        ) : undefined
+      }
+    >
       {recent.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-            Sin alertas activas
+        <div className="flex-1 flex items-center justify-center py-8">
+          <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+            Todo en orden — sin alertas pendientes
           </p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 min-h-0">
+        <div className="flex-1 overflow-y-auto space-y-2 min-h-0 max-h-72 lg:max-h-none">
           {recent.map((n) => {
             const cta = resolveCta(n)
             return (
               <div
                 key={n.id}
-                className="flex items-start gap-1 p-2 rounded-lg"
-                style={{ background: 'var(--bg-input)', border: '1px solid var(--border-default)' }}
+                className="flex items-start gap-1 p-2.5 rounded-lg"
+                style={{ background: 'var(--bg-muted)', border: '1px solid var(--border-default)' }}
               >
                 <button
                   type="button"
                   onClick={() => onResolve(n)}
                   title="Click para resolver"
-                  className="flex-1 min-w-0 text-left flex items-start gap-2 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
+                  className="compact-control flex-1 min-w-0 text-left flex items-start gap-2 rounded-lg cursor-pointer hover:opacity-80 transition-opacity"
                 >
                   <div className="flex-shrink-0 mt-0.5">
-                    <Bell size={11} style={{ color: '#F59E0B' }} />
+                    <Bell size={12} style={{ color: '#F59E0B' }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{n.title}</p>
-                    <p className="text-[10px] mt-0.5 line-clamp-2" style={{ color: 'var(--text-secondary)' }}>{n.message}</p>
-                    <p className="text-[10px] mt-1 font-semibold inline-flex items-center gap-0.5" style={{ color: 'var(--color-primary)' }}>
-                      {cta} <ChevronRight size={11} />
+                    <p className="text-xs font-semibold leading-snug" style={{ color: 'var(--text-primary)' }}>
+                      {n.title}
+                    </p>
+                    <p className="text-[11px] mt-1 line-clamp-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                      {n.message}
+                    </p>
+                    <p className="text-[11px] mt-1.5 font-semibold inline-flex items-center gap-0.5" style={{ color: 'var(--color-primary)' }}>
+                      {cta} <ChevronRight size={12} />
                     </p>
                   </div>
                 </button>
@@ -81,10 +88,10 @@ export default function AlertsWidget({ rooms, onResolve }: AlertsWidgetProps) {
                     type="button"
                     onClick={() => markRead(n.id)}
                     title="Descartar"
-                    className="flex-shrink-0 p-0.5 rounded hover:opacity-70"
+                    className="compact-control flex-shrink-0 p-1 rounded hover:opacity-70"
                     style={{ color: 'var(--text-muted)' }}
                   >
-                    <X size={11} />
+                    <X size={12} />
                   </button>
                 )}
               </div>
@@ -92,6 +99,6 @@ export default function AlertsWidget({ rooms, onResolve }: AlertsWidgetProps) {
           })}
         </div>
       )}
-    </div>
+    </DashboardSection>
   )
 }

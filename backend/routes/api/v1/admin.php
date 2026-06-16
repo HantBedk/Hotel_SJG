@@ -56,6 +56,11 @@ Route::prefix('admin')->middleware('permission:manage_settings')->group(function
      Route::put('/nationalities/{nationality}',  [AdminCatalogController::class, 'updateNationality']);
      Route::delete('/nationalities/{nationality}', [AdminCatalogController::class, 'destroyNationality']);
 
+     Route::get('/room-features',                  [AdminCatalogController::class, 'getRoomFeatures']);
+     Route::post('/room-features',                 [AdminCatalogController::class, 'storeRoomFeature']);
+     Route::put('/room-features/{roomFeature}',    [AdminCatalogController::class, 'updateRoomFeature']);
+     Route::delete('/room-features/{roomFeature}', [AdminCatalogController::class, 'destroyRoomFeature']);
+
      Route::get('/users',           [AdminUserController::class, 'getUsers'])
           ->withoutMiddleware('permission:manage_settings')
           ->middleware('permission:manage_users|manage_settings');

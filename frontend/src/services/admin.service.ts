@@ -14,6 +14,7 @@ import type {
   HotelSummary,
   House,
   Room,
+  RoomFeature,
   RoomType,
   Season,
 } from '@/types'
@@ -122,6 +123,7 @@ export interface CreateAdminRoomPayload {
   number: string
   floor?: number | null
   notes?: string | null
+  feature_ids?: string[]
 }
 
 export async function getAdminRoomsApi(): Promise<Room[]> {
@@ -217,6 +219,30 @@ export async function updateNationalityApi(id: string, payload: Partial<National
 
 export async function deleteNationalityApi(id: string): Promise<ApiResponse> {
   const { data } = await api.delete<ApiResponse>(`/admin/nationalities/${id}`)
+  return data
+}
+
+// ── Room features ─────────────────────────────────────────────────────────────
+
+export type RoomFeaturePayload = Pick<RoomFeature, 'name' | 'sort_order' | 'is_active'>
+
+export async function getAdminRoomFeaturesApi(): Promise<RoomFeature[]> {
+  const { data } = await api.get<ApiResponse<RoomFeature[]>>('/admin/room-features')
+  return data.data
+}
+
+export async function createRoomFeatureApi(payload: RoomFeaturePayload): Promise<RoomFeature> {
+  const { data } = await api.post<ApiResponse<RoomFeature>>('/admin/room-features', payload)
+  return data.data
+}
+
+export async function updateRoomFeatureApi(id: string, payload: Partial<RoomFeaturePayload>): Promise<RoomFeature> {
+  const { data } = await api.put<ApiResponse<RoomFeature>>(`/admin/room-features/${id}`, payload)
+  return data.data
+}
+
+export async function deleteRoomFeatureApi(id: string): Promise<ApiResponse> {
+  const { data } = await api.delete<ApiResponse>(`/admin/room-features/${id}`)
   return data
 }
 

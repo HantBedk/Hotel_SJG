@@ -13,10 +13,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @phpstan-require-extends Model
  * @property string|null $person_id
  * @property array<string, mixed> $attributes
+ * @method list<string> getFillable()
+ * @method $this mergeFillable(list<string> $fillable)
  * @method BelongsTo belongsTo(string $related, ?string $foreignKey = null, ?string $ownerKey = null, ?string $relation = null)
  */
 trait HasPersonGuestRelation
 {
+    /**
+     * Permite mass assignment con `guest_id` (alias API) → columna `person_id`.
+     */
+    public function initializeHasPersonGuestRelation(): void
+    {
+        if (! in_array('guest_id', $this->getFillable(), true)) {
+            $this->mergeFillable(['guest_id']);
+        }
+    }
+
     public function guest(): BelongsTo
     {
         return $this->belongsTo(Persona::class, 'person_id');

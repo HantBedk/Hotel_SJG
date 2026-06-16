@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   X, BedDouble, Sparkles, Wrench, XCircle, Check, Calendar, User,
-  CheckCircle2, LogOut, RefreshCw, AlertTriangle, Lock, CreditCard,
+  CheckCircle2, LogOut, RefreshCw, AlertTriangle, Lock, CreditCard, Ban,
 } from 'lucide-react'
+import { RequestStayVoidModal } from '@/components/stays/RequestStayVoidModal'
 import { useAuth } from '@/hooks/useAuth'
 import { useReservations } from '@/hooks/useReservations'
 import { useRepairOrders } from '@/hooks/useInventory'
@@ -33,6 +34,8 @@ interface Props {
   readonly onStartCheckIn: (room: Room) => void
   readonly onStartCheckOut?: (stay: Stay) => void
   readonly onAddPayment?: (payload: AddPaymentPayload) => void
+  readonly onRequestVoid?: (stayId: string, reason: string) => Promise<unknown>
+  readonly isRequestingVoid?: boolean
   readonly onSelectReservation?: (reservation: Reservation) => void
   readonly onClose: () => void
 }
@@ -65,6 +68,7 @@ const STATUS_META: Record<RoomStatus, { label: string; color: string; bg: string
 export function DashboardRoomModal({
   room, stay, housekeepers, isChangingStatus,
   onChangeStatus, onStartCheckIn, onStartCheckOut, onAddPayment,
+  onRequestVoid, isRequestingVoid,
   onSelectReservation, onClose,
 }: Props) {
   const navigate = useNavigate()
@@ -75,6 +79,7 @@ export function DashboardRoomModal({
   const [showReservationPicker, setShowReservationPicker] = useState(false)
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false)
   const [maintenanceReason, setMaintenanceReason] = useState('')
+  const [showVoidModal, setShowVoidModal] = useState(false)
 
   useEffect(() => {
     setShowPayForm(false)
@@ -120,6 +125,8 @@ export function DashboardRoomModal({
   const canManage   = hasPermission('manage_rooms')
   const canCheckOut = hasPermission('check_out')
   const canPay      = hasPermission('check_in')
+  const canVoid     = hasPermission('request_stay_void')
+  const stayOperable = stay?.status === 'active' || stay?.status === 'extended'
 
   const go = (path: string) => { onClose(); navigate(path) }
 
@@ -152,6 +159,7 @@ export function DashboardRoomModal({
   }
 
   return (
+    <>
     <dialog
       ref={dialogRef}
       aria-label={`Habitación ${room.number}`}
@@ -387,7 +395,7 @@ export function DashboardRoomModal({
                       primary
                     />
                   )}
-                  {stay && onAddPayment && (
+                  {stay && onAddPayment && stayOperable && (
                     <ActionButton
                       onClick={() => setShowPayForm((v) => !v)}
                       disabled={!canPay}
@@ -405,7 +413,7 @@ export function DashboardRoomModal({
                       onCancel={() => { setShowPayForm(false); setPayForm(EMPTY_PAYMENT) }}
                     />
                   )}
-                  {stay && (
+                  {stay && stayOperable && (
                     <ActionButton
                       onClick={() => {
                         if (onStartCheckOut) {
@@ -418,6 +426,14 @@ export function DashboardRoomModal({
                       disabled={!canCheckOut}
                       icon={<LogOut size={15} />}
                       label="Procesar check-out"
+                    />
+                  )}
+                  {stay && stayOperable && onRequestVoid && (
+                    <ActionButton
+                      onClick={() => setShowVoidModal(true)}
+                      disabled={!canVoid || isRequestingVoid}
+                      icon={<Ban size={15} />}
+                      label="Solicitar anulación"
                     />
                   )}
                   <ActionButton
@@ -583,6 +599,19 @@ export function DashboardRoomModal({
         </div>
       </div>
     </dialog>
+
+    <RequestStayVoidModal
+      open={showVoidModal}
+      stay={stay ?? null}
+      isPending={isRequestingVoid}
+      onClose={() => setShowVoidModal(false)}
+      onConfirm={async (reason) => {
+        if (!stay || !onRequestVoid) return
+        await onRequestVoid(stay.id, reason)
+        onClose()
+      }}
+    />
+  </>
   )
 }
 

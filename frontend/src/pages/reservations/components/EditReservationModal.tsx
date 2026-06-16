@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { X, Save, Loader2 } from 'lucide-react'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
 import { cn } from '@/lib/cn'
+import { calendarNightsBetween } from '@/lib/formatDate'
 import type { Reservation } from '@/types'
 
 interface Props {
@@ -19,10 +20,7 @@ interface Props {
 }
 
 function nightsBetween(start: string, end: string): number {
-  if (!start || !end) return 0
-  const d1 = new Date(start)
-  const d2 = new Date(end)
-  return Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86_400_000))
+  return Math.max(0, calendarNightsBetween(start, end))
 }
 
 function toDateInputValue(value: string | null | undefined): string {

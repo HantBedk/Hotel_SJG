@@ -27,6 +27,9 @@ class ActivityLogController extends Controller
         'stay.service'           => 'Servicio agregado',
         'stay.transfer'          => 'Transferencia de habitación',
         'stay.extended'          => 'Estadía extendida',
+        'stay.void_requested'    => 'Anulación solicitada',
+        'stay.void_approved'     => 'Anulación aprobada',
+        'stay.void_rejected'     => 'Anulación rechazada',
         'stay.minibar_cancelled' => 'Consumo de minibar anulado',
         'stay.minibar'           => 'Venta de productos (estadía)',
         'minibar_sale.created'   => 'Venta de productos creada',
@@ -155,6 +158,7 @@ class ActivityLogController extends Controller
     public function payments(Request $request): JsonResponse
     {
         $query = Payment::with(['stay.guest', 'receptionist.persona', 'cancelledBy.persona'])
+            ->forCurrentHotel()
             ->orderByDesc('payment_date');
 
         // Por defecto el historial muestra TODOS los pagos (anulados con badge).

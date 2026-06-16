@@ -247,7 +247,7 @@ export default function ReservationsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-5 h-full">
+    <div className="flex flex-col gap-5 lg:h-full lg:min-h-0">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="mr-auto">
@@ -306,7 +306,7 @@ export default function ReservationsPage() {
       </div>
 
       {/* List */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex flex-col lg:flex-1 lg:min-h-0 lg:overflow-hidden">
         {listContent}
       </div>
 

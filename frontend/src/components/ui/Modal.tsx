@@ -76,37 +76,33 @@ export function Modal({
     }
   }, [open])
 
-  const backdropClassName = 'absolute inset-0 border-0 p-0 cursor-default'
-
   return (
     <dialog
       ref={ref}
       aria-label={ariaLabel || title}
       className={cn(
         'app-modal fixed inset-0 z-50 m-0 h-full w-full max-h-none max-w-none border-0 bg-transparent p-0',
-        'flex items-end sm:items-center justify-center pointer-events-none',
+        'flex items-end sm:items-center justify-center',
       )}
     >
-      {closeOnBackdrop ? (
+      {closeOnBackdrop && (
         <button
           type="button"
           aria-label="Cerrar modal"
-          className={cn(backdropClassName, 'pointer-events-auto bg-transparent')}
+          className="absolute inset-0 z-0 border-0 p-0 cursor-default bg-transparent"
           onClick={onClose}
         />
-      ) : (
-        <div className={cn(backdropClassName, 'pointer-events-none')} aria-hidden="true" />
       )}
       <div
         className={cn(
-          'relative z-10 pointer-events-auto w-full bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] overflow-hidden flex flex-col',
+          'relative z-10 w-full rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[90vh] overflow-hidden flex flex-col',
           SIZE[size],
           className,
         )}
         style={{ background: 'var(--bg-surface)' }}
       >
         {title && (
-          <h2 className="text-lg font-semibold px-5 pt-5" style={{ color: 'var(--text-primary)' }}>
+          <h2 className="text-lg font-semibold px-5 pt-5 pb-1" style={{ color: 'var(--text-primary)' }}>
             {title}
           </h2>
         )}

@@ -114,6 +114,13 @@ class GuestController extends Controller
 
     public function destroy(Guest $guest): JsonResponse
     {
+        if ($guest->user()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Este huésped tiene cuenta de usuario. Desactívala desde Usuarios antes de eliminarlo.',
+            ], 422);
+        }
+
         $guest->delete();
 
         return response()->json(['success' => true, 'message' => 'Huésped eliminado.']);

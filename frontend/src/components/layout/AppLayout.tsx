@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import Sidebar, { getPageTitle } from './sidebar'
 import Header from './Header'
 import HotelSwitchOverlay from './HotelSwitchOverlay'
+import HotelActiveModal from './HotelActiveModal'
 import NotificationModal from '@/components/notifications/NotificationModal'
 import { useHotelStore } from '@/store/hotelStore'
 import { cn } from '@/lib/cn'
@@ -22,6 +23,27 @@ export default function AppLayout() {
 
   const title = getPageTitle(location.pathname)
   const switchingHotelName = hotels.find((h) => h.id === currentHotelId)?.name
+  const activeHotelName = switchingHotelName ?? 'Hotel'
+
+  const [hotelConfirmOpen, setHotelConfirmOpen] = useState(false)
+  const prevHotelIdRef = useRef<string | null>(null)
+  const skipInitialHotelConfirmRef = useRef(true)
+
+  useEffect(() => {
+    if (isSwitchingHotel) return
+
+    if (skipInitialHotelConfirmRef.current) {
+      skipInitialHotelConfirmRef.current = false
+      prevHotelIdRef.current = currentHotelId
+      return
+    }
+
+    const previous = prevHotelIdRef.current
+    if (previous && currentHotelId && previous !== currentHotelId && hotels.length > 1) {
+      setHotelConfirmOpen(true)
+    }
+    prevHotelIdRef.current = currentHotelId
+  }, [isSwitchingHotel, currentHotelId, hotels.length])
 
   // Close mobile sidebar on navigation
   useEffect(() => {
@@ -90,6 +112,7 @@ export default function AppLayout() {
           <HotelSwitchOverlay show={isSwitchingHotel} hotelName={switchingHotelName} />
           <div
             className={cn(
+              'lg:h-full lg:min-h-0 lg:flex lg:flex-col',
               'transition-opacity duration-300 ease-out',
               isSwitchingHotel ? 'opacity-40 pointer-events-none select-none' : 'opacity-100',
             )}
@@ -100,6 +123,12 @@ export default function AppLayout() {
       </div>
 
       <NotificationModal />
+
+      <HotelActiveModal
+        open={hotelConfirmOpen}
+        hotelName={activeHotelName}
+        onClose={() => setHotelConfirmOpen(false)}
+      />
     </div>
   )
 }
