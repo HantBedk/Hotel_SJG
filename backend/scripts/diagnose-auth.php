@@ -1,15 +1,29 @@
 <?php
 
-require __DIR__ . '/vendor/autoload.php';
-$app = require __DIR__ . '/bootstrap/app.php';
+$root = dirname(__DIR__);
+require $root . '/vendor/autoload.php';
+$app = require $root . '/bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 use App\Models\Role;
 use App\Models\User;
 use App\Support\AuthUserPayload;
+use App\Support\HotelAccess;
 use Illuminate\Support\Facades\DB;
 
-echo "=== Permissions in DB ===\n";
+$email = $argv[1] ?? null;
+
+echo "=== Staff hotel assignments ===\n";
+User::query()
+    ->with(['persona', 'hotels'])
+    ->orderBy('email')
+    ->each(function (User $user): void {
+        $roles = $user->getRoleNames()->implode(', ') ?: '-';
+        $hotelNames = $user->hotels->pluck('name')->implode(', ') ?: '(ninguno)';
+        echo "  {$user->email} | {$roles} | {$hotelNames}\n";
+    });
+
+echo "\n=== Permissions in DB ===\n";
 foreach (DB::table('permissions')->orderBy('name')->pluck('name') as $name) {
     echo "  - $name\n";
 }
@@ -43,15 +57,34 @@ foreach ($expected as $roleName => $perms) {
     }
 }
 
-echo "\n=== Auth payload JSON shape ===\n";
-$user = User::where('email', 'dorismena2018@gmail.com')->with('persona', 'hotels')->first();
+if (! $email) {
+    echo "\n=== Usage ===\n";
+    echo "  php scripts/diagnose-auth.php user@example.com\n";
+    exit(0);
+}
+
+$user = User::where('email', $email)->with('persona', 'hotels')->first();
+if (! $user) {
+    echo "\nUsuario no encontrado: {$email}\n";
+    exit(1);
+}
+
+echo "\n=== Auth payload for {$email} ===\n";
 $payload = AuthUserPayload::build($user);
 echo json_encode([
-    'roles' => $payload['roles'],
-    'permissions' => $payload['permissions'],
-], JSON_PRETTY_PRINT) . "\n";
+    'roles'            => $payload['roles'],
+    'permissions'      => $payload['permissions'],
+    'hotels'           => $payload['hotels'],
+    'current_hotel_id' => $payload['current_hotel_id'],
+    'can_switch_hotel' => $payload['can_switch_hotel'],
+], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "\n";
 
-echo "\n=== can() checks receptionist ===\n";
+echo "\n=== can() checks ===\n";
 foreach (['view_dashboard', 'check_in', 'manage_reservations', 'manage_settings', 'view_reports'] as $perm) {
     echo "$perm: " . ($user->can($perm) ? 'yes' : 'no') . "\n";
 }
+
+echo "\n=== default hotel ===\n";
+echo HotelAccess::defaultHotelId($user) ?? '(null)';
+
+echo "\n";

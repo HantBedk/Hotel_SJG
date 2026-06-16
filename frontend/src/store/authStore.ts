@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { AuthUser } from '@/types'
+import { useHotelStore } from '@/store/hotelStore'
 
 const AUTH_STORAGE_KEY = 'hotel-sjg-auth'
 const SUPERADMIN_ROLE = 'superadmin'
@@ -74,7 +75,10 @@ export const useAuthStore = create<AuthState>()(
 
       setUser: (user) => set({ user: normalizeAuthUser(user), isAuthenticated: true }),
 
-      clearAuth: () => set({ user: null, token: null, isAuthenticated: false }),
+      clearAuth: () => {
+        useHotelStore.getState().reset()
+        set({ user: null, token: null, isAuthenticated: false })
+      },
 
       setBootstrapping: (value) => set({ isBootstrapping: value }),
 

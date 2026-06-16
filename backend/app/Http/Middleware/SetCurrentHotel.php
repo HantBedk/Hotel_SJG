@@ -19,19 +19,13 @@ class SetCurrentHotel
         }
 
         $headerHotelId = $request->header('X-Hotel-Id');
+        $defaultHotelId = HotelAccess::defaultHotelId($user);
 
-        if ($headerHotelId) {
-            if (! HotelAccess::canAccess($user, $headerHotelId)) {
-                return response()->json([
-                    'success' => false,
-                    'data'    => null,
-                    'message' => 'No tienes acceso a este hotel.',
-                    'errors'  => [],
-                ], 403);
-            }
+        if ($headerHotelId && HotelAccess::canAccess($user, $headerHotelId)) {
             TenantContext::set($headerHotelId);
         } else {
-            TenantContext::set(HotelAccess::defaultHotelId($user));
+            // Header ausente, inválido o de otra sesión (p. ej. superadmin) → hotel por defecto del usuario.
+            TenantContext::set($defaultHotelId);
         }
 
         return $next($request);

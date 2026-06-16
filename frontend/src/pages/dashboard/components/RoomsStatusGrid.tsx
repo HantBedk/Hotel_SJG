@@ -1,7 +1,7 @@
 import type { Room } from '@/types'
 import { BedDouble, Wrench } from 'lucide-react'
 import { ROOM_COLOR, ROOM_LABEL, roomStatusSoftBg } from '../constants/roomStatusTheme'
-import { buildRoomPlanGroups, roomStatusIcon, type RoomPlanGroup } from '../utils/roomUtils'
+import { roomStatusIcon, sortRoomsByNumber } from '../utils/roomUtils'
 import { cn } from '@/lib/cn'
 
 export type RoomPlanDensity = 'compact' | 'comfort'
@@ -149,38 +149,22 @@ function RoomComfortTile({ room, onSelect }: RoomComfortTileProps) {
   )
 }
 
-interface RoomPlanGroupSectionProps {
-  readonly group: RoomPlanGroup
+interface RoomPlanGridProps {
+  readonly rooms: Room[]
   readonly density: RoomPlanDensity
-  readonly showHeader: boolean
   readonly onSelectRoom: (room: Room) => void
 }
 
-function RoomPlanGroupSection({ group, density, showHeader, onSelectRoom }: RoomPlanGroupSectionProps) {
+function RoomPlanGrid({ rooms, density, onSelectRoom }: RoomPlanGridProps) {
   const gridClass = density === 'compact' ? COMPACT_GRID : COMFORT_GRID
   const Tile = density === 'compact' ? RoomCompactTile : RoomComfortTile
 
   return (
-    <section aria-label={group.label || 'Habitaciones'}>
-      {showHeader && group.label && (
-        <div
-          className="sticky top-0 z-[1] flex items-center justify-between gap-2 py-1.5 mb-1.5 -mx-0.5 px-1"
-          style={{ background: 'var(--bg-surface)' }}
-        >
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
-            {group.label}
-          </h3>
-          <span className="text-[10px] tabular-nums" style={{ color: 'var(--text-muted)' }}>
-            {group.rooms.length}
-          </span>
-        </div>
-      )}
-      <div className={gridClass}>
-        {group.rooms.map((room) => (
-          <Tile key={room.id} room={room} onSelect={onSelectRoom} />
-        ))}
-      </div>
-    </section>
+    <div className={gridClass}>
+      {sortRoomsByNumber(rooms).map((room) => (
+        <Tile key={room.id} room={room} onSelect={onSelectRoom} />
+      ))}
+    </div>
   )
 }
 
@@ -224,8 +208,7 @@ export default function RoomsStatusGrid({
   onSelectRoom,
   hasFilters,
 }: RoomsStatusGridProps) {
-  const groups = buildRoomPlanGroups(rooms)
-  const showGroupHeaders = groups.length > 1 || (groups[0]?.label ?? '') !== ''
+  const sortedRooms = sortRoomsByNumber(rooms)
 
   if (loading) {
     return <RoomsStatusSkeleton density={density} />
@@ -236,16 +219,6 @@ export default function RoomsStatusGrid({
   }
 
   return (
-    <div className="space-y-4">
-      {groups.map((group) => (
-        <RoomPlanGroupSection
-          key={group.key}
-          group={group}
-          density={density}
-          showHeader={showGroupHeaders}
-          onSelectRoom={onSelectRoom}
-        />
-      ))}
-    </div>
+    <RoomPlanGrid rooms={sortedRooms} density={density} onSelectRoom={onSelectRoom} />
   )
 }

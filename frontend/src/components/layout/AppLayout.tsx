@@ -4,6 +4,7 @@ import Sidebar, { getPageTitle } from './sidebar'
 import Header from './Header'
 import HotelSwitchOverlay from './HotelSwitchOverlay'
 import HotelActiveModal from './HotelActiveModal'
+import NoHotelAssignedBanner from './NoHotelAssignedBanner'
 import NotificationModal from '@/components/notifications/NotificationModal'
 import { useHotelStore } from '@/store/hotelStore'
 import { cn } from '@/lib/cn'
@@ -110,6 +111,7 @@ export default function AppLayout() {
           style={{ background: 'var(--bg-base)' }}
         >
           <HotelSwitchOverlay show={isSwitchingHotel} hotelName={switchingHotelName} />
+          <NoHotelAssignedBanner />
           <div
             className={cn(
               'lg:h-full lg:min-h-0 lg:flex lg:flex-col',

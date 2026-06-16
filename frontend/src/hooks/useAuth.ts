@@ -14,6 +14,7 @@ export function useAuth() {
     const res = await loginApi(payload)
     if (res.success && res.data) {
       setAuth(res.data.user, res.data.token)
+      useHotelStore.getState().reset()
       useHotelStore.getState().setFromAuth({
         hotels:            res.data.user.hotels ?? [],
         can_switch_hotel:  res.data.user.can_switch_hotel ?? false,

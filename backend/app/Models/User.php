@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Arr;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -46,6 +47,28 @@ class User extends Authenticatable
     public function can($ability, $arguments = []): bool
     {
         return $this->canViaPersona($ability, $arguments);
+    }
+
+    /**
+     * Spatie PermissionMiddleware usa canAny(); Authorizable lo resuelve vía Gate
+     * (no conoce la delegación a Persona). Redirigimos a can() sobreescrito.
+     *
+     * @param iterable|\UnitEnum|string $abilities
+     * @param mixed $arguments
+     */
+    public function canAny($abilities, $arguments = []): bool
+    {
+        foreach (Arr::wrap($abilities) as $ability) {
+            if ($ability instanceof \BackedEnum) {
+                $ability = $ability->value;
+            }
+
+            if ($this->can($ability, $arguments)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function hotels(): BelongsToMany

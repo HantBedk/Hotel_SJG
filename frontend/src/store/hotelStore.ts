@@ -49,6 +49,11 @@ export const useHotelStore = create<HotelState>()(
       isSwitchingHotel: false,
 
       setFromAuth: ({ hotels, can_switch_hotel, current_hotel_id }) => {
+        if (hotels.length === 0) {
+          set({ hotels: [], canSwitchHotel: false, currentHotelId: null })
+          return
+        }
+
         set({
           hotels,
           canSwitchHotel: can_switch_hotel,
