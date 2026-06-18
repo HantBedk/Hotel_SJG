@@ -40,6 +40,9 @@ scripts/debug/
 # Planning docs (never committed)
 Planes/
 
+# Cursor local config
+.cursor/
+
 # Claude local config
 .claude/
 
