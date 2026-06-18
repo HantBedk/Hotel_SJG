@@ -122,7 +122,9 @@ export function DashboardRoomModal({
 
   const meta = STATUS_META[room.status] ?? STATUS_META.available
   const canCheckIn  = hasPermission('check_in')
-  const canManage   = hasPermission('manage_rooms')
+  const canManageRooms = hasPermission('manage_rooms')
+  /** Misma regla que PATCH /rooms/{id}/status: manage_rooms o check_in (recepción). */
+  const canChangeRoomStatus = canManageRooms || canCheckIn
   const canCheckOut = hasPermission('check_out')
   const canPay      = hasPermission('check_in')
   const canVoid     = hasPermission('request_stay_void')
@@ -238,7 +240,7 @@ export function DashboardRoomModal({
                   Probablemente quedó un check-out sin cerrar. Podés liberarla y dejarla disponible.
                 </p>
                 <button
-                  disabled={!canManage || isChangingStatus}
+                  disabled={!canChangeRoomStatus || isChangingStatus}
                   onClick={() => onChangeStatus(
                     room.id,
                     'available',
@@ -361,7 +363,7 @@ export function DashboardRoomModal({
                   )}
                   <ActionButton
                     onClick={() => setShowMaintenanceForm((v) => !v)}
-                    disabled={!canManage || isChangingStatus}
+                    disabled={!canManageRooms || isChangingStatus}
                     icon={<Wrench size={15} />}
                     label={showMaintenanceForm ? 'Cancelar mantenimiento' : 'Marcar en mantenimiento'}
                   />
@@ -376,7 +378,7 @@ export function DashboardRoomModal({
                   )}
                   <ActionButton
                     onClick={() => onChangeStatus(room.id, 'blocked')}
-                    disabled={!canManage || isChangingStatus}
+                    disabled={!canManageRooms || isChangingStatus}
                     icon={<Lock size={15} />}
                     label="Bloquear habitación"
                   />
@@ -438,7 +440,7 @@ export function DashboardRoomModal({
                   )}
                   <ActionButton
                     onClick={() => go(`/inventory?tab=reparaciones&room_id=${room.id}`)}
-                    disabled={!canManage}
+                    disabled={!canChangeRoomStatus}
                     icon={<AlertTriangle size={15} />}
                     label="Reportar incidente / mantenimiento"
                   />
@@ -483,7 +485,7 @@ export function DashboardRoomModal({
                       ))}
                     </select>
                     <button
-                      disabled={!housekeeperId || isChangingStatus || !canManage}
+                      disabled={!housekeeperId || isChangingStatus || !canChangeRoomStatus}
                       onClick={() => {
                         const hk = housekeepers.find((h) => h.id === housekeeperId)
                         if (!hk) return
@@ -500,7 +502,7 @@ export function DashboardRoomModal({
                   </div>
                   <ActionButton
                     onClick={() => setShowMaintenanceForm((v) => !v)}
-                    disabled={!canManage || isChangingStatus}
+                    disabled={!canChangeRoomStatus || isChangingStatus}
                     icon={<Wrench size={15} />}
                     label={showMaintenanceForm ? 'Cancelar mantenimiento' : 'Reportar daño / mantenimiento'}
                   />
@@ -532,7 +534,7 @@ export function DashboardRoomModal({
                   )}
                   <ActionButton
                     onClick={() => onChangeStatus(room.id, 'available')}
-                    disabled={!canManage || isChangingStatus || hasOpenMaintenanceOrder}
+                    disabled={!canChangeRoomStatus || isChangingStatus || hasOpenMaintenanceOrder}
                     icon={<CheckCircle2 size={15} />}
                     label="Marcar como disponible"
                     primary
@@ -550,14 +552,14 @@ export function DashboardRoomModal({
                 <>
                   <ActionButton
                     onClick={() => onChangeStatus(room.id, 'available')}
-                    disabled={!canManage || isChangingStatus}
+                    disabled={!canChangeRoomStatus || isChangingStatus}
                     icon={<CheckCircle2 size={15} />}
                     label="Liberar habitación"
                     primary
                   />
                   <ActionButton
                     onClick={() => setShowMaintenanceForm((v) => !v)}
-                    disabled={!canManage || isChangingStatus}
+                    disabled={!canChangeRoomStatus || isChangingStatus}
                     icon={<Wrench size={15} />}
                     label={showMaintenanceForm ? 'Cancelar mantenimiento' : 'Pasar a mantenimiento'}
                   />
