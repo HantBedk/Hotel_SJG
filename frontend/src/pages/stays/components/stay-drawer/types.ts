@@ -16,7 +16,7 @@ export interface StayDrawerProps {
   }) => void
   readonly onAddService: (payload: { stayId: string; extra_service_id: string; quantity: number }) => void
   readonly onAddMinibar: (payload: { stayId: string; items: MinibarItem[] }) => Promise<unknown>
-  readonly onTransfer: (payload: { stayId: string; from_room_id: string; to_room_id: string; reason?: string }) => void
+  readonly onTransfer: (payload: { stayId: string; from_room_id: string; to_room_id: string; reason?: string }) => Promise<unknown>
   readonly onExtend: (payload: { id: string; check_out_datetime: string }) => Promise<unknown>
 }
 

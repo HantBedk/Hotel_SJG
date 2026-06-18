@@ -27,7 +27,7 @@ export function StayDrawer({
   stayId, initialStay, onClose, canCheckOut, onCheckOut,
   onAddPayment, onAddService, onAddMinibar, onTransfer, onExtend,
 }: StayDrawerProps) {
-  const { data: freshStay, isLoading } = useStay(stayId)
+  const { data: freshStay, isLoading, isFetching } = useStay(stayId)
   const stay = freshStay ?? initialStay
 
   const activeRooms = stay.stay_rooms?.filter((sr) => sr.is_active) ?? []
@@ -79,7 +79,7 @@ export function StayDrawer({
           className="relative pointer-events-auto w-full max-w-md h-full flex flex-col shadow-2xl"
           style={{ background: 'var(--bg-surface)' }}
         >
-          <StayDrawerHeader activeRooms={activeRooms} isLoading={isLoading} onClose={onClose} />
+          <StayDrawerHeader activeRooms={activeRooms} isLoading={isLoading || isFetching} onClose={onClose} />
 
           <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
             {isVoidPending && (

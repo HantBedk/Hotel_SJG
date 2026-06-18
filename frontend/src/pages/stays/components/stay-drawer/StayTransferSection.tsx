@@ -1,33 +1,63 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeftRight } from 'lucide-react'
 import type { StayRoom } from '@/types'
 import { useRooms } from '@/hooks/useRooms'
 import type { TransferForm } from './types'
+import { busyConfirmLabel } from './utils'
 
 interface StayTransferSectionProps {
   readonly stayId: string
   readonly activeRooms: readonly StayRoom[]
-  readonly onTransfer: (payload: { stayId: string; from_room_id: string; to_room_id: string; reason?: string }) => void
+  readonly onTransfer: (payload: { stayId: string; from_room_id: string; to_room_id: string; reason?: string }) => Promise<unknown>
 }
 
 export function StayTransferSection({ stayId, activeRooms, onTransfer }: StayTransferSectionProps) {
   const { rooms: availableRooms } = useRooms('available')
   const [showForm, setShowForm] = useState(false)
+  const [isTransferring, setIsTransferring] = useState(false)
+  const [feedback, setFeedback] = useState<{ ok: true; message: string } | { ok: false; message: string } | null>(null)
   const [form, setForm] = useState<TransferForm>({
     from_room_id: activeRooms[0]?.room_id ?? '',
     to_room_id: '',
     reason: '',
   })
 
-  const handleTransfer = () => {
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      from_room_id: activeRooms[0]?.room_id ?? '',
+    }))
+  }, [activeRooms])
+
+  const toRoomNumber = availableRooms.find((r) => r.id === form.to_room_id)?.number
+
+  const handleTransfer = async () => {
     if (!form.from_room_id || !form.to_room_id) return
-    onTransfer({
-      stayId,
-      from_room_id: form.from_room_id,
-      to_room_id: form.to_room_id,
-      reason: form.reason || undefined,
-    })
-    setShowForm(false)
+    setIsTransferring(true)
+    setFeedback(null)
+    try {
+      await onTransfer({
+        stayId,
+        from_room_id: form.from_room_id,
+        to_room_id: form.to_room_id,
+        reason: form.reason || undefined,
+      })
+      setFeedback({
+        ok: true,
+        message: toRoomNumber
+          ? `Huésped transferido a la habitación ${toRoomNumber}.`
+          : 'Transferencia completada.',
+      })
+      setShowForm(false)
+      setForm((prev) => ({ ...prev, to_room_id: '', reason: '' }))
+    } catch (e: unknown) {
+      const message =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message
+        ?? 'No se pudo completar la transferencia.'
+      setFeedback({ ok: false, message })
+    } finally {
+      setIsTransferring(false)
+    }
   }
 
   if (activeRooms.length === 0) return null
@@ -42,7 +72,10 @@ export function StayTransferSection({ stayId, activeRooms, onTransfer }: StayTra
         {!showForm && (
           <button
             type="button"
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setFeedback(null)
+              setShowForm(true)
+            }}
             className="text-xs px-2 py-1 rounded-lg border hover:opacity-80"
             style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
           >
@@ -50,6 +83,19 @@ export function StayTransferSection({ stayId, activeRooms, onTransfer }: StayTra
           </button>
         )}
       </div>
+
+      {feedback && (
+        <output
+          className="rounded-lg px-3 py-2 text-xs mb-2 block"
+          style={{
+            background: feedback.ok ? '#ECFDF5' : '#FEF2F2',
+            border: `1px solid ${feedback.ok ? '#6EE7B7' : '#FECACA'}`,
+            color: feedback.ok ? '#065F46' : '#991B1B',
+          }}
+        >
+          {feedback.message}
+        </output>
+      )}
 
       {showForm && (
         <div
@@ -62,6 +108,7 @@ export function StayTransferSection({ stayId, activeRooms, onTransfer }: StayTra
               <select
                 value={form.from_room_id}
                 onChange={(e) => setForm((s) => ({ ...s, from_room_id: e.target.value }))}
+                disabled={isTransferring}
                 className="w-full px-2 py-2 rounded-lg text-xs border outline-none"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
               >
@@ -75,6 +122,7 @@ export function StayTransferSection({ stayId, activeRooms, onTransfer }: StayTra
               <select
                 value={form.to_room_id}
                 onChange={(e) => setForm((s) => ({ ...s, to_room_id: e.target.value }))}
+                disabled={isTransferring}
                 className="w-full px-2 py-2 rounded-lg text-xs border outline-none"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
               >
@@ -90,6 +138,7 @@ export function StayTransferSection({ stayId, activeRooms, onTransfer }: StayTra
             placeholder="Motivo (opcional)"
             value={form.reason}
             onChange={(e) => setForm((s) => ({ ...s, reason: e.target.value }))}
+            disabled={isTransferring}
             className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-default)', color: 'var(--text-primary)' }}
           />
@@ -97,16 +146,17 @@ export function StayTransferSection({ stayId, activeRooms, onTransfer }: StayTra
             <button
               type="button"
               onClick={handleTransfer}
-              disabled={!form.to_room_id}
+              disabled={!form.to_room_id || isTransferring}
               className="flex-1 py-2 rounded-lg text-xs font-medium disabled:opacity-40 hover:opacity-80"
               style={{ background: 'var(--color-primary)', color: '#fff' }}
             >
-              Confirmar
+              {busyConfirmLabel(isTransferring)}
             </button>
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="px-4 py-2 rounded-lg text-xs border hover:opacity-80"
+              disabled={isTransferring}
+              className="px-4 py-2 rounded-lg text-xs border hover:opacity-80 disabled:opacity-40"
               style={{ borderColor: 'var(--border-default)', color: 'var(--text-secondary)' }}
             >
               Cancelar

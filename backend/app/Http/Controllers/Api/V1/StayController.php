@@ -802,7 +802,17 @@ class StayController extends Controller
             );
         }
 
-        $stay->load(['guest', 'stayRooms.room', 'transfers']);
+        $stay->load([
+            'guest.nationality',
+            'company',
+            'stayRooms.room.roomType',
+            'stayGuests.guest',
+            'payments.receptionist',
+            'transfers.fromRoom',
+            'transfers.toRoom',
+            'services.extraService',
+            'minibarConsumptions',
+        ]);
 
         $fromRoom = Room::find($data['from_room_id']);
         $toRoom   = Room::find($data['to_room_id']);

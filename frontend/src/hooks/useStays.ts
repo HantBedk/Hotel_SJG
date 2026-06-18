@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { hotelQueryKey } from '@/lib/hotelQueryKey'
 import toast from 'react-hot-toast'
 import {
@@ -7,7 +7,41 @@ import {
   addServiceApi, getExtraServicesApi,
   extendStayApi, addMinibarChargesApi, cancelMinibarConsumptionApi,
 } from '@/services/stays.service'
-import type { CheckInPayload, MinibarItem } from '@/types'
+import type { CheckInPayload, MinibarItem, Stay } from '@/types'
+
+function activeRoomNumbers(stay: Stay): string {
+  const numbers = stay.stay_rooms
+    ?.filter((sr) => sr.is_active)
+    .map((sr) => sr.room?.number)
+    .filter(Boolean)
+  return numbers?.length ? numbers.join(', ') : '—'
+}
+
+function patchStayInListCache(queryClient: QueryClient, updatedStay: Stay): void {
+  queryClient.setQueriesData(
+    { queryKey: hotelQueryKey('stays') },
+    (old: unknown) => {
+      if (!old || typeof old !== 'object' || !('data' in old)) return old
+      const page = old as { data: Stay[] | { data: Stay[] } }
+      if (Array.isArray(page.data)) {
+        return {
+          ...page,
+          data: page.data.map((s) => (s.id === updatedStay.id ? updatedStay : s)),
+        }
+      }
+      if (page.data && typeof page.data === 'object' && 'data' in page.data && Array.isArray(page.data.data)) {
+        return {
+          ...page,
+          data: {
+            ...page.data,
+            data: page.data.data.map((s) => (s.id === updatedStay.id ? updatedStay : s)),
+          },
+        }
+      }
+      return old
+    },
+  )
+}
 
 export function useStays(filters?: { status?: string; company_id?: string } | string) {
   const queryClient = useQueryClient()
@@ -66,9 +100,15 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
   const transferMutation = useMutation({
     mutationFn: ({ stayId, ...payload }: { stayId: string; from_room_id: string; to_room_id: string; reason?: string }) =>
       transferRoomApi(stayId, payload),
-    onSuccess: () => { toast.success('Transferencia realizada.'); invalidate() },
+    onSuccess: (updatedStay, { stayId }) => {
+      queryClient.setQueryData(hotelQueryKey('stays', stayId), updatedStay)
+      patchStayInListCache(queryClient, updatedStay)
+      const label = activeRoomNumbers(updatedStay)
+      toast.success(`Transferencia realizada. Habitación actual: ${label}.`)
+      invalidate()
+    },
     onError: (e: { response?: { data?: { message?: string } } }) =>
-      toast.error(e?.response?.data?.message ?? 'Error al transferir.'),
+      toast.error(e?.response?.data?.message ?? 'Error al transferir habitación.'),
   })
 
   const paymentMutation = useMutation({
@@ -122,7 +162,8 @@ export function useStays(filters?: { status?: string; company_id?: string } | st
     checkOut:     checkOutMutation.mutate,
     extend:       extendMutation.mutateAsync,
     addMinibar:   minibarMutation.mutateAsync,
-    transfer:     transferMutation.mutate,
+    transfer:     transferMutation.mutateAsync,
+    isTransferring: transferMutation.isPending,
     addPayment:   paymentMutation.mutate,
     cancelPayment: cancelPaymentMutation.mutateAsync,
     cancelMinibar: cancelMinibarMutation.mutateAsync,

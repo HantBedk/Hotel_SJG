@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { LayoutGrid } from 'lucide-react'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import CheckInWizard from '@/pages/checkin/CheckInWizard'
@@ -96,6 +96,25 @@ export default function DashboardPage() {
     () => filterDashboardRooms(rooms, roomFilter, roomSearch),
     [rooms, roomFilter, roomSearch],
   )
+
+  const balanceStayId = selectedBalanceStay?.stay.id
+
+  useEffect(() => {
+    if (!balanceStayId) return
+    const updated = (activeStays as Stay[]).find((s) => s.id === balanceStayId)
+    if (!updated) return
+    const prevIds = selectedBalanceStay?.stay.stay_rooms
+      ?.filter((sr) => sr.is_active)
+      .map((sr) => sr.room_id)
+      .join(',') ?? ''
+    const nextIds = updated.stay_rooms
+      ?.filter((sr) => sr.is_active)
+      .map((sr) => sr.room_id)
+      .join(',') ?? ''
+    if (prevIds !== nextIds) {
+      setSelectedBalanceStay((row) => (row ? { ...row, stay: updated } : null))
+    }
+  }, [activeStays, balanceStayId, selectedBalanceStay?.stay.stay_rooms])
 
   const hasRoomFilters = roomFilter !== 'all' || roomSearch.trim().length > 0
 

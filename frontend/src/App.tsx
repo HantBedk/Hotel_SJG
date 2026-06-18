@@ -18,6 +18,7 @@ export default function App() {
       <RouterProvider router={router} />
       <Toaster
         position="top-right"
+        containerStyle={{ zIndex: 99999 }}
         toastOptions={{
           duration: 4000,
           style: {
