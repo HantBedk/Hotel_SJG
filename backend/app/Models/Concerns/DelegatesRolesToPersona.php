@@ -166,6 +166,27 @@ trait DelegatesRolesToPersona
     }
 
     /**
+     * Filtra usuarios por permiso Spatie vinculado a su Persona (reemplaza HasPermissions::scopePermission en User).
+     *
+     * @param  string|int|array|Permission|Collection|\BackedEnum  $permissions
+     */
+    public function scopePermission(Builder $query, $permissions, bool $without = false): Builder
+    {
+        return $query->{$without ? 'whereDoesntHave' : 'whereHas'}(
+            'persona',
+            fn (Builder $personaQuery) => $personaQuery->permission($permissions, $without),
+        );
+    }
+
+    /**
+     * @param  string|int|array|Permission|Collection|\BackedEnum  $permissions
+     */
+    public function scopeWithoutPermission(Builder $query, $permissions): Builder
+    {
+        return $this->scopePermission($query, $permissions, true);
+    }
+
+    /**
      * Relación vacía cuando aún no hay Persona vinculada (evita NPE en consultas de roles).
      */
     private function emptyRolesRelation(): BelongsToMany
