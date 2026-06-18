@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\RoomCleaningNotifier;
 use App\Support\RoomMaintenanceNotifier;
 use App\Support\RoomRepairOrderService;
+use App\Support\RoomStayResolver;
 use App\Support\TenantContext;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -56,6 +57,25 @@ class RoomController extends Controller
     public function show(Room $room): JsonResponse
     {
         return $this->success($room->load(['roomType', 'features']));
+    }
+
+    public function currentStay(Room $room): JsonResponse
+    {
+        $stay = RoomStayResolver::currentStay($room);
+
+        if ($stay === null) {
+            return $this->success(null);
+        }
+
+        $stay->load([
+            'guest.nationality',
+            'company',
+            'stayRooms.room.roomType',
+            'stayGuests.guest',
+            'payments.receptionist',
+        ]);
+
+        return $this->success($stay);
     }
 
     public function update(Request $request, Room $room): JsonResponse

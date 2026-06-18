@@ -1,5 +1,5 @@
 import api from '@/lib/axios'
-import type { ApiResponse, Room, RoomStatus, RoomType } from '@/types'
+import type { ApiResponse, Room, RoomStatus, RoomType, Stay } from '@/types'
 
 export interface CreateRoomPayload {
   room_type_id: string
@@ -35,6 +35,11 @@ export async function getRoomsApi(status?: RoomStatus): Promise<Room[]> {
 
 export async function getRoomApi(id: string): Promise<Room> {
   const { data } = await api.get<ApiResponse<Room>>(`/rooms/${id}`)
+  return data.data
+}
+
+export async function getRoomCurrentStayApi(id: string): Promise<Stay | null> {
+  const { data } = await api.get<ApiResponse<Stay | null>>(`/rooms/${id}/current-stay`)
   return data.data
 }
 

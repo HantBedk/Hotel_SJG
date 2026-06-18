@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useDashboard } from '@/hooks/useDashboard'
-import { useRooms, useHousekeepers } from '@/hooks/useRooms'
+import { useRooms, useHousekeepers, useRoomCurrentStay } from '@/hooks/useRooms'
 import { useStays } from '@/hooks/useStays'
 import { useActivityLogs } from '@/hooks/useActivity'
 import { useNotifications } from '@/hooks/useNotifications'
@@ -61,14 +61,9 @@ export function useDashboardPage() {
     addMinibar,
     transfer,
     extend,
-  } = useStays({ status: 'active' })
+  } = useStays({ status: 'open', per_page: 100 })
 
-  const stayForSelectedRoom = useMemo(() => {
-    if (!selectedRoom) return null
-    return (activeStays as Stay[]).find((s) =>
-      (s.stay_rooms ?? []).some((sr) => sr.room?.id === selectedRoom.id && sr.is_active !== false),
-    ) ?? null
-  }, [activeStays, selectedRoom])
+  const { data: stayForSelectedRoom = null } = useRoomCurrentStay(selectedRoom)
 
   const staysWithBalance = useMemo(
     () => (activeStays as Stay[])

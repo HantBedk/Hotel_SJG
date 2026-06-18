@@ -43,7 +43,7 @@ function patchStayInListCache(queryClient: QueryClient, updatedStay: Stay): void
   )
 }
 
-export function useStays(filters?: { status?: string; company_id?: string } | string) {
+export function useStays(filters?: { status?: string; company_id?: string; page?: number; per_page?: number } | string) {
   const queryClient = useQueryClient()
 
   const normalizedFilters = typeof filters === 'string' ? { status: filters } : (filters ?? {})

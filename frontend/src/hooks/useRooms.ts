@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
-  getRoomsApi, getRoomTypesApi, createRoomApi,
+  getRoomsApi, getRoomTypesApi, getRoomCurrentStayApi, createRoomApi,
   updateRoomApi, updateRoomStatusApi, deleteRoomApi,
   getHousekeepersApi,
 } from '@/services/rooms.service'
@@ -103,5 +103,16 @@ export function useHousekeepers() {
     queryKey: hotelQueryKey('housekeepers'),
     queryFn:  getHousekeepersApi,
     staleTime: 5 * 60 * 1000,
+  })
+}
+
+const ROOM_STAY_LOOKUP_STATUSES = new Set<RoomStatus>(['occupied', 'reserved'])
+
+export function useRoomCurrentStay(room: Room | null) {
+  return useQuery({
+    queryKey: hotelQueryKey('rooms', room?.id, 'current-stay'),
+    queryFn:  () => getRoomCurrentStayApi(room!.id),
+    enabled:  !!room && ROOM_STAY_LOOKUP_STATUSES.has(room.status),
+    staleTime: 30_000,
   })
 }

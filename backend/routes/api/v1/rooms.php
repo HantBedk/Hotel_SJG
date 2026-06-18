@@ -15,6 +15,8 @@ Route::post('/rooms', [RoomController::class, 'store'])
      ->middleware('permission:manage_rooms');
 Route::get(ROOM_ROUTE, [RoomController::class, 'show'])
      ->middleware('permission:view_rooms');
+Route::get(ROOM_ROUTE . '/current-stay', [RoomController::class, 'currentStay'])
+     ->middleware('permission:view_rooms');
 Route::put(ROOM_ROUTE, [RoomController::class, 'update'])
      ->middleware('permission:manage_rooms');
 Route::patch(ROOM_ROUTE . '/status', [RoomController::class, 'updateStatus'])

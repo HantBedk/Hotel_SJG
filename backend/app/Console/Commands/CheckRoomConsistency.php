@@ -3,10 +3,10 @@
 namespace App\Console\Commands;
 
 use App\Models\Notification;
-use App\Models\Reservation;
 use App\Models\Room;
-use App\Models\StayRoom;
 use App\Models\User;
+use App\Support\RoomInconsistencyNotifier;
+use App\Support\RoomStayResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -31,12 +31,16 @@ class CheckRoomConsistency extends Command
             return self::SUCCESS;
         }
 
-        $today   = today()->toDateString();
+        $today   = today();
         $alerted = 0;
+        $healed  = 0;
 
-        DB::transaction(function () use ($staffIds, $today, &$alerted) {
+        DB::transaction(function () use ($staffIds, $today, &$alerted, &$healed) {
             foreach (Room::whereIn('status', ['occupied', 'reserved'])->get() as $room) {
-                if ($this->roomIsConsistent($room, $today)) {
+                if (RoomStayResolver::isConsistent($room, $today)) {
+                    RoomInconsistencyNotifier::dismissForRoom($room->id);
+                    $healed++;
+
                     continue;
                 }
 
@@ -44,7 +48,7 @@ class CheckRoomConsistency extends Command
             }
         });
 
-        $this->info("Creadas {$alerted} alerta(s) de inconsistencia.");
+        $this->info("Creadas {$alerted} alerta(s) de inconsistencia; {$healed} habitación(es) saneada(s).");
         return self::SUCCESS;
     }
 
@@ -54,31 +58,6 @@ class CheckRoomConsistency extends Command
             ->merge(User::role(['admin', 'superadmin'])->pluck('id'))
             ->unique()
             ->values();
-    }
-
-    private function roomIsConsistent(Room $room, string $today): bool
-    {
-        return $this->hasActiveStay($room, $today)
-            || $this->hasActiveReservation($room, $today);
-    }
-
-    private function hasActiveStay(Room $room, string $today): bool
-    {
-        return StayRoom::where('room_id', $room->id)
-            ->where('is_active', true)
-            ->where('check_in_date', '<=', $today)
-            ->where('check_out_date', '>', $today)
-            ->whereHas('stay', fn ($q) => $q->whereIn('status', ['active', 'extended']))
-            ->exists();
-    }
-
-    private function hasActiveReservation(Room $room, string $today): bool
-    {
-        return Reservation::where('room_id', $room->id)
-            ->whereIn('status', ['pending', 'confirmed'])
-            ->where('start_date', '<=', $today)
-            ->where('end_date', '>', $today)
-            ->exists();
     }
 
     private function notifyRoomInconsistency(Room $room, Collection $staffIds): int

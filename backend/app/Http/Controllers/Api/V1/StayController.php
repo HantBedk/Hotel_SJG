@@ -19,6 +19,8 @@ use App\Models\RoomMinibar;
 use App\Models\Setting;
 use App\Support\HotelInventoryService;
 use App\Support\RoomCleaningNotifier;
+use App\Support\RoomInconsistencyNotifier;
+use App\Support\RoomStayResolver;
 use App\Support\StayNights;
 use App\Support\TenantContext;
 use App\Models\Stay;
@@ -169,6 +171,8 @@ class StayController extends Controller
             return $stay;
         });
 
+        RoomInconsistencyNotifier::dismissForRooms($data['room_ids']);
+
         $stay->load(['guest', 'company', 'stayRooms.room.roomType', 'stayGuests.guest', 'createdBy']);
 
         ActivityLog::record('stay.checkin', $request->user()->id, [
@@ -236,6 +240,8 @@ class StayController extends Controller
         ]);
 
         foreach ($cleaningRooms as $room) {
+            RoomInconsistencyNotifier::dismissForRoom($room->id);
+
             ActivityLog::record('room.cleaning', $request->user()->id, [
                 'room_id'     => $room->id,
                 'room_number' => $room->number,
@@ -395,6 +401,8 @@ class StayController extends Controller
             broadcast(new RoomStatusChanged($room->refresh()))->toOthers();
             $stay->increment('total_amount', $subtotal);
         });
+
+        RoomInconsistencyNotifier::dismissForRoom($data['room_id']);
 
         $stay->load('stayRooms.room.roomType');
 
@@ -741,7 +749,7 @@ class StayController extends Controller
     public function transfer(Request $request, Stay $stay): JsonResponse
     {
         $this->ensureStayOperable($stay);
-        abort_if($stay->status !== 'active', 409, 'Solo se puede transferir una estadía activa.');
+        abort_if(! in_array($stay->status, Stay::OPEN_STATUSES, true), 409, 'Solo se puede transferir una estadía activa.');
 
         $data = $request->validate([
             'from_room_id' => 'required|uuid|exists:rooms,id',
@@ -805,6 +813,8 @@ class StayController extends Controller
                 'to_room_number'   => $toRoom->number,
                 'reason'           => $data['reason'] ?? null,
             ]);
+
+            RoomInconsistencyNotifier::dismissForRooms([$fromRoom->id, $toRoom->id]);
         });
 
         $stay->load([

@@ -15,6 +15,7 @@ use App\Models\Stay;
 use App\Models\StayPerson;
 use App\Models\StayRoom;
 use App\Models\User;
+use App\Support\RoomInconsistencyNotifier;
 use App\Support\StayNights;
 use App\Traits\Paginates;
 use Illuminate\Http\JsonResponse;
@@ -396,6 +397,8 @@ class ReservationController extends Controller
 
             return $stay;
         });
+
+        RoomInconsistencyNotifier::dismissForRooms($data['room_ids']);
 
         $stay->load(['guest', 'company', 'stayRooms.room.roomType', 'createdBy']);
 

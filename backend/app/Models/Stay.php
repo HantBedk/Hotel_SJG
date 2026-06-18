@@ -118,6 +118,10 @@ class Stay extends Model
 
     public function scopeByStatus(Builder $query, string $status): Builder
     {
+        if ($status === 'open') {
+            return $query->open();
+        }
+
         return $query->where('status', $status);
     }
 

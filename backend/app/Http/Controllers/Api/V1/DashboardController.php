@@ -35,14 +35,14 @@ class DashboardController extends Controller
         }
 
         $totalRooms   = array_sum($statusCounts);
-        $activeStays  = Stay::where('status', 'active')->count();
+        $activeStays  = Stay::open()->count();
 
         // "Check-ins hoy" = stays registrados hoy por el recepcionista
         // (no la fecha programada de entrada, que podría ser futura).
         $checkinsToday = Stay::whereDate('created_at', today())->count();
 
         // Pending balance across all active stays
-        $pendingBalance = Stay::where('status', 'active')
+        $pendingBalance = Stay::open()
             ->selectRaw('COALESCE(SUM(total_amount - paid_amount), 0) as balance')
             ->value('balance');
 
