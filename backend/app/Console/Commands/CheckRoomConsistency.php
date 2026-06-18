@@ -2,20 +2,20 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Hotel;
 use App\Models\Notification;
 use App\Models\Room;
-use App\Models\User;
+use App\Support\AlertRecipients;
 use App\Support\RoomInconsistencyNotifier;
 use App\Support\RoomStayResolver;
+use App\Support\TenantContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Detecta "habitaciones zombie": rooms.status dice ocupada/reservada pero no
- * hay estadía/reserva real que lo respalde (típicamente porque el check-out
- * no se hizo correctamente). Crea notificaciones para que el admin/recepción
- * lo vea en el widget "Alertas activas" del dashboard.
+ * Detecta habitaciones cuyo estado no coincide con estadías/reservas reales.
+ * Crea alertas para recepción/admin del hotel correspondiente.
  */
 class CheckRoomConsistency extends Command
 {
@@ -24,43 +24,40 @@ class CheckRoomConsistency extends Command
 
     public function handle(): int
     {
-        $staffIds = $this->alertRecipientIds();
-
-        if ($staffIds->isEmpty()) {
-            $this->info('No hay personal con permisos para recibir alertas.');
-            return self::SUCCESS;
-        }
-
         $today   = today();
         $alerted = 0;
         $healed  = 0;
 
-        DB::transaction(function () use ($staffIds, $today, &$alerted, &$healed) {
-            foreach (Room::whereIn('status', ['occupied', 'reserved'])->get() as $room) {
-                if (RoomStayResolver::isConsistent($room, $today)) {
-                    RoomInconsistencyNotifier::dismissForRoom($room->id);
-                    $healed++;
+        foreach (Hotel::orderBy('name')->get() as $hotel) {
+            TenantContext::set($hotel->id);
 
-                    continue;
-                }
-
-                $alerted += $this->notifyRoomInconsistency($room, $staffIds);
+            $staffIds = AlertRecipients::forHotel($hotel->id);
+            if ($staffIds->isEmpty()) {
+                $this->warn("Sin destinatarios para {$hotel->name}; se omiten alertas.");
+                continue;
             }
-        });
+
+            DB::transaction(function () use ($staffIds, $today, $hotel, &$alerted, &$healed) {
+                foreach (Room::whereIn('status', ['occupied', 'reserved'])->get() as $room) {
+                    if (RoomStayResolver::isConsistent($room, $today)) {
+                        RoomInconsistencyNotifier::dismissForRoom($room->id);
+                        $healed++;
+
+                        continue;
+                    }
+
+                    $alerted += $this->notifyRoomInconsistency($room, $staffIds, $hotel->id);
+                }
+            });
+        }
+
+        TenantContext::set(null);
 
         $this->info("Creadas {$alerted} alerta(s) de inconsistencia; {$healed} habitación(es) saneada(s).");
         return self::SUCCESS;
     }
 
-    private function alertRecipientIds(): Collection
-    {
-        return User::permission('manage_reservations')->pluck('id')
-            ->merge(User::role(['admin', 'superadmin'])->pluck('id'))
-            ->unique()
-            ->values();
-    }
-
-    private function notifyRoomInconsistency(Room $room, Collection $staffIds): int
+    private function notifyRoomInconsistency(Room $room, Collection $staffIds, string $hotelId): int
     {
         $expectedReason = $room->status === 'occupied' ? 'estadía activa' : 'reserva vigente';
         $created        = 0;
@@ -79,9 +76,10 @@ class CheckRoomConsistency extends Command
                     'room_id'     => $room->id,
                     'room_number' => $room->number,
                     'room_status' => $room->status,
+                    'hotel_id'    => $hotelId,
                     'detected_at' => now()->toIso8601String(),
                 ],
-                'action_url' => '/stays',
+                'action_url' => '/',
                 'user_id'    => $userId,
             ]);
             $created++;
@@ -94,8 +92,8 @@ class CheckRoomConsistency extends Command
     {
         return Notification::where('user_id', $userId)
             ->where('type', 'room_inconsistency')
+            ->where('is_read', false)
             ->whereJsonContains('payload->room_id', $roomId)
-            ->whereDate('created_at', today())
             ->exists();
     }
 }

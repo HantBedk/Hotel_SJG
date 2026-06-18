@@ -17,7 +17,7 @@ class RoomCleaningNotifier
             return;
         }
 
-        $recipientIds = self::recipientIds($excludeUserId);
+        $recipientIds = self::recipientIds($room, $excludeUserId);
         if ($recipientIds->isEmpty()) {
             return;
         }
@@ -35,6 +35,7 @@ class RoomCleaningNotifier
                 'payload'    => [
                     'room_id'     => $room->id,
                     'room_number' => $room->number,
+                    'hotel_id'    => $room->hotel_id,
                 ],
                 'action_url' => '/',
                 'user_id'    => $userId,
@@ -51,14 +52,19 @@ class RoomCleaningNotifier
             ->update(['is_read' => true, 'read_at' => now()]);
     }
 
-    private static function recipientIds(?string $excludeUserId): Collection
+    private static function recipientIds(Room $room, ?string $excludeUserId): Collection
     {
-        $ids = User::role(['housekeeping', 'admin', 'superadmin', 'receptionist'])
-            ->where('is_active', true)
-            ->pluck('id')
+        $ids = AlertRecipients::forHotel($room->hotel_id)
+            ->merge(
+                User::role('housekeeping')
+                    ->where('is_active', true)
+                    ->whereHas('hotels', fn ($q) => $q->where('hotels.id', $room->hotel_id))
+                    ->pluck('id'),
+            )
             ->merge(
                 User::permission('manage_rooms')
                     ->where('is_active', true)
+                    ->whereHas('hotels', fn ($q) => $q->where('hotels.id', $room->hotel_id))
                     ->pluck('id'),
             )
             ->unique()

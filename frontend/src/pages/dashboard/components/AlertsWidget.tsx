@@ -1,5 +1,6 @@
 import { AlertTriangle, Bell, ChevronRight, X } from 'lucide-react'
 import { useNotifications } from '@/hooks/useNotifications'
+import { useHotelStore } from '@/store/hotelStore'
 import { collectActiveAlerts, isPersistentRoomAlert } from '../dashboardAlerts'
 import DashboardSection from './DashboardSection'
 import type { AppNotification, Room } from '@/types'
@@ -8,6 +9,7 @@ function resolveCta(n: AppNotification): string {
   if (n.type === 'room_inconsistency') return 'Resolver habitación'
   if (n.type === 'room_cleaning') return 'Ir a habitación'
   if (n.type === 'room_maintenance') return 'Ver orden de mantenimiento'
+  if (/reservation/i.test(n.type)) return 'Ver reservas'
   if (/low_stock|expir/i.test(n.type)) return 'Ir al inventario'
   if (/maintenance/i.test(n.type)) return 'Ver mantenimiento'
   if (/asset|repair/i.test(n.type)) return 'Ver reparación'
@@ -24,7 +26,8 @@ interface AlertsWidgetProps {
 
 export default function AlertsWidget({ rooms, onResolve }: AlertsWidgetProps) {
   const { notifications, markRead } = useNotifications()
-  const recent = collectActiveAlerts(notifications, rooms)
+  const currentHotelId = useHotelStore((s) => s.currentHotelId)
+  const recent = collectActiveAlerts(notifications, rooms, currentHotelId)
 
   return (
     <DashboardSection

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { hotelQueryKey } from '@/lib/hotelQueryKey'
+import { useHotelQueryKey } from '@/lib/hotelQueryKey'
+import { useAuthStore } from '@/store/authStore'
 import toast from 'react-hot-toast'
 import {
   getNotificationsApi,
@@ -10,23 +11,29 @@ import {
 
 export function useNotifications() {
   const qc = useQueryClient()
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const notificationsKey = useHotelQueryKey('notifications')
+  const unreadKey = useHotelQueryKey('notifications-unread')
 
-  const { data, isLoading } = useQuery({
-    queryKey: hotelQueryKey('notifications'),
+  const { data: notifications = [], isLoading } = useQuery({
+    queryKey: notificationsKey,
     queryFn: getNotificationsApi,
+    enabled: isAuthenticated,
+    refetchInterval: 60_000,
   })
 
   const { data: unreadCount = 0 } = useQuery({
-    queryKey: hotelQueryKey('notifications-unread'),
+    queryKey: unreadKey,
     queryFn: getUnreadCountApi,
+    enabled: isAuthenticated,
     refetchInterval: 60_000,
   })
 
   const markReadMutation = useMutation({
     mutationFn: markReadApi,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: hotelQueryKey('notifications') })
-      qc.invalidateQueries({ queryKey: hotelQueryKey('notifications-unread') })
+      qc.invalidateQueries({ queryKey: notificationsKey })
+      qc.invalidateQueries({ queryKey: unreadKey })
     },
     onError: () => toast.error('Error al marcar notificación.'),
   })
@@ -34,14 +41,14 @@ export function useNotifications() {
   const markAllReadMutation = useMutation({
     mutationFn: markAllReadApi,
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: hotelQueryKey('notifications') })
-      qc.invalidateQueries({ queryKey: hotelQueryKey('notifications-unread') })
+      qc.invalidateQueries({ queryKey: notificationsKey })
+      qc.invalidateQueries({ queryKey: unreadKey })
     },
     onError: () => toast.error('Error al marcar todas.'),
   })
 
   return {
-    notifications: data?.data ?? [],
+    notifications,
     isLoading,
     unreadCount,
     markRead: (id: string) => markReadMutation.mutate(id),

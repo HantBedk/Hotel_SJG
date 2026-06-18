@@ -118,6 +118,14 @@ export function useDashboardPage() {
       }
     }
 
+    if (/^reservation_/i.test(n.type)) {
+      const reservationId = (n.payload as { reservation_id?: string } | null)?.reservation_id
+      if (reservationId) {
+        navigate(`/reservations?id=${reservationId}`)
+        return
+      }
+    }
+
     if (n.action_url) navigate(n.action_url)
   }
 

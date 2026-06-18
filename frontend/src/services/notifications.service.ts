@@ -1,18 +1,21 @@
 import api from '@/lib/axios'
 import type { ApiResponse, AppNotification } from '@/types'
 
-export interface NotificationsListResult {
+interface PaginatedNotifications {
   data: AppNotification[]
-  meta: unknown
 }
 
 export interface UnreadCountResult {
   count: number
 }
 
-export async function getNotificationsApi(): Promise<NotificationsListResult> {
-  const { data } = await api.get<ApiResponse<NotificationsListResult>>('/notifications')
-  return data.data
+export async function getNotificationsApi(): Promise<AppNotification[]> {
+  const { data } = await api.get<ApiResponse<PaginatedNotifications>>('/notifications', {
+    params: { per_page: 50 },
+  })
+
+  const page = data.data
+  return Array.isArray(page) ? page : page?.data ?? []
 }
 
 export async function getUnreadCountApi(): Promise<number> {

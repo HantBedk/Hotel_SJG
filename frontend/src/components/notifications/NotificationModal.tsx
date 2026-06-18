@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { AlertTriangle, Bell, X } from 'lucide-react'
 import { useNotifications } from '@/hooks/useNotifications'
 import { useFocusTrap } from '@/hooks/useFocusTrap'
+import { isNotificationUnread } from '@/pages/dashboard/dashboardAlerts'
 import type { AppNotification } from '@/types'
 
 function notificationSeverityColor(severity: AppNotification['severity']): string {
@@ -20,7 +21,7 @@ export default function NotificationModal() {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
 
   const pending = notifications.filter(
-    (n) => n.is_modal && !n.is_read && !dismissed.has(n.id),
+    (n) => n.is_modal && isNotificationUnread(n) && !dismissed.has(n.id),
   )
 
   const current = pending[0]

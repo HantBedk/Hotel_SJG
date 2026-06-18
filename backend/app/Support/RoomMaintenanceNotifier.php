@@ -17,7 +17,7 @@ class RoomMaintenanceNotifier
             return;
         }
 
-        $recipientIds = self::recipientIds($excludeUserId);
+        $recipientIds = self::recipientIds($room, $excludeUserId);
         if ($recipientIds->isEmpty()) {
             return;
         }
@@ -35,6 +35,7 @@ class RoomMaintenanceNotifier
                 'payload'    => [
                     'room_id'     => $room->id,
                     'room_number' => $room->number,
+                    'hotel_id'    => $room->hotel_id,
                 ],
                 'action_url' => '/inventory?tab=reparaciones&room_id=' . $room->id,
                 'user_id'    => $userId,
@@ -51,14 +52,19 @@ class RoomMaintenanceNotifier
             ->update(['is_read' => true, 'read_at' => now()]);
     }
 
-    private static function recipientIds(?string $excludeUserId): Collection
+    private static function recipientIds(Room $room, ?string $excludeUserId): Collection
     {
-        $ids = User::role(['admin', 'superadmin', 'receptionist', 'maintenance'])
-            ->where('is_active', true)
-            ->pluck('id')
+        $ids = AlertRecipients::forHotel($room->hotel_id)
+            ->merge(
+                User::role('maintenance')
+                    ->where('is_active', true)
+                    ->whereHas('hotels', fn ($q) => $q->where('hotels.id', $room->hotel_id))
+                    ->pluck('id'),
+            )
             ->merge(
                 User::permission('manage_rooms')
                     ->where('is_active', true)
+                    ->whereHas('hotels', fn ($q) => $q->where('hotels.id', $room->hotel_id))
                     ->pluck('id'),
             )
             ->unique()
