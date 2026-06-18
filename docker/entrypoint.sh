@@ -9,6 +9,9 @@ echo "=== Hotel Manager — Iniciando ==="
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R 775 storage bootstrap/cache
 
+# Enlace public/storage → storage/app/public (logos, comprobantes, etc.)
+php artisan storage:link --force
+
 # Persist APP_KEY across restarts using storage volume
 KEY_FILE=/var/www/html/storage/.app_key
 if [ -f "$KEY_FILE" ]; then

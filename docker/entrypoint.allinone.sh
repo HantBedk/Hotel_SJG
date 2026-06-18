@@ -48,6 +48,9 @@ cd /var/www/html
 chown -R www-data:www-data storage bootstrap/cache
 chmod -R 775 storage bootstrap/cache
 
+# Enlace public/storage → storage/app/public (logos, comprobantes, etc.)
+php artisan storage:link --force
+
 KEY_FILE=/var/www/html/storage/.app_key
 if [ -f "$KEY_FILE" ]; then
     SAVED_KEY=$(cat "$KEY_FILE")
