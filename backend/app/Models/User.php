@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Models\Concerns\DelegatesRolesToPersona;
+use App\Support\EmailNormalizer;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -33,6 +35,25 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password'          => 'hashed',
         ];
+    }
+
+    protected function email(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $value) => EmailNormalizer::normalize($value),
+        );
+    }
+
+    public static function findByEmail(string $email): ?self
+    {
+        $normalized = EmailNormalizer::normalize($email);
+        if ($normalized === null) {
+            return null;
+        }
+
+        return static::query()
+            ->whereRaw('LOWER(email) = ?', [$normalized])
+            ->first();
     }
 
     public function persona(): BelongsTo

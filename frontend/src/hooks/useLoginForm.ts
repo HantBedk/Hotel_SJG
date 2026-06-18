@@ -22,7 +22,10 @@ export function useLoginForm() {
 
   const onSubmit = async (data: LoginFormData) => {
     try {
-      const res = await login(data)
+      const res = await login({
+        ...data,
+        email: data.email.trim().toLowerCase(),
+      })
       if (res.success) navigate('/', { replace: true })
     } catch (err: unknown) {
       const msg =

@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Persona;
 use App\Models\User;
+use App\Support\EmailNormalizer;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -21,7 +22,7 @@ final class PersonaProvisioner
         }
 
         $user = User::firstOrCreate(
-            ['email' => $userFields['email']],
+            ['email' => EmailNormalizer::normalize($userFields['email']) ?? ''],
             [
                 'person_id' => $persona->id,
                 'password'  => $userFields['password'] ?? Hash::make('password'),
@@ -99,7 +100,7 @@ final class PersonaProvisioner
     public static function ensureUserForHotelAccess(Persona $persona, string $email): User
     {
         self::assertRealStaffEmail($email);
-        $email = strtolower(trim($email));
+        $email = EmailNormalizer::normalize($email) ?? '';
 
         if ($persona->user) {
             abort_if(

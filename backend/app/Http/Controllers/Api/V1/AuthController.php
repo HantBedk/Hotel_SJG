@@ -22,7 +22,7 @@ class AuthController extends Controller
     {
         // Auth manual (sin guard web) para evitar CSRF: el login emite token
         // Sanctum directamente; el frontend lo manda como Bearer en cada request.
-        $user = User::where('email', $request->email)->first();
+        $user = User::findByEmail($request->email);
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             ActivityLog::record('login_failed', null, [
@@ -71,7 +71,7 @@ class AuthController extends Controller
         $request->validate(['email' => 'required|email']);
 
         // Always return success to avoid user-enumeration
-        $user = User::where('email', $request->email)->first();
+        $user = User::findByEmail($request->email);
 
         if ($user && $user->is_active) {
             $role = $user->getRoleNames()->first();
