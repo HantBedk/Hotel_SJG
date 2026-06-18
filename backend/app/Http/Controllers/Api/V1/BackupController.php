@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Support\BackupPaths;
 use App\Models\Company;
 use App\Models\Persona;
 use App\Models\InventoryItem;
@@ -23,18 +24,12 @@ use ZipArchive;
 
 class BackupController extends Controller
 {
-    private const FOLDER = 'backups';
-
-    /** Ruta dentro del container donde Docker monta la carpeta del PC del host. */
-    private const SHARED_CONTAINER_PATH = '/var/www/html/backup';
-
     /** ZIP de restauración (KB). Alineado con upload_max_filesize/post_max_size (50M) en docker/php/local.ini. */
     private const MAX_RESTORE_UPLOAD_KB = 51_200;
 
     private function backupsDir(): string
     {
-        $custom = Setting::get('backup.auto_backup_folder', '');
-        return ! empty($custom) ? rtrim($custom, '/\\') : storage_path('app/' . self::FOLDER);
+        return BackupPaths::resolve();
     }
 
     /**
@@ -58,7 +53,7 @@ class BackupController extends Controller
         ]);
 
         $path = trim($data['path'] ?? '');
-        $defaultPath = storage_path('app/' . self::FOLDER);
+        $defaultPath = BackupPaths::resolve();
 
         // Vacío = se usará la carpeta por defecto.
         if ($path === '') {
@@ -83,7 +78,7 @@ class BackupController extends Controller
 
         // Si la ruta es la carpeta compartida con el PC, mostramos al usuario
         // el path real de su computador (no /var/www/html/backup que es del container).
-        $isShared = rtrim($path, '/\\') === self::SHARED_CONTAINER_PATH;
+        $isShared = rtrim($path, '/\\') === BackupPaths::SHARED_CONTAINER_PATH;
         $displayPath = $isShared ? $this->sharedHostPath() : $path;
 
         if (! $exists) {
@@ -116,8 +111,8 @@ class BackupController extends Controller
                 'auto_backup'         => Setting::get('backup.auto_backup', true),
                 'auto_backup_time'    => Setting::get('backup.auto_backup_time', '23:59'),
                 'auto_backup_folder'  => Setting::get('backup.auto_backup_folder', ''),
-                'retention_days'      => Setting::get('backup.retention_days', 30),
-                'shared_container_path' => self::SHARED_CONTAINER_PATH,
+                'retention_days'      => Setting::get('backup.retention_days', 7),
+                'shared_container_path' => BackupPaths::SHARED_CONTAINER_PATH,
                 'shared_host_path'      => $this->sharedHostPath(),
             ],
         ]);

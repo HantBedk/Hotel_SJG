@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS: BackupSettings = {
   auto_backup: true,
   auto_backup_time: '23:59',
   auto_backup_folder: '',
-  retention_days: 30,
+  retention_days: 7,
 }
 
 function folderInputBorderColor(folderCheck: BackupFolderCheck | null): string {

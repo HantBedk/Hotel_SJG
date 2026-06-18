@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\Setting;
+use App\Support\BackupPaths;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -56,13 +57,12 @@ class CreateAutoBackup extends Command
 
     private function resolveDir(): string
     {
-        $custom = Setting::get('backup.auto_backup_folder', '');
-        return ! empty($custom) ? rtrim($custom, '/\\') : storage_path('app/backups');
+        return BackupPaths::resolve();
     }
 
     private function pruneOldBackups(string $dir): void
     {
-        $days = (int) Setting::get('backup.retention_days', 30);
+        $days = (int) Setting::get('backup.retention_days', 7);
         if ($days <= 0) {
             return;
         }

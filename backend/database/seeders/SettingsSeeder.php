@@ -36,7 +36,7 @@ class SettingsSeeder extends Seeder
             ['key' => 'backup.auto_backup',             'value' => 'true',  'type' => 'boolean', 'group' => 'backup'],
             ['key' => 'backup.auto_backup_time',        'value' => '23:59', 'type' => 'string',  'group' => 'backup'],
             ['key' => 'backup.auto_backup_folder',      'value' => '',      'type' => 'string',  'group' => 'backup'],
-            ['key' => 'backup.retention_days',          'value' => '30',    'type' => 'integer', 'group' => 'backup'],
+            ['key' => 'backup.retention_days',          'value' => '7',     'type' => 'integer', 'group' => 'backup'],
         ];
 
         foreach ($defaults as $s) {
