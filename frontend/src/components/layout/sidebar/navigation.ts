@@ -70,8 +70,8 @@ export const NAV_MODULES: readonly NavModule[] = [
       {
         id: 'rooms',
         to: '/rooms',
-        label: 'Plano de habitaciones',
-        pageTitle: 'Plano de habitaciones',
+        label: 'Habitaciones',
+        pageTitle: 'Habitaciones',
         icon: BedDouble,
         permissions: ['view_rooms'],
       },

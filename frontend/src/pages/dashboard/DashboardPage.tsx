@@ -149,7 +149,7 @@ export default function DashboardPage() {
         <div className="lg:col-span-6 flex flex-col gap-4 lg:min-h-0">
           <DashboardSection
             id="dashboard-rooms"
-            title="Plano de habitaciones"
+            title="Habitaciones"
             description="Vista compacta · clic para detalle, check-in o cambio de estado"
             icon={LayoutGrid}
             className="lg:flex-[3] lg:min-h-[22rem]"
