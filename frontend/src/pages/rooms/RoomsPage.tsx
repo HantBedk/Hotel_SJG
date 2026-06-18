@@ -7,7 +7,7 @@ import { useHotelStore } from '@/store/hotelStore'
 import { SkeletonCard } from '@/components/ui/Skeleton'
 import { RoomCard } from './components/RoomCard'
 import { RoomStatusModal } from './components/RoomStatusModal'
-import { STATUS_CONFIG } from './components/RoomStatusBadge'
+import { roomStatusFilterChipStyle } from '@/pages/dashboard/constants/roomStatusTheme'
 import CheckInWizard from '@/pages/checkin/CheckInWizard'
 import KpiCard from '@/pages/dashboard/components/KpiCard'
 import { personInputClass, personInputStyle } from '@/components/person/personFormStyles'
@@ -281,7 +281,7 @@ export default function RoomsPage() {
           <div className="flex flex-wrap gap-1.5 shrink-0">
             {FILTERS.map(({ key, label }) => {
               const isActive = filter === key
-              const cfg = key === 'all' ? null : STATUS_CONFIG[key]
+              const chip = roomStatusFilterChipStyle(key, isActive)
               const count = key === 'all'
                 ? allRooms.length
                 : allRooms.filter((r) => r.status === key).length
@@ -293,13 +293,14 @@ export default function RoomsPage() {
                   onClick={() => setFilter(key)}
                   className={cn(
                     'px-2.5 py-1.5 rounded-full text-xs font-medium border transition-all inline-flex items-center gap-1',
-                    isActive ? 'border-transparent' : 'hover:opacity-80',
+                    'hover:opacity-90',
                   )}
                   style={{
-                    background: isActive ? (cfg?.bg ?? 'var(--color-primary-light)') : 'transparent',
-                    color: isActive ? (cfg?.color ?? 'var(--color-primary)') : 'var(--text-secondary)',
-                    borderColor: isActive ? 'transparent' : 'var(--border-default)',
-                    fontWeight: isActive ? 600 : 400,
+                    background: chip.background,
+                    color: chip.color,
+                    borderColor: chip.borderColor,
+                    fontWeight: chip.fontWeight,
+                    opacity: chip.opacity,
                   }}
                 >
                   {label}

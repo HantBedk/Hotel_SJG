@@ -39,3 +39,31 @@ export function roomStatusSoftBg(status: RoomStatus): string {
 export function roomStatusBorderColor(status: RoomStatus): string {
   return `color-mix(in srgb, ${roomStatusColor(status)} 33%, transparent)`
 }
+
+export type RoomStatusFilter = RoomStatus | 'all'
+
+/** Estilo de chip/badge de filtro: siempre con color de estado; activo resalta borde y peso. */
+export function roomStatusFilterChipStyle(
+  filter: RoomStatusFilter,
+  active: boolean,
+): { background: string; color: string; borderColor: string; fontWeight: number; opacity: number } {
+  if (filter === 'all') {
+    return {
+      background: 'var(--color-primary-light)',
+      color: 'var(--color-primary)',
+      borderColor: active ? 'var(--color-primary)' : 'transparent',
+      fontWeight: active ? 600 : 500,
+      opacity: 1,
+    }
+  }
+
+  const cfg = ROOM_STATUS_STYLE[filter]
+
+  return {
+    background: cfg.bg,
+    color: cfg.color,
+    borderColor: active ? cfg.color : 'transparent',
+    fontWeight: active ? 600 : 500,
+    opacity: 1,
+  }
+}

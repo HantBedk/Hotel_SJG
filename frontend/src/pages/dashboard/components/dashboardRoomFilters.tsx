@@ -1,8 +1,7 @@
 import { LayoutGrid, Rows3, Search, X } from 'lucide-react'
 import { personInputClass, personInputStyle } from '@/components/person/personFormStyles'
 import { cn } from '@/lib/cn'
-import { ROOM_LABEL } from '@/pages/dashboard/constants/roomStatusTheme'
-import { STATUS_CONFIG } from '@/pages/rooms/components/RoomStatusBadge'
+import { ROOM_LABEL, roomStatusFilterChipStyle } from '@/pages/dashboard/constants/roomStatusTheme'
 import type { Room, RoomStatus } from '@/types'
 import type { RoomPlanDensity } from './RoomsStatusGrid'
 
@@ -113,7 +112,7 @@ export function DashboardRoomFilters({
         <div className="flex flex-wrap gap-1 overflow-x-auto max-w-full pb-0.5">
           {GRID_FILTER_OPTIONS.map(({ value, label }) => {
             const active = filter === value
-            const cfg = value === 'all' ? null : STATUS_CONFIG[value]
+            const chip = roomStatusFilterChipStyle(value, active)
             return (
               <button
                 key={value}
@@ -121,13 +120,14 @@ export function DashboardRoomFilters({
                 onClick={() => onFilterChange(value)}
                 className={cn(
                   'px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all',
-                  active ? 'border-transparent' : 'hover:opacity-80',
+                  'hover:opacity-90',
                 )}
                 style={{
-                  background: active ? (cfg?.bg ?? 'var(--color-primary-light)') : 'transparent',
-                  color: active ? (cfg?.color ?? 'var(--color-primary)') : 'var(--text-secondary)',
-                  borderColor: active ? 'transparent' : 'var(--border-default)',
-                  fontWeight: active ? 600 : 400,
+                  background: chip.background,
+                  color: chip.color,
+                  borderColor: chip.borderColor,
+                  fontWeight: chip.fontWeight,
+                  opacity: chip.opacity,
                 }}
               >
                 {label}
