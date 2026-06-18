@@ -790,17 +790,22 @@ class StayController extends Controller
 
             broadcast(new RoomStatusChanged($fromRoom->refresh()))->toOthers();
             broadcast(new RoomStatusChanged($toRoom->refresh()))->toOthers();
-        });
 
-        $fromRoom = Room::find($data['from_room_id']);
-
-        if ($fromRoom?->status === 'cleaning') {
             RoomCleaningNotifier::notify(
                 $fromRoom,
                 'Liberada tras transferencia de huésped. Pendiente de limpieza.',
                 $request->user()->id,
             );
-        }
+
+            ActivityLog::record('stay.transfer', $request->user()->id, [
+                'stay_id'          => $stay->id,
+                'from_room_id'     => $fromRoom->id,
+                'to_room_id'       => $toRoom->id,
+                'from_room_number' => $fromRoom->number,
+                'to_room_number'   => $toRoom->number,
+                'reason'           => $data['reason'] ?? null,
+            ]);
+        });
 
         $stay->load([
             'guest.nationality',
@@ -812,18 +817,6 @@ class StayController extends Controller
             'transfers.toRoom',
             'services.extraService',
             'minibarConsumptions',
-        ]);
-
-        $fromRoom = Room::find($data['from_room_id']);
-        $toRoom   = Room::find($data['to_room_id']);
-
-        ActivityLog::record('stay.transfer', $request->user()->id, [
-            'stay_id'          => $stay->id,
-            'from_room_id'     => $data['from_room_id'],
-            'to_room_id'       => $data['to_room_id'],
-            'from_room_number' => $fromRoom?->number,
-            'to_room_number'   => $toRoom?->number,
-            'reason'           => $data['reason'] ?? null,
         ]);
 
         return response()->json(['success' => true, 'data' => $stay, 'message' => 'Transferencia realizada.']);
