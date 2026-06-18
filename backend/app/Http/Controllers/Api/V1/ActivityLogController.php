@@ -51,17 +51,18 @@ class ActivityLogController extends Controller
         'inventory.adjust'       => 'Ajuste de inventario',
     ];
 
+    private const ROLE_LABELS = [
+        'superadmin'   => 'Super administrador',
+        'admin'        => 'Administrador',
+        'receptionist' => 'Recepcionista',
+        'housekeeping' => 'Aseo',
+        'maintenance'  => 'Mantenimiento',
+    ];
+
     public function index(Request $request): JsonResponse
     {
-        $query = ActivityLog::with('user.roles')
+        $query = ActivityLog::with('user.persona.roles')
             ->orderByDesc('created_at');
-
-        // Si el usuario actual es recepcionista (sin escalar a admin/superadmin),
-        // solo puede ver actividades de OTROS recepcionistas.
-        $current = $request->user();
-        if ($current && $current->hasRole('receptionist') && ! $current->hasAnyRole(['admin', 'superadmin'])) {
-            $query->whereHas('user.roles', fn($q) => $q->where('name', 'receptionist'));
-        }
 
         if ($action = $request->query('action')) {
             $query->where('action', $action);
@@ -91,16 +92,19 @@ class ActivityLogController extends Controller
             $roomLabel = ActivityLogRoomResolver::fromPayload($payload)
                 ?? ActivityLogRoomResolver::fromFallback($payload, $stayRoomNumbers, $roomNumbers);
 
+            $userRole = $log->user?->getRoleNames()->first();
+
             return [
-                'id'           => $log->id,
-                'action'       => $log->action,
-                'action_label' => self::ACTION_LABELS[$log->action] ?? $log->action,
-                'user_id'      => $log->user_id,
-                'user_name'    => $log->user?->name ?? 'Sistema',
-                'user_role'    => $log->user?->roles->first()?->name,
-                'room_label'   => $roomLabel,
-                'payload'      => $log->payload,
-                'created_at'   => $log->created_at,
+                'id'              => $log->id,
+                'action'          => $log->action,
+                'action_label'    => self::ACTION_LABELS[$log->action] ?? $log->action,
+                'user_id'         => $log->user_id,
+                'user_name'       => $log->user?->name ?? 'Sistema',
+                'user_role'       => $userRole,
+                'user_role_label' => $userRole ? (self::ROLE_LABELS[$userRole] ?? $userRole) : null,
+                'room_label'      => $roomLabel,
+                'payload'         => $log->payload,
+                'created_at'      => $log->created_at,
             ];
         }));
 

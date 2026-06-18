@@ -7,6 +7,7 @@ export interface ActivityLogEntry {
   user_id: string | null
   user_name: string
   user_role: string | null
+  user_role_label?: string | null
   room_label: string | null
   payload: Record<string, unknown> | null
   created_at: string

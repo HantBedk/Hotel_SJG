@@ -11,6 +11,7 @@ import NotificationCenter from '@/components/notifications/NotificationCenter'
 import { useReverb } from '@/hooks/useReverb'
 import { hotelQueryKey, useHotelQueryKey } from '@/lib/hotelQueryKey'
 import { getDefaultSettingsPath } from '@/components/layout/sidebar'
+import { personaRoleLabel } from '@/lib/personaRoles'
 
 interface NotificationBroadcast {
   id:         string
@@ -178,7 +179,7 @@ export default function Header({ title, onToggleSidebar, darkMode, onToggleDark 
                 {user?.name}
               </p>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                {user?.roles[0]}
+                {user?.roles[0] ? personaRoleLabel(user.roles[0]) : ''}
               </p>
             </div>
           </button>

@@ -3,7 +3,7 @@ import { Activity, X } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import type { ActivityLogEntry } from '@/types'
 import { ACTION_LABELS } from '../constants/activityLogLabels'
-import { buildActivityDetailRows, formatUserRole } from '../utils/activityLogFormat'
+import { buildActivityDetailRows, formatActivityUserRole } from '../utils/activityLogFormat'
 import { useDialogLifecycle } from '../hooks/useDialogLifecycle'
 
 interface ActivityDetailModalProps {
@@ -14,7 +14,7 @@ interface ActivityDetailModalProps {
 export default function ActivityDetailModal({ log, onClose }: ActivityDetailModalProps) {
   const { dialogRef, backdropClassName } = useDialogLifecycle(onClose)
   const label = ACTION_LABELS[log.action] ?? log.action_label ?? log.action
-  const roleLabel = formatUserRole(log.user_role)
+  const roleLabel = formatActivityUserRole(log)
 
   const payloadEntries = useMemo(() => buildActivityDetailRows(log), [log])
 

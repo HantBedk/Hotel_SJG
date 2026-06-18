@@ -230,6 +230,11 @@ export function formatUserRole(role: string | null | undefined): string | null {
   return ROLE_LABELS[role] ?? role
 }
 
+export function formatActivityUserRole(log: ActivityLogEntry): string | null {
+  if (log.user_role_label) return log.user_role_label
+  return formatUserRole(log.user_role)
+}
+
 function formatPayloadStringKey(key: string, value: string): string | null {
   if (key === 'method') return METHOD_LABELS[value] ?? value
   if (key === 'type') return MINIBAR_TYPE_LABELS[value] ?? STATUS_LABELS[value] ?? value
@@ -484,7 +489,9 @@ export function formatActivityCardTitle(log: ActivityLogEntry): string {
   return formatDefaultCardTitle(log, payload, roomPrefix)
 }
 
-/** Subtítulo de la card (usuario; sin repetir habitación si ya está en el título). */
+/** Subtítulo de la card (usuario y rol en español). */
 export function formatActivityCardSubtitle(log: ActivityLogEntry): string {
+  const role = formatActivityUserRole(log)
+  if (role) return `${log.user_name} · ${role}`
   return log.user_name
 }
