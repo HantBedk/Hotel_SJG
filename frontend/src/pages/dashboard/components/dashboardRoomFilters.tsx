@@ -1,6 +1,8 @@
 import { LayoutGrid, Rows3, Search, X } from 'lucide-react'
 import { personInputClass, personInputStyle } from '@/components/person/personFormStyles'
 import { cn } from '@/lib/cn'
+import { ROOM_LABEL } from '@/pages/dashboard/constants/roomStatusTheme'
+import { STATUS_CONFIG } from '@/pages/rooms/components/RoomStatusBadge'
 import type { Room, RoomStatus } from '@/types'
 import type { RoomPlanDensity } from './RoomsStatusGrid'
 
@@ -8,10 +10,10 @@ export type RoomGridFilter = RoomStatus | 'all'
 
 const GRID_FILTER_OPTIONS: readonly { value: RoomGridFilter; label: string }[] = [
   { value: 'all', label: 'Todas' },
-  { value: 'available', label: 'Disponibles' },
-  { value: 'occupied', label: 'Ocupadas' },
-  { value: 'reserved', label: 'Reservadas' },
-  { value: 'cleaning', label: 'Limpieza' },
+  { value: 'available', label: ROOM_LABEL.available },
+  { value: 'occupied', label: ROOM_LABEL.occupied },
+  { value: 'reserved', label: ROOM_LABEL.reserved },
+  { value: 'cleaning', label: ROOM_LABEL.cleaning },
   { value: 'maintenance', label: 'Mantenimiento' },
 ]
 
@@ -111,6 +113,7 @@ export function DashboardRoomFilters({
         <div className="flex flex-wrap gap-1 overflow-x-auto max-w-full pb-0.5">
           {GRID_FILTER_OPTIONS.map(({ value, label }) => {
             const active = filter === value
+            const cfg = value === 'all' ? null : STATUS_CONFIG[value]
             return (
               <button
                 key={value}
@@ -121,9 +124,10 @@ export function DashboardRoomFilters({
                   active ? 'border-transparent' : 'hover:opacity-80',
                 )}
                 style={{
-                  background: active ? 'var(--color-primary-light)' : 'transparent',
-                  color: active ? 'var(--color-primary)' : 'var(--text-secondary)',
+                  background: active ? (cfg?.bg ?? 'var(--color-primary-light)') : 'transparent',
+                  color: active ? (cfg?.color ?? 'var(--color-primary)') : 'var(--text-secondary)',
                   borderColor: active ? 'transparent' : 'var(--border-default)',
+                  fontWeight: active ? 600 : 400,
                 }}
               >
                 {label}

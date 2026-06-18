@@ -1,7 +1,8 @@
 import type { Room } from '@/types'
 import { BedDouble, Wrench } from 'lucide-react'
-import { ROOM_COLOR, ROOM_LABEL, roomStatusSoftBg } from '../constants/roomStatusTheme'
+import { ROOM_LABEL, roomStatusBorderColor, roomStatusColor, roomStatusSoftBg } from '../constants/roomStatusTheme'
 import { roomStatusIcon, sortRoomsByNumber } from '../utils/roomUtils'
+import { RoomStatusBadge } from '@/pages/rooms/components/RoomStatusBadge'
 import { cn } from '@/lib/cn'
 
 export type RoomPlanDensity = 'compact' | 'comfort'
@@ -47,7 +48,7 @@ interface RoomCompactTileProps {
 }
 
 function RoomCompactTile({ room, onSelect }: RoomCompactTileProps) {
-  const statusColor = ROOM_COLOR[room.status] ?? '#94A3B8'
+  const statusColor = roomStatusColor(room.status)
   const StatusIcon = roomStatusIcon(room.status)
   const hasRepairs = (room.open_repair_orders_count ?? 0) > 0
 
@@ -63,7 +64,7 @@ function RoomCompactTile({ room, onSelect }: RoomCompactTileProps) {
       )}
       style={{
         background: roomStatusSoftBg(room.status),
-        borderColor: `${statusColor}55`,
+        borderColor: roomStatusBorderColor(room.status),
         boxShadow: `inset 3px 0 0 ${statusColor}`,
       }}
       title={roomTileTitle(room)}
@@ -71,7 +72,7 @@ function RoomCompactTile({ room, onSelect }: RoomCompactTileProps) {
     >
       <span
         className="text-[11px] sm:text-xs font-bold tabular-nums leading-none truncate max-w-full px-0.5"
-        style={{ color: 'var(--text-primary)' }}
+        style={{ color: statusColor }}
       >
         {room.number}
       </span>
@@ -101,7 +102,7 @@ interface RoomComfortTileProps {
 }
 
 function RoomComfortTile({ room, onSelect }: RoomComfortTileProps) {
-  const statusColor = ROOM_COLOR[room.status] ?? '#94A3B8'
+  const statusColor = roomStatusColor(room.status)
   const StatusIcon = roomStatusIcon(room.status)
   const hasRepairs = (room.open_repair_orders_count ?? 0) > 0
 
@@ -116,7 +117,7 @@ function RoomComfortTile({ room, onSelect }: RoomComfortTileProps) {
       )}
       style={{
         background: roomStatusSoftBg(room.status),
-        borderColor: `${statusColor}44`,
+        borderColor: roomStatusBorderColor(room.status),
         boxShadow: `inset 0 -3px 0 ${statusColor}`,
       }}
       title={roomTileTitle(room)}
@@ -138,9 +139,13 @@ function RoomComfortTile({ room, onSelect }: RoomComfortTileProps) {
             />
           )}
         </div>
-        <p className="text-[10px] truncate mt-auto" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-[10px] truncate" style={{ color: 'var(--text-muted)' }}>
           {room.room_type?.name ?? '—'}
         </p>
+        <RoomStatusBadge
+          status={room.status}
+          className="inline-flex items-center px-1.5 py-0 rounded-full text-[9px] font-semibold mt-auto self-start"
+        />
         {hasRepairs && (
           <Wrench size={10} className="absolute bottom-1.5 right-1.5" style={{ color: '#D97706' }} aria-hidden="true" />
         )}

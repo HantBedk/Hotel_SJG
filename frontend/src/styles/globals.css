@@ -19,6 +19,9 @@
   --status-available-soft: #ECFDF5;
   --status-occupied-soft:  #FEF2F2;
   --status-warning-soft:   #FFFBEB;
+  --status-cleaning-soft:  #F5F3FF;
+  --status-maintenance-soft: #ECFEFF;
+  --status-blocked-soft:   #F9FAFB;
 
   /* Primario — Azul marino */
   --color-primary:         #1E40AF;
@@ -99,6 +102,9 @@
   --status-available-soft: rgba(16, 185, 129, 0.16);
   --status-occupied-soft:  rgba(248, 113, 113, 0.16);
   --status-warning-soft:   rgba(251, 191, 36, 0.16);
+  --status-cleaning-soft:  rgba(124, 58, 237, 0.16);
+  --status-maintenance-soft: rgba(8, 145, 178, 0.16);
+  --status-blocked-soft:   rgba(107, 114, 128, 0.16);
 
   --color-primary:        #3B82F6;
   --color-primary-hover:  #2563EB;

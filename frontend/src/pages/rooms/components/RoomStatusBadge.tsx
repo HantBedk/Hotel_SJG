@@ -1,23 +1,23 @@
 import type { RoomStatus } from '@/types'
+import { ROOM_LABEL, ROOM_STATUS_STYLE } from '@/pages/dashboard/constants/roomStatusTheme'
 
-const STATUS_CONFIG: Record<RoomStatus, { label: string; color: string; bg: string }> = {
-  available:   { label: 'Disponible',   color: 'var(--status-available)',   bg: '#ECFDF5' },
-  occupied:    { label: 'Ocupada',      color: 'var(--status-occupied)',    bg: '#FEF2F2' },
-  reserved:    { label: 'Reservada',    color: 'var(--status-reserved)',    bg: '#FFFBEB' },
-  cleaning:    { label: 'Limpieza',     color: 'var(--status-cleaning)',    bg: '#F5F3FF' },
-  maintenance: { label: 'Mantenimiento',color: 'var(--status-maintenance)', bg: '#ECFEFF' },
-  blocked:     { label: 'Bloqueada',    color: 'var(--status-blocked)',     bg: '#F9FAFB' },
-}
+const STATUS_CONFIG = Object.fromEntries(
+  (Object.keys(ROOM_STATUS_STYLE) as RoomStatus[]).map((status) => [
+    status,
+    { label: ROOM_LABEL[status], ...ROOM_STATUS_STYLE[status] },
+  ]),
+) as Record<RoomStatus, { label: string; color: string; bg: string }>
 
 interface RoomStatusBadgeProps {
   readonly status: RoomStatus
+  readonly className?: string
 }
 
-export function RoomStatusBadge({ status }: RoomStatusBadgeProps) {
+export function RoomStatusBadge({ status, className }: RoomStatusBadgeProps) {
   const cfg = STATUS_CONFIG[status]
   return (
     <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
+      className={className ?? 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium'}
       style={{ color: cfg.color, background: cfg.bg }}
     >
       <span
